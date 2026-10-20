@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D Home demo</title>
+<meta name="description" content="A live 3D floor plan card for Home Assistant, running on a pretend home in your browser.">
+<style>
+  :root { color-scheme: dark; --bg: #0f1114; --panel: #1a1d22; --line: #2c3037; --text: #e8e6e1; --dim: #a3a7ad; --accent: #ffd27a; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; flex-direction: column; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header p { margin: 0; color: var(--dim); font-size: 13px; flex: 1 1 260px; }
+  .tools { display: flex; gap: 6px; align-items: center; }
+  button, .link { font: inherit; font-size: 13px; color: var(--text); background: #262a31; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer; text-decoration: none; }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  main { flex: 1; min-height: 420px; position: relative; }
+  #host { position: absolute; inset: 0; }
+  #host ha-3dhome-card { display: block; height: 100%; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #262a31; border: 1px solid var(--line); padding: 8px 14px; border-radius: 10px; font-size: 13px; z-index: 10; }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 18px; width: min(340px, calc(100vw - 32px)); }
+  dialog::backdrop { background: #0008; }
+  dialog h2 { margin: 0 0 2px; font-size: 18px; }
+  dialog .id { color: var(--dim); font: 12px ui-monospace, monospace; }
+  dialog .state { font-size: 28px; margin: 12px 0; text-transform: capitalize; }
+  dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  dialog label { display: block; font-size: 13px; color: var(--dim); }
+  dialog input[type=range] { width: 100%; accent-color: var(--accent); }
+  .hint { position: absolute; right: 16px; top: 16px; max-width: 320px; color: var(--dim); font-size: 12px; background: #1a1d22cc; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; pointer-events: none; }
+  @media (max-width: 640px) { .hint { display: none; } header p { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>3D Home</h1>
+  <p>A live 3D floor plan for Home Assistant. This is a pretend home running in your browser, with no Home Assistant behind it.</p>
+  <div class="tools">
+    <button id="day" aria-pressed="false">Day</button>
+    <button id="night" aria-pressed="true">Night</button>
+    <button id="reset" title="Forget your edits and load the sample home again">Reset</button>
+    <a class="link" href="https://github.com/tbell19/ha-3dhome">GitHub</a>
+  </div>
+</header>
+<main>
+  <div id="host"></div>
+  <div class="hint">Tap a light to switch it. Hold, or tap a chip, for details. Drag to pan, right-drag or two fingers to turn. Press ✎ to try the editor.</div>
+</main>
+<div id="toast" hidden></div>
+<dialog id="info">
+  <h2></h2>
+  <div class="id"></div>
+  <div class="state"></div>
+  <label class="bri">Brightness <input type="range" min="1" max="255"></label>
+  <div class="row"><button class="toggle">Toggle</button><button class="close">Close</button></div>
+</dialog>
+<script type="module" src="./demo.js"></script>
+</body>
+</html>

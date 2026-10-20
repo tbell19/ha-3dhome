@@ -1,0 +1,6 @@
+{
+  "name": "3D Home",
+  "filename": "ha-3dhome.js",
+  "homeassistant": "2024.1.0",
+  "render_readme": true
+}

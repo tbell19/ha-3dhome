@@ -1,0 +1,1218 @@
+{
+  "strategy": {
+    "type": "custom:ha-3dhome",
+    "title": "Home",
+    "path": "3d",
+    "icon": "mdi:floor-plan",
+    "weather": "weather.home",
+    "outdoor_temperature": "sensor.outside_temperature",
+    "scene": {
+      "wall_height": 60,
+      "lintel": 8,
+      "wall_thickness": 4,
+      "low": 8,
+      "wall_colors": [
+        "#e6e2da",
+        "#c9c2b6",
+        "#a99f90"
+      ],
+      "model_scale": [
+        2.1,
+        4
+      ],
+      "palette": {
+        "cab": [
+          "#3f5a50",
+          "#2f443c",
+          "#374f46"
+        ],
+        "ctr": [
+          "#e9e6df",
+          "#c9c5bc",
+          "#d8d4cb"
+        ],
+        "sofa": [
+          "#c9a66b",
+          "#a68650",
+          "#b8975e"
+        ],
+        "bed": [
+          "#e8e4dc",
+          "#c4bfb5",
+          "#d6d1c7"
+        ],
+        "pillow": [
+          "#f6f2ea",
+          "#d8d2c6",
+          "#e6e0d4"
+        ],
+        "wood": [
+          "#7a5a3e",
+          "#5c432e",
+          "#6b4f36"
+        ],
+        "oak": [
+          "#b8925f",
+          "#957447",
+          "#a68352"
+        ],
+        "ss": [
+          "#b4b7ba",
+          "#878b8f",
+          "#9ca0a4"
+        ],
+        "black": [
+          "#2a2c2f",
+          "#1a1b1d",
+          "#222426"
+        ],
+        "white": [
+          "#f5f4f1",
+          "#d0cfcb",
+          "#e2e1dd"
+        ],
+        "stone": [
+          "#77746f",
+          "#5d5b57",
+          "#6a6863"
+        ]
+      },
+      "floors": [
+        {
+          "name": "bedroom",
+          "pts": [
+            [
+              30,
+              230
+            ],
+            [
+              200,
+              230
+            ],
+            [
+              200,
+              340
+            ],
+            [
+              30,
+              340
+            ]
+          ],
+          "fill": "#9d978e",
+          "texture": "carpet"
+        },
+        {
+          "name": "bath",
+          "pts": [
+            [
+              30,
+              340
+            ],
+            [
+              110,
+              340
+            ],
+            [
+              110,
+              420
+            ],
+            [
+              30,
+              420
+            ]
+          ],
+          "fill": "#dfe3e4",
+          "texture": "tile"
+        },
+        {
+          "name": "study",
+          "pts": [
+            [
+              110,
+              340
+            ],
+            [
+              200,
+              340
+            ],
+            [
+              200,
+              420
+            ],
+            [
+              110,
+              420
+            ]
+          ],
+          "fill": "#a5835e",
+          "texture": "wood"
+        },
+        {
+          "name": "hallway",
+          "pts": [
+            [
+              200,
+              230
+            ],
+            [
+              250,
+              230
+            ],
+            [
+              250,
+              420
+            ],
+            [
+              200,
+              420
+            ]
+          ],
+          "fill": "#a5835e",
+          "texture": "wood"
+        },
+        {
+          "name": "dining",
+          "pts": [
+            [
+              250,
+              230
+            ],
+            [
+              400,
+              230
+            ],
+            [
+              400,
+              420
+            ],
+            [
+              250,
+              420
+            ]
+          ],
+          "fill": "#b08e66",
+          "texture": "wood"
+        },
+        {
+          "name": "kitchen",
+          "pts": [
+            [
+              400,
+              230
+            ],
+            [
+              560,
+              230
+            ],
+            [
+              560,
+              420
+            ],
+            [
+              400,
+              420
+            ]
+          ],
+          "fill": "#cfcabf",
+          "texture": "tile"
+        },
+        {
+          "name": "lounge",
+          "pts": [
+            [
+              30,
+              420
+            ],
+            [
+              200,
+              420
+            ],
+            [
+              200,
+              550
+            ],
+            [
+              30,
+              550
+            ]
+          ],
+          "fill": "#b08e66",
+          "texture": "wood"
+        },
+        {
+          "name": "foyer",
+          "pts": [
+            [
+              200,
+              420
+            ],
+            [
+              300,
+              420
+            ],
+            [
+              300,
+              550
+            ],
+            [
+              200,
+              550
+            ]
+          ],
+          "fill": "#8f8a82",
+          "texture": "stone"
+        },
+        {
+          "name": "deck",
+          "pts": [
+            [
+              300,
+              420
+            ],
+            [
+              560,
+              420
+            ],
+            [
+              560,
+              550
+            ],
+            [
+              300,
+              550
+            ]
+          ],
+          "fill": "#8c6a4c",
+          "texture": "wood"
+        },
+        {
+          "name": "rug",
+          "pts": [
+            [
+              70,
+              460
+            ],
+            [
+              160,
+              460
+            ],
+            [
+              160,
+              510
+            ],
+            [
+              70,
+              510
+            ]
+          ],
+          "fill": "#8a5a4a"
+        }
+      ],
+      "boxes": [
+        {
+          "b": [
+            36,
+            126,
+            255,
+            330,
+            12,
+            "bed"
+          ],
+          "group": "bed"
+        },
+        {
+          "b": [
+            36,
+            44,
+            255,
+            330,
+            26,
+            "wood"
+          ],
+          "group": "bed"
+        },
+        {
+          "b": [
+            46,
+            62,
+            262,
+            290,
+            15,
+            "pillow"
+          ],
+          "group": "bed"
+        },
+        {
+          "b": [
+            46,
+            62,
+            296,
+            324,
+            15,
+            "pillow"
+          ],
+          "group": "bed"
+        },
+        {
+          "b": [
+            36,
+            54,
+            236,
+            252,
+            13,
+            "wood"
+          ]
+        },
+        {
+          "b": [
+            150,
+            196,
+            236,
+            252,
+            22,
+            "wood"
+          ],
+          "group": "dresser"
+        },
+        {
+          "b": [
+            36,
+            60,
+            346,
+            414,
+            14,
+            "white"
+          ],
+          "group": "tub"
+        },
+        {
+          "b": [
+            80,
+            106,
+            346,
+            366,
+            20,
+            "wood"
+          ],
+          "group": "vanity"
+        },
+        {
+          "b": [
+            80,
+            106,
+            346,
+            366,
+            1.5,
+            "white",
+            20
+          ],
+          "group": "vanity"
+        },
+        {
+          "b": [
+            88,
+            104,
+            398,
+            414,
+            10,
+            "white"
+          ]
+        },
+        {
+          "b": [
+            70,
+            160,
+            520,
+            544,
+            10,
+            "sofa"
+          ],
+          "group": "sofa"
+        },
+        {
+          "b": [
+            70,
+            160,
+            536,
+            544,
+            20,
+            "sofa"
+          ],
+          "group": "sofa"
+        },
+        {
+          "b": [
+            70,
+            80,
+            514,
+            544,
+            14,
+            "sofa"
+          ],
+          "group": "sofa"
+        },
+        {
+          "b": [
+            150,
+            160,
+            514,
+            544,
+            14,
+            "sofa"
+          ],
+          "group": "sofa"
+        },
+        {
+          "b": [
+            80,
+            150,
+            424,
+            436,
+            12,
+            "oak"
+          ],
+          "group": "media"
+        },
+        {
+          "b": [
+            30,
+            42,
+            465,
+            505,
+            30,
+            "stone"
+          ],
+          "group": "fireplace"
+        },
+        {
+          "b": [
+            120,
+            190,
+            396,
+            414,
+            18,
+            "oak"
+          ],
+          "group": "desk"
+        },
+        {
+          "b": [
+            145,
+            165,
+            380,
+            392,
+            12,
+            "black"
+          ],
+          "group": "chair"
+        },
+        {
+          "b": [
+            270,
+            330,
+            236,
+            248,
+            20,
+            "wood"
+          ],
+          "group": "sideboard"
+        },
+        {
+          "b": [
+            318,
+            332,
+            286,
+            296,
+            11,
+            "oak"
+          ],
+          "group": "chairs"
+        },
+        {
+          "b": [
+            318,
+            332,
+            344,
+            354,
+            11,
+            "oak"
+          ],
+          "group": "chairs"
+        },
+        {
+          "b": [
+            290,
+            300,
+            313,
+            327,
+            11,
+            "oak"
+          ],
+          "group": "chairs"
+        },
+        {
+          "b": [
+            350,
+            360,
+            313,
+            327,
+            11,
+            "oak"
+          ],
+          "group": "chairs"
+        },
+        {
+          "b": [
+            406,
+            500,
+            236,
+            256,
+            22,
+            "cab"
+          ],
+          "group": "kitchen"
+        },
+        {
+          "b": [
+            406,
+            500,
+            236,
+            256,
+            1.5,
+            "ctr",
+            22
+          ],
+          "group": "kitchen"
+        },
+        {
+          "b": [
+            406,
+            500,
+            236,
+            246,
+            14,
+            "cab",
+            40
+          ],
+          "group": "kitchen"
+        },
+        {
+          "b": [
+            504,
+            532,
+            236,
+            260,
+            48,
+            "ss"
+          ],
+          "group": "fridge"
+        },
+        {
+          "b": [
+            534,
+            554,
+            236,
+            360,
+            22,
+            "cab"
+          ],
+          "group": "kitchen"
+        },
+        {
+          "b": [
+            534,
+            554,
+            236,
+            360,
+            1.5,
+            "ctr",
+            22
+          ],
+          "group": "kitchen"
+        },
+        {
+          "b": [
+            206,
+            220,
+            440,
+            480,
+            10,
+            "oak"
+          ],
+          "group": "bench"
+        },
+        {
+          "b": [
+            500,
+            520,
+            460,
+            520,
+            8,
+            "oak"
+          ],
+          "group": "lounger"
+        },
+        {
+          "b": [
+            530,
+            550,
+            460,
+            520,
+            8,
+            "oak"
+          ],
+          "group": "lounger"
+        }
+      ],
+      "objects": [
+        {
+          "type": "table",
+          "x": 325,
+          "y": 320,
+          "r": 20,
+          "z": 19
+        },
+        {
+          "type": "table",
+          "x": 115,
+          "y": 485,
+          "r": 14,
+          "z": 10
+        },
+        {
+          "type": "table",
+          "x": 420,
+          "y": 490,
+          "r": 18,
+          "z": 18
+        },
+        {
+          "type": "floorlamp",
+          "x": 180,
+          "y": 535,
+          "z": 36
+        },
+        {
+          "type": "shelf",
+          "box": [
+            116,
+            140,
+            344,
+            352,
+            40
+          ],
+          "shelves": [
+            10,
+            20,
+            30
+          ]
+        },
+        {
+          "type": "plant",
+          "x": 44,
+          "y": 532
+        },
+        {
+          "type": "plant",
+          "x": 240,
+          "y": 236
+        },
+        {
+          "type": "plant",
+          "x": 290,
+          "y": 536
+        },
+        {
+          "type": "plant",
+          "x": 320,
+          "y": 540
+        },
+        {
+          "type": "plant",
+          "x": 545,
+          "y": 436
+        },
+        {
+          "type": "plant",
+          "x": 392,
+          "y": 236
+        },
+        {
+          "type": "screen",
+          "entity": "media_player.lounge_tv",
+          "x": 115,
+          "y": 430,
+          "z": 14,
+          "w": 56
+        }
+      ],
+      "overlays": [
+        {
+          "type": "sink",
+          "rect": [
+            430,
+            456,
+            240,
+            254
+          ],
+          "z": 23.5,
+          "faucet": [
+            443,
+            238
+          ],
+          "group": "kitchen"
+        },
+        {
+          "type": "burners",
+          "pts": [
+            [
+              538,
+              296
+            ],
+            [
+              550,
+              296
+            ],
+            [
+              538,
+              312
+            ],
+            [
+              550,
+              312
+            ]
+          ],
+          "z": 23.5,
+          "group": "kitchen"
+        },
+        {
+          "type": "pendant",
+          "x": 325,
+          "y": 320,
+          "z": 38,
+          "top": 60
+        },
+        {
+          "type": "fan",
+          "x": 155,
+          "y": 375,
+          "z": 58
+        },
+        {
+          "type": "sink",
+          "rect": [
+            84,
+            102,
+            350,
+            362
+          ],
+          "z": 21.5,
+          "faucet": [
+            93,
+            348
+          ],
+          "group": "vanity"
+        }
+      ],
+      "walls": [
+        {
+          "axis": "x",
+          "at": 230,
+          "spans": [
+            [
+              30,
+              560
+            ]
+          ],
+          "note": "back"
+        },
+        {
+          "axis": "y",
+          "at": 30,
+          "spans": [
+            [
+              230,
+              550
+            ]
+          ],
+          "note": "left"
+        },
+        {
+          "axis": "y",
+          "at": 560,
+          "spans": [
+            [
+              230,
+              420
+            ]
+          ],
+          "note": "right"
+        },
+        {
+          "axis": "x",
+          "at": 420,
+          "spans": [
+            [
+              300,
+              315.0
+            ],
+            [
+              385.0,
+              560
+            ]
+          ],
+          "doors": [
+            [
+              315.0,
+              385.0
+            ]
+          ],
+          "note": "deck side"
+        },
+        {
+          "axis": "y",
+          "at": 300,
+          "spans": [
+            [
+              420,
+              470.0
+            ],
+            [
+              510.0,
+              550
+            ]
+          ],
+          "doors": [
+            [
+              470.0,
+              510.0
+            ]
+          ],
+          "note": "foyer east"
+        },
+        {
+          "axis": "y",
+          "at": 200,
+          "spans": [
+            [
+              230,
+              272.0
+            ],
+            [
+              308.0,
+              363.0
+            ],
+            [
+              397.0,
+              420
+            ]
+          ],
+          "doors": [
+            [
+              272.0,
+              308.0
+            ],
+            [
+              363.0,
+              397.0
+            ]
+          ]
+        },
+        {
+          "axis": "y",
+          "at": 250,
+          "spans": [
+            [
+              230,
+              305.0
+            ],
+            [
+              355.0,
+              420
+            ]
+          ],
+          "doors": [
+            [
+              305.0,
+              355.0
+            ]
+          ]
+        },
+        {
+          "axis": "x",
+          "at": 340,
+          "spans": [
+            [
+              30,
+              54.0
+            ],
+            [
+              86.0,
+              200
+            ]
+          ],
+          "doors": [
+            [
+              54.0,
+              86.0
+            ]
+          ]
+        },
+        {
+          "axis": "y",
+          "at": 110,
+          "spans": [
+            [
+              340,
+              420
+            ]
+          ]
+        },
+        {
+          "axis": "x",
+          "at": 420,
+          "spans": [
+            [
+              30,
+              205.0
+            ],
+            [
+              245.0,
+              250
+            ]
+          ],
+          "doors": [
+            [
+              205.0,
+              245.0
+            ]
+          ]
+        },
+        {
+          "axis": "y",
+          "at": 200,
+          "spans": [
+            [
+              420,
+              505.0
+            ],
+            [
+              545.0,
+              550
+            ]
+          ],
+          "doors": [
+            [
+              505.0,
+              545.0
+            ]
+          ]
+        }
+      ],
+      "front_walls": [
+        {
+          "axis": "x",
+          "at": 550,
+          "spans": [
+            [
+              30,
+              300
+            ]
+          ]
+        }
+      ]
+    },
+    "lights": [
+      {
+        "entity": "light.dining_pendant",
+        "name": "Dining pendant",
+        "x": 325,
+        "y": 320,
+        "z": 38,
+        "r": 50
+      },
+      {
+        "entity": "light.kitchen_downlights",
+        "name": "Kitchen downlights",
+        "x": 440,
+        "y": 300,
+        "z": 59,
+        "r": 50,
+        "fixture": "can"
+      },
+      {
+        "entity": "light.kitchen_downlights",
+        "name": "Kitchen downlights 2",
+        "x": 505,
+        "y": 340,
+        "z": 59,
+        "r": 50,
+        "fixture": "can",
+        "hit": 0
+      },
+      {
+        "entity": "light.lounge_lamp",
+        "name": "Lounge lamp",
+        "x": 180,
+        "y": 535,
+        "z": 34,
+        "r": 60
+      },
+      {
+        "entity": "light.lounge_ceiling",
+        "name": "Lounge ceiling",
+        "x": 115,
+        "y": 485,
+        "z": 59,
+        "r": 70,
+        "fixture": "ceiling"
+      },
+      {
+        "entity": "light.hall",
+        "name": "Hall",
+        "x": 225,
+        "y": 300,
+        "z": 59,
+        "r": 40,
+        "fixture": "ceiling"
+      },
+      {
+        "entity": "light.foyer",
+        "name": "Foyer",
+        "x": 250,
+        "y": 485,
+        "z": 48,
+        "r": 45,
+        "fixture": "pendant"
+      },
+      {
+        "entity": "light.main_bedroom",
+        "name": "Main bedroom",
+        "x": 115,
+        "y": 285,
+        "z": 59,
+        "r": 60,
+        "fixture": "ceiling"
+      },
+      {
+        "entity": "light.reading_lamp",
+        "name": "Reading lamp",
+        "x": 45,
+        "y": 244,
+        "z": 24,
+        "r": 34,
+        "fixture": "tablelamp"
+      },
+      {
+        "entity": "light.ensuite",
+        "name": "Ensuite",
+        "x": 70,
+        "y": 380,
+        "z": 59,
+        "r": 45,
+        "fixture": "ceiling"
+      },
+      {
+        "entity": "light.study_fan_a",
+        "name": "Study fan A",
+        "x": 155,
+        "y": 375,
+        "z": 56,
+        "r": 60,
+        "halo": 10,
+        "hit": 0,
+        "gx": 151,
+        "gy": 371
+      },
+      {
+        "entity": "light.study_fan_b",
+        "name": "Study fan B",
+        "x": 155,
+        "y": 375,
+        "z": 56,
+        "r": 60,
+        "halo": 10,
+        "hit": 0,
+        "gx": 159,
+        "gy": 379
+      },
+      {
+        "entity": "light.porch",
+        "name": "Porch",
+        "x": 308,
+        "y": 470,
+        "z": 46,
+        "r": 36,
+        "fixture": "bulb"
+      },
+      {
+        "entity": "light.deck_spots",
+        "name": "Deck spots",
+        "x": 554,
+        "y": 430,
+        "z": 40,
+        "gx": 440,
+        "gy": 500,
+        "gz": 0,
+        "r": 70,
+        "fixture": "can"
+      }
+    ],
+    "hotspots": [
+      {
+        "entity": "light.study_fan",
+        "name": "Study fan",
+        "x": 155,
+        "y": 375,
+        "z": 58,
+        "hit": 14,
+        "tap": "toggle"
+      }
+    ],
+    "chips": [
+      {
+        "temperature": "sensor.lounge_temperature",
+        "humidity": "sensor.lounge_humidity",
+        "occupancy": "binary_sensor.lounge_occupancy",
+        "x": 60,
+        "y": 460,
+        "z": 66
+      },
+      {
+        "temperature": "sensor.main_bedroom_temperature",
+        "occupancy": "binary_sensor.main_bedroom_occupancy",
+        "x": 170,
+        "y": 300,
+        "z": 66
+      },
+      {
+        "climate": "climate.heat_pump",
+        "x": 225,
+        "y": 255,
+        "z": 66
+      },
+      {
+        "entity": "media_player.kitchen_radio",
+        "x": 520,
+        "y": 300,
+        "z": 30
+      }
+    ],
+    "doors": [
+      {
+        "entity": "binary_sensor.front_door",
+        "name": "Front door",
+        "x": 308,
+        "y": 495,
+        "z": 40
+      },
+      {
+        "entity": "binary_sensor.deck_door",
+        "name": "Deck door",
+        "x": 395,
+        "y": 424,
+        "z": 40
+      }
+    ]
+  }
+}

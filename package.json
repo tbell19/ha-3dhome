@@ -1,0 +1,23 @@
+{
+  "name": "ha-3dhome",
+  "version": "5.0.0",
+  "private": true,
+  "description": "3D Home: a live 3D floor plan card and dashboard strategy for Home Assistant, with an editor built in",
+  "type": "commonjs",
+  "scripts": {
+    "build": "node tools/build.js",
+    "test": "node tools/smoke-test.js",
+    "test:mobile": "node tools/smoke-test.js --mobile",
+    "test:leaks": "node tools/leak-test.js",
+    "test:plan": "node tools/plan-test.js",
+    "shots:looks": "node tools/look-shots.js",
+    "demo": "node tools/demo.js",
+    "test:demo": "node tools/demo-test.js"
+  },
+  "devDependencies": {
+    "jszip": "3.10.1",
+    "playwright": "^1.47.0",
+    "terser": "^5.31.0",
+    "three": "0.160.0"
+  }
+}

@@ -1,0 +1,41 @@
+# Publishes a release when a version tag is pushed (git tag v4.21.0 && git push origin v4.21.0).
+# HACS installs from releases, so this is the gate for what users get; main can move freely in between.
+# A tag with a suffix (v4.21.0-beta.1) becomes a pre-release, which only people with "Show beta versions" see.
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - name: Versions match the tag
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          node -e '
+            const fs = require("fs"), v = process.argv[1];
+            const got = { "package.json": require("./package.json").version,
+              VERSION3D: fs.readFileSync("src/ha-3dhome.js", "utf8").match(/VERSION3D = "([^"]+)"/)[1],
+              EDITOR_VERSION: fs.readFileSync("src/ha-3dhome-editor.js", "utf8").match(/EDITOR_VERSION = "([^"]+)"/)[1] };
+            const bad = Object.entries(got).filter(([, x]) => x !== v);
+            if (bad.length) { console.error("tag v" + v + " but " + bad.map(([k, x]) => k + "=" + x).join(", ")); process.exit(1); }' "$v"
+      - name: Committed dist/ is this build
+        run: npm run build && git diff --exit-code -- dist/
+      - name: Tests
+        run: |
+          npx playwright install --with-deps chromium
+          npm test
+          npm run test:plan
+          npm run test:demo
+      - name: Publish
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" dist/ha-3dhome.js dist/ha-3dhome-editor.js \
+            --title "$GITHUB_REF_NAME" --generate-notes $pre

@@ -1,0 +1,25 @@
+# Publishes the standalone demo (site/ + the built card + examples/sample-home.json) to GitHub Pages.
+# Pages needs a public repository (or a paid plan), so this is skipped while the repo is private.
+# One-time setup: Settings -> Pages -> Source: GitHub Actions.
+name: Demo site
+# Manual for now: run it from the Actions tab once Pages is turned on. To publish on every push to main, add:
+#   push: { branches: [main], paths: ["site/**", "dist/**", "examples/**", "tools/demo.js"] }
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency: { group: pages, cancel-in-progress: true }
+jobs:
+  deploy:
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
+    steps:
+      - uses: actions/checkout@v4
+      - run: node tools/demo.js --out _site
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+      - id: deploy
+        uses: actions/deploy-pages@v4

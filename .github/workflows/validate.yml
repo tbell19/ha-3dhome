@@ -1,0 +1,13 @@
+# HACS and hassfest-style checks. HACS only accepts public repositories, so this is skipped while the repo is private.
+name: Validate
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:
+jobs:
+  hacs:
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with: { category: plugin }
