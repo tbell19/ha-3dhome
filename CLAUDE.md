@@ -64,6 +64,7 @@ HACS installs GitHub releases, so a version tag is what ships and `main` is the 
   - Run `npm run test:leaks` after touching lifecycle, rebuild or disposal code.
 - **Rendering is on demand (v4.20)**
   - Nothing draws unless `_requestRender()` is called. Anything that changes the scene (async loads, animations, editor tweaks) must call it. Before v4.20 an OrbitControls bug kept the loop spinning, which hid missing calls.
+  - A lost WebGL context (phones do it to background pages) needs a redraw on `webglcontextrestored`, or a rebuild when it never comes back (`_ctxCheck`, v5.1). Connection state lives in `_connState` (`hass.connected` + `navigator.onLine`); reconnecting sets `_seen = null` so every entity is re-applied.
   - `hass` is applied on the next frame (`_applyHass`), and `_update()` runs only when an entity mentioned in the config changed. Tests that set `hass` must wait a frame (`!card._hassRaf`). A new feature that reads an entity from somewhere other than the card config must add it to `watchedEntities`.
 
 - **Lighting and shadows**

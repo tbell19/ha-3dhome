@@ -5,7 +5,7 @@
  * models (libraries downloaded into /config/www/sh3d via the Downloader integration), then Save writes the
  * card config back into the dashboard.
  */
-const VERSION3D = "5.0.0";
+const VERSION3D = "5.1.0";
 const STRATEGY_NAME = "ha-3dhome";
 const OLD_NAMES = { card: "iso-home-3d-card", strategy: "iso-home" };   // the project was called ha-iso-home before v5; both still work
 const CDN = "https://cdn.jsdelivr.net/npm/";
@@ -490,6 +490,10 @@ const watchedEntities = (cfg) => {
   walk(cfg);
   return [...out];
 };
+/* a connection blip shorter than this (HA suspending a hidden tab, a Wi-Fi hand-over) doesn't show the offline pill */
+const CONN_GRACE = 2500;
+/* how long a lost WebGL context may stay lost on a visible page before the card rebuilds itself from scratch */
+const CTX_GRACE = 3000;
 const cardIdent = (cfg) => `${cfg.dashboard || decodeURIComponent(location.pathname.split("/")[1] || "lovelace")}|${cfg.card_id || ""}`;
 
 class Home3DCard extends HTMLElement {
@@ -533,6 +537,10 @@ class Home3DCard extends HTMLElement {
     if (this._keys) window.removeEventListener("keydown", this._keys);
     if (this._texListener) document.removeEventListener("ha-3dhome-tex", this._texListener);
     if (this._visListener) document.removeEventListener("visibilitychange", this._visListener);
+    if (this._netListener) for (const t of ["online", "offline", "pageshow"]) window.removeEventListener(t, this._netListener);
+    this._netListener = null;
+    clearTimeout(this._offT); clearTimeout(this._probeT); clearTimeout(this._ctxT);
+    this._offT = this._probeT = this._ctxT = null; this._offSince = 0; this._ctxLost = 0; this._conn = null;
     if (this._edReady) window.removeEventListener("ha-3dhome-editor-ready", this._edReady);
     this._ro?.disconnect(); this._ro = null;
     for (const hp of this._helpers || []) { this._scene?.remove(hp); hp.dispose?.(); }
@@ -578,6 +586,7 @@ class Home3DCard extends HTMLElement {
   _applyHass() {
     const h = this._hass;
     if (!this._ready || !h) return;
+    this._connState(h);
     if (this._edit || this._hassChanged(h)) this._update();
     this._rcHass();
     if (this._edBtn) this._edBtn.style.display = h.user?.is_admin && !this._edit && this._enterEdit ? "" : "none";   // Edit shows once the editor module has loaded
@@ -593,6 +602,55 @@ class Home3DCard extends HTMLElement {
     if (this._seenCfg !== cfg) { this._watch = watchedEntities(cfg); this._seenCfg = cfg; }
     this._seen = { config: h.config, locale: h.locale, user: h.user, at: now, states: new Map(this._watch.map((id) => [id, h.states[id]])) };
     return true;
+  }
+  /* The websocket to HA drops on a restart, a network loss or a sleeping tablet, and HA flips hass.connected while it
+   * reconnects. Past a short grace period the map greys out under a "Reconnecting" pill (its states may be stale); once
+   * it's back, every entity is re-applied (they may have changed meanwhile) and the scene redrawn. */
+  _connState(h = this._hass) {
+    if (!this._ready) return;
+    const up = !!h && h.connected !== false && navigator.onLine !== false;
+    if (up) {
+      clearTimeout(this._offT); this._offT = null;
+      if (this._offSince) { this._offSince = 0; this._seen = null; this._showOffline(false); }   // _seen = null: the next _hassChanged redoes everything
+    } else if (!this._offSince) {
+      this._offSince = Date.now();
+      this._offT = setTimeout(() => { this._offT = null; if (this._offSince) this._showOffline(true); }, CONN_GRACE);
+    }
+  }
+  _showOffline(on) {
+    this._wrap?.classList.toggle("offline", on);
+    this._conn?.classList.toggle("hide", !on);
+  }
+  /* a tap that would call a service while HA is away: show the pill now instead of a call that goes nowhere */
+  _offlineTap() {
+    if (!this._offSince) return false;
+    clearTimeout(this._offT); this._offT = null; this._showOffline(true);
+    this._conn?.animate?.([{ transform: "translateX(-50%) scale(1.08)" }, { transform: "translateX(-50%)" }], 300);
+    return true;
+  }
+  /* After a long sleep or a network change the websocket can be dead without HA noticing yet (it still says connected).
+   * Ping it, and if no answer comes back, have HA reconnect now rather than whenever the socket finally times out. */
+  _probeConn() {
+    const h = this._hass, c = h?.connection;
+    if (!c?.ping || h.connected === false || this._probeT) return;
+    this._probeT = setTimeout(() => { this._probeT = null; if (this._renderer && this._hass?.connection === c) c.reconnect?.(true); }, 8000);
+    c.ping().then(() => { clearTimeout(this._probeT); this._probeT = null; }, () => {});
+  }
+  /* Phones and tablets often throw away the WebGL context of a page in the background. Three.js restores its state when
+   * the browser gives the context back, but nothing redraws by itself (rendering is on demand), and some browsers never
+   * give it back: then rebuild the card once the page is visible again. */
+  _ctxCheck() {
+    clearTimeout(this._ctxT); this._ctxT = null;
+    if (!this._ctxLost || !this._renderer) return;
+    if (document.hidden) return;   // visibilitychange calls again
+    const left = CTX_GRACE - (Date.now() - Math.max(this._ctxLost, this._shownAt || 0));
+    if (left > 0) { this._ctxT = setTimeout(() => this._ctxCheck(), left); return; }
+    if (this._edit?.dirty) return;   // never throw away unsaved edits; the canvas comes back with the context
+    console.warn("ha-3dhome: the WebGL context was lost and not restored; rebuilding the map");
+    const cam = this._cam && this._controls && { pos: this._cam.position.toArray(), zoom: this._cam.zoom, target: this._controls.target.toArray() };
+    this._teardown();
+    this._camKeep = cam;
+    this._kick();
   }
   disconnectedCallback() {
     if (this._inner) return;   // the adopted card parks itself
@@ -846,9 +904,16 @@ class Home3DCard extends HTMLElement {
           display: grid; gap: 6px; padding: 16px 18px; border-radius: 14px; text-align: center; pointer-events: none; color: #f2ebe0;
           background: rgba(20,18,16,.78); border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(6px); font: 13px/1.45 var(--ha-font-family-body, system-ui); }
         .empty b { font-size: 15px; } .empty span { opacity: .8; } .empty ha-icon { --mdc-icon-size: 14px; margin: 0 2px 0 4px; }
+        .conn { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 7; display: flex; gap: 8px; align-items: center;
+          padding: 6px 12px; border-radius: 999px; background: rgba(20,18,16,.85); color: #f2ebe0; border: 1px solid rgba(255,255,255,.12);
+          font: 500 12px var(--ha-font-family-body, system-ui); pointer-events: none; white-space: nowrap; }
+        .conn i { width: 8px; height: 8px; border-radius: 50%; background: #e0a050; animation: connp 1.4s ease-in-out infinite; }
+        @keyframes connp { 50% { opacity: .3; } }
+        .editing .conn { top: 58px; }
+        canvas, .ov { transition: filter .6s; } .offline canvas, .offline .ov { filter: saturate(.35) brightness(.8); }
         .hide { display: none !important; }
       </style>
-      <ha-card><div class="wrap"><div class="ov"></div><div class="ed"></div>
+      <ha-card><div class="wrap"><div class="ov"></div><div class="ed"></div><div class="conn hide" role="status"><i></i>Reconnecting to Home Assistant…</div>
         <div class="rooms"></div><div class="rcards hide"><header><span class="ttl"></span><button data-m title="Hide controls">${ic("chevron-up")}</button></header><div class="rcbody"></div></div>
         <div class="nav">
           <button data-v="left" title="Rotate view left">${ic("rotate-left")}</button><button data-v="right" title="Rotate view right">${ic("rotate-right")}</button>
@@ -859,6 +924,7 @@ class Home3DCard extends HTMLElement {
     this._ov = root.querySelector(".ov");
     this._ed = root.querySelector(".ed");
     this._edBtn = root.querySelector(".edbtn");
+    this._conn = root.querySelector(".conn");
     this._edBtn.addEventListener("click", () => this._enterEdit?.());
 
     const renderer = (this._renderer = new T.WebGLRenderer({ antialias: true, alpha: true }));
@@ -870,6 +936,13 @@ class Home3DCard extends HTMLElement {
     renderer.shadowMap.type = T.PCFSoftShadowMap;
     renderer.shadowMap.autoUpdate = false;
     wrap.prepend(renderer.domElement);
+    const canvas = renderer.domElement;   // three.js keeps the context restorable (it preventDefault()s the loss)
+    canvas.addEventListener("webglcontextlost", () => { if (this._renderer?.domElement === canvas) { this._ctxLost = Date.now(); this._ctxCheck(); } });
+    canvas.addEventListener("webglcontextrestored", () => {
+      if (this._renderer?.domElement !== canvas) return;
+      this._ctxLost = 0; clearTimeout(this._ctxT); this._ctxT = null;
+      this._renderer.shadowMap.needsUpdate = true; this._requestRender();
+    });
 
     this._scene = new T.Scene();
     const cam = (this._cam = new T.OrthographicCamera(-1, 1, 1, -1, -2000, 4000));
@@ -925,15 +998,31 @@ class Home3DCard extends HTMLElement {
     renderer.domElement.addEventListener("contextmenu", (ev) => ev.preventDefault());
     this._texListener = () => this._renderer && this._requestRender();
     document.addEventListener("ha-3dhome-tex", this._texListener);
-    this._visListener = () => { if (!document.hidden && this._renderer) this._requestRender(); };
+    this._visListener = () => {
+      if (document.hidden) { this._hiddenAt = Date.now(); return; }
+      if (!this._renderer) return;
+      this._shownAt = Date.now();
+      this._requestRender(); this._ctxCheck();
+      if (this._shownAt - (this._hiddenAt || this._shownAt) > 60000) this._probeConn();   // back from a long sleep
+    };
     document.addEventListener("visibilitychange", this._visListener);
+    // the browser's own network state: going offline counts even before the socket notices, and coming online or
+    // a page restored from the back/forward cache checks the socket still works
+    this._netListener = (ev) => { if (!this._renderer) return; this._connState(); if (ev.type !== "offline") { this._requestRender(); this._probeConn(); } };
+    for (const t of ["online", "offline", "pageshow"]) window.addEventListener(t, this._netListener);
     this._rebuild();
     this._bindPicking();
     this._ro = new ResizeObserver(() => this._resize());
     this._ro.observe(wrap);
     this._ro.observe(root.querySelector(".rcards"));   // the room controls resizing moves the safe area (see _safeArea)
+    if (this._camKeep) {   // rebuilt after a lost context: keep the view the user had
+      const k = this._camKeep; this._camKeep = null;
+      this._fitRoom = null; this._fly = null; this._moved = true;
+      cam.position.fromArray(k.pos); controls.target.fromArray(k.target); cam.zoom = k.zoom; cam.updateProjectionMatrix();
+    }
     this._resize();
     this._ready = true;
+    this._connState();
     this._update();
     if (this._hass?.user?.is_admin && this._enterEdit) this._edBtn.style.display = "";
     this._edReady = () => { if (this._edBtn && this._hass?.user?.is_admin && !this._edit) this._edBtn.style.display = ""; };
@@ -2280,7 +2369,7 @@ class Home3DCard extends HTMLElement {
         }
         if (!this._tcDragging) this._controls.enabled = true;
       } else if (down && down.hit && !down.held && ev.type === "pointerup") {
-        if (down.hit.action === "toggle") this._hass.callService("homeassistant", "toggle", { entity_id: down.hit.entity });
+        if (down.hit.action === "toggle") { if (!this._offlineTap()) this._hass.callService("homeassistant", "toggle", { entity_id: down.hit.entity }); }
         else this._moreInfo(down.hit.entity);
       }
       down = null;
@@ -2304,6 +2393,7 @@ class Home3DCard extends HTMLElement {
   _entityAction(entity, tap) {
     const d = entity.split(".")[0], h = this._hass;
     const a = tap || (TOGGLE_DOMAINS.has(d) ? "toggle" : ["script", "scene"].includes(d) ? "run" : ["button", "input_button"].includes(d) ? "press" : "more-info");
+    if (a !== "more-info" && this._offlineTap()) return;
     if (a === "toggle") h.callService("homeassistant", "toggle", { entity_id: entity });
     else if (a === "run") h.callService(d, "turn_on", { entity_id: entity });
     else if (a === "press") h.callService(d, "press", { entity_id: entity });

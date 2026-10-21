@@ -7,7 +7,7 @@
  * It waits for the core to define <ha-3dhome-card>, takes the shared helpers the core publishes on
  * window.__ha3dhome, and copies the methods of Home3DEditor onto the card's prototype.
  */
-const EDITOR_VERSION = "5.0.0";
+const EDITOR_VERSION = "5.1.0";
 await customElements.whenDefined("ha-3dhome-card");
 const H = window.__ha3dhome;
 if (!H || H.VERSION3D !== EDITOR_VERSION) throw new Error(`3D Home editor ${EDITOR_VERSION} doesn't match the card core ${H?.VERSION3D || "(missing)"} — refresh, or update both resources`);
@@ -1564,6 +1564,7 @@ class Home3DEditor {
   /* ----- save ----- */
   async _save() {
     const h = this._hass, btn = this._ed.querySelector('[data-a="save"]');
+    if (this._offSince) return this._toast("Not connected to Home Assistant. Your changes are kept: save again once it's back", 5000);
     btn.disabled = true; btn.textContent = "Saving…";
     try {
       const seg = this._config.dashboard || decodeURIComponent(location.pathname.split("/")[1] || "lovelace");

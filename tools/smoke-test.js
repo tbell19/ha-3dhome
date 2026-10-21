@@ -133,6 +133,33 @@ window.card=__card;</script></body></html>`;
   }
   await ev(`(()=>{card._config.lights.pop();card._rebuild()})()`); await wait(1500);
 
+  // connection loss: a short blip shows nothing, a real drop greys the map under a pill and blocks taps, reconnecting
+  // re-applies every entity and redraws
+  await ev(`(()=>{card._upN=0;card._frN=0;const u=card._update,f=card._placeOverlays;card._update=function(){card._upN++;return u.apply(this,arguments)};
+    card._placeOverlays=function(){card._frN++;return f.apply(this,arguments)}})()`);
+  await ev(`card.hass={...card._hass,connected:false}`); await wait(400);
+  await ev(`card.hass={...card._hass,connected:true}`); await wait(2800);
+  check("a short connection blip shows no offline pill", await ev(`card.shadowRoot.querySelector('.conn').classList.contains('hide') && !card._offSince`));
+  await ev(`card.hass={...card._hass,connected:false}`); await wait(800);
+  check("no offline pill during the grace period", await ev(`card.shadowRoot.querySelector('.conn').classList.contains('hide')`));
+  await wait(2200);
+  check("a dropped connection shows the offline pill and greys the map", await ev(`!card.shadowRoot.querySelector('.conn').classList.contains('hide') && card._wrap.classList.contains('offline')`));
+  await ev(`calls.length=0; card._entityAction('light.test_string')`);
+  check("taps don't call services while offline", (await ev(`calls.length`)) === 0);
+  await ev(`card._upN=0;card._frN=0;card.hass={...card._hass,connected:true}`); await wait(400);
+  check("reconnecting hides the pill, re-applies the states and redraws",
+    await ev(`card.shadowRoot.querySelector('.conn').classList.contains('hide') && !card._wrap.classList.contains('offline') && card._upN>0 && card._frN>0`), JSON.stringify(await ev(`[card._upN,card._frN]`)));
+  await ev(`card._entityAction('light.test_string')`);
+  check("taps call services again once reconnected", await ev(`calls.some(c=>c[1]==='toggle')`));
+  // a lost WebGL context (phones do this to background pages): redraw when it comes back, rebuild when it doesn't
+  await ev(`card._frN=0;window.__lc=card._renderer.getContext().getExtension('WEBGL_lose_context');window.__r0=card._renderer;__lc.loseContext()`); await wait(400);
+  await ev(`__lc.restoreContext()`); await wait(800);
+  check("a restored WebGL context redraws the map", await ev(`card._frN>0 && card._renderer===__r0 && !card._ctxLost`), String(await ev(`card._frN`)));
+  await ev(`(()=>{card._camZ=card._cam.zoom;card._renderer.getContext().getExtension('WEBGL_lose_context').loseContext()})()`); await wait(5000);
+  check("a WebGL context that never comes back rebuilds the map and keeps the view",
+    await ev(`card._ready && card._renderer && card._renderer!==__r0 && !card._renderer.getContext().isContextLost() && Math.abs(card._cam.zoom-card._camZ)<1e-6 && card._wrap.isConnected`));
+  await ev(`delete card._update; delete card._placeOverlays`);
+
   await ev(`card.shadowRoot.querySelector('.edbtn').click()`); await wait(1500);
   check("edit mode opens", await ev(`!!card._edit && !!card.shadowRoot.querySelector('.bar')`));
   const SOFA = await ev(`card._work.scene.boxes.findIndex(b=>b.group==='sofa')`), FAN = await ev(`'v:'+card._work.scene.overlays.findIndex(o=>o.type==='fan')`);
