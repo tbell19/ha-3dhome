@@ -13,6 +13,7 @@ const { chromium } = require("playwright");
 const fs = require("fs"), path = require("path");
 
 const ROOT = path.join(__dirname, "..");
+const CODE = require("./bundle").bundle();   // { core, editor }
 const MOBILE = process.argv.includes("--mobile");
 const OUT = path.join(__dirname, "out/looks");
 fs.mkdirSync(OUT, { recursive: true });
@@ -72,8 +73,8 @@ const esm = (rel) => fs.readFileSync(path.join(ROOT, "node_modules/three/example
 <body style="margin:0;background:#111"><div id=host></div>
 <script>customElements.define('ha-card',class extends HTMLElement{connectedCallback(){this.style.display='block'}});
 customElements.define('ha-icon',class extends HTMLElement{});</script>
-${panel ? `<script type=module>${fs.readFileSync(path.join(ROOT, "src/ha-3dhome-editor.js"), "utf8")}</script>` : ""}
-<script type=module>${fs.readFileSync(path.join(ROOT, "src/ha-3dhome.js"), "utf8")}
+${panel ? `<script type=module>${CODE.editor}</script>` : ""}
+<script type=module>${CODE.core}
 const __gen=await customElements.get('ll-strategy-dashboard-ha-3dhome').generate(${JSON.stringify(dash.strategy)});
 const __card=document.createElement('ha-3dhome-card');
 __card.setConfig({...__gen.views[0].cards[0], night_mode: ${JSON.stringify(mode === "night" ? "always" : "never")}, look: ${JSON.stringify(LOOKS[name])}${name === "nowindow" ? ", window_light: 0" : ""}});

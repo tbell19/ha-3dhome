@@ -14,8 +14,7 @@
 const { chromium } = require("playwright");
 const fs = require("fs"), path = require("path");
 const ROOT = path.join(__dirname, "..");
-const CARD = process.argv.includes("--dist") ? path.join(ROOT, "dist/ha-3dhome.js") : path.join(ROOT, "src/ha-3dhome.js");
-const EDITOR = process.argv.includes("--dist") ? path.join(ROOT, "dist/ha-3dhome-editor.js") : path.join(ROOT, "src/ha-3dhome-editor.js");
+const CODE = require("./bundle").bundle({ dist: process.argv.includes("--dist") });   // { core, editor }
 const js = (body) => ({ body, contentType: "application/javascript", headers: { "access-control-allow-origin": "*" } });
 const LOOK = process.argv.includes("--look");
 const JSM = "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/";
@@ -50,8 +49,8 @@ const _cap=(o)=>!!(o===true||(o&&o.capture));
 EventTarget.prototype.addEventListener=function(t,f,o){ if((this===window||this===document)&&!__lst.some(l=>l[0]===this&&l[1]===t&&l[2]===f&&l[3]===_cap(o))) __lst.push([this,t,f,_cap(o)]); return _ae.call(this,t,f,o); };
 EventTarget.prototype.removeEventListener=function(t,f,o){ const i=__lst.findIndex(l=>l[0]===this&&l[1]===t&&l[2]===f&&l[3]===_cap(o)); if(i>=0)__lst.splice(i,1); return _re.call(this,t,f,o); };
 </script>
-<script type=module>${fs.readFileSync(EDITOR, "utf8")}</script>
-<script type=module>${fs.readFileSync(CARD, "utf8")}
+<script type=module>${CODE.editor}</script>
+<script type=module>${CODE.core}
 const __dash=${JSON.stringify(dash)};
 const __gen=await customElements.get('ll-strategy-dashboard-ha-3dhome').generate(__dash.strategy);
 window.__cfg=${LOOK ? `{...__gen.views[0].cards[0], night_mode:"always", look:{light:true,ao:true,stage:true,bloom:true}}` : "__gen.views[0].cards[0]"};

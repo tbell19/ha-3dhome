@@ -14,7 +14,7 @@ For a dashboard plugin, HACS looks for `hacs.json` → `filename` (`ha-3dhome.js
 
 ## Cutting a release
 
-1. Bump `VERSION3D` (`src/ha-3dhome.js`), `EDITOR_VERSION` (`src/ha-3dhome-editor.js`) and `version` in `package.json` to the same number.
+1. Bump `VERSION3D` (`src/core/constants.js`), `EDITOR_VERSION` (`src/ha-3dhome-editor.js`) and `version` in `package.json` to the same number.
 2. Run the tests (`npm test`, `npm run test:mobile`, `npm run test:plan`, `npm run test:demo`), then `npm run build` and commit `dist/`.
 3. Push to `main`, then tag that commit and push the tag:
 

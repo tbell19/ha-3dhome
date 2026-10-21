@@ -15,6 +15,7 @@
     "test:demo": "node tools/demo-test.js"
   },
   "devDependencies": {
+    "esbuild": "0.24.0",
     "jszip": "3.10.1",
     "playwright": "^1.47.0",
     "terser": "^5.31.0",

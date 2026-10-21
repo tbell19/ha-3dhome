@@ -4,10 +4,13 @@ Read this first. It is the hand-off between sessions: what lives where, how to c
 
 ## What this is
 
-3D Home (`ha-3dhome`, formerly ha-iso-home) is a Home Assistant dashboard plugin, published through HACS. The code is two ES modules:
+3D Home (`ha-3dhome`, formerly ha-iso-home) is a Home Assistant dashboard plugin, published through HACS. The source is split into small ES modules that esbuild bundles back into two files (`npm run build`, `tools/bundle.js`):
 
-- `src/ha-3dhome.js` (core): the viewer, picking, plan-layer rendering and the strategy. It publishes shared helpers on `window.__ha3dhome` and imports the editor from its own folder (HACS registers only one file).
-- `src/ha-3dhome-editor.js`: the in-card editor. It waits for the core, checks the version, and copies its methods onto the card prototype. The ✎ Edit button only appears once it has loaded.
+- `src/ha-3dhome.js` (core entry → `dist/ha-3dhome.js`): registers the card and the strategy, publishes shared helpers on `window.__ha3dhome` and imports the editor from its own folder (HACS registers only one file).
+  - `src/core/`: constants and pure helpers (items, plan geometry, surfaces, fixtures, sun, entities, Sweet Home 3D parsing) plus the strategy.
+  - `src/card/`: the card. `card.js` holds the element's lifecycle and extends one mixin per topic (`startup`, `camera`, `rooms`, `scene`, `models`, `lights`, `picking`, `live`, `plan`).
+- `src/ha-3dhome-editor.js` (editor entry → `dist/ha-3dhome-editor.js`): waits for the core, checks the version, then copies the methods of each part in `src/editor/` onto the card prototype. The parts read the core's helpers through `src/editor/shared.js`. The ✎ Edit button only appears once it has loaded.
+- Tests bundle `src/` on the fly (`tools/bundle.js`), so there's no build step before `npm test`; `--dist` tests the committed build.
 
 They define:
 
@@ -21,7 +24,7 @@ This repo is public. Never commit anyone's real home layout, entity ids, Home As
 
 HACS installs GitHub releases, so a version tag is what ships and `main` is the working branch. Full steps: docs/RELEASING.md.
 
-1. Edit `src/`, then bump `VERSION3D` (core), `EDITOR_VERSION` (editor) and `version` in package.json together. The editor refuses to attach to a core of another version.
+1. Edit `src/`, then bump `VERSION3D` (`src/core/constants.js`), `EDITOR_VERSION` (`src/ha-3dhome-editor.js`) and `version` in package.json together. The editor refuses to attach to a core of another version.
 2. Run `npm test`, `npm run test:mobile`, `npm run test:plan` (and `-- --mobile`) and `npm run test:demo`; all must pass. Also run `npm run test:leaks` if you touched lifecycle, rebuild or disposal code (add `-- --look` when you touched the render looks). Then `npm run build` and commit `dist/`.
 3. Only the maintainer decides when to tag a release. Don't push tags or submit to the HACS default list unless asked.
 

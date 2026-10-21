@@ -11,8 +11,7 @@ const { build: buildMockLib } = require("./mock/build-mock-lib");
 
 const ROOT = path.join(__dirname, "..");
 const MOBILE = process.argv.includes("--mobile");
-const CARD = process.argv.includes("--dist") ? path.join(ROOT, "dist/ha-3dhome.js") : path.join(ROOT, "src/ha-3dhome.js");
-const EDITOR = process.argv.includes("--dist") ? path.join(ROOT, "dist/ha-3dhome-editor.js") : path.join(ROOT, "src/ha-3dhome-editor.js");
+const CODE = require("./bundle").bundle({ dist: process.argv.includes("--dist") });   // { core, editor }
 const OUT = path.join(__dirname, "out");
 fs.mkdirSync(OUT, { recursive: true });
 const results = [];
@@ -38,8 +37,8 @@ const esm = (rel) => fs.readFileSync(path.join(ROOT, "node_modules/three/example
   });
   const html = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1"><body style="margin:0;background:#111"><div id=host></div>
 <script>customElements.define('ha-card',class extends HTMLElement{connectedCallback(){this.style.display='block'}});customElements.define('ha-icon',class extends HTMLElement{});</script>
-<script type=module>${fs.readFileSync(EDITOR, "utf8")}</script>
-<script type=module>${fs.readFileSync(CARD, "utf8")}
+<script type=module>${CODE.editor}</script>
+<script type=module>${CODE.core}
 const __dash=${JSON.stringify(dash)};
 window.saved=null; window.uploads=0;
 const __gen=await customElements.get('ll-strategy-dashboard-ha-3dhome').generate(__dash.strategy);

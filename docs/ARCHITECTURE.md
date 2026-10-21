@@ -1,15 +1,22 @@
 # Architecture
 
-The viewer and the strategy live in `src/ha-3dhome.js`; everything behind ✎ Edit lives in `src/ha-3dhome-editor.js`, which the core loads from its own folder. This doc walks through them top to bottom.
+The source is small ES modules under `src/`, bundled by esbuild into the two shipped files: `dist/ha-3dhome.js` (viewer and strategy) and `dist/ha-3dhome-editor.js` (everything behind ✎ Edit, which the core loads from its own folder). This doc walks through them top to bottom.
 
 ## Module layout
 
-| Section | What it does |
+| Path | What it does |
 |---|---|
-| Constants | CDN URLs (pinned `three@0.160.0`, `jszip@3.10.1`), plan centre `CX=296, CY=391`, the Sweet Home 3D library list `LIBS`, icon maps |
-| Pure helpers | `itemCenter`, `shiftItem`, `mapPts`, `rotPt`, `parseProps` (Java .properties), `zipFind`, the `IDB` cache |
-| `class Home3DCard` | Lifecycle, camera, scene build, lights, picking, overlays, live update, editor, model library |
-| `class Home3DStrategy` | The dashboard strategy (`generate(config)` → `{views:[panel view with the card]}`) |
+| `src/ha-3dhome.js` | Core entry: defines `<ha-3dhome-card>` and the strategy elements (plus the old aliases), publishes `window.__ha3dhome`, loads the editor |
+| `src/core/constants.js` | Version, names, CDN URLs (pinned `three@0.160.0`, `jszip@3.10.1`), plan centre `CX=296, CY=391`, the Sweet Home 3D library list `LIBS`, render-look defaults |
+| `src/core/util.js` | Rounding, cloning, escaping, `rotPt`, `inPoly`, `polyArea`, `stableJSON` |
+| `src/core/items.js` | Item kinds and pure item maths: `itemCenter`, `shiftItem`, `itemZ`, `scaleItem`, `mapPts` |
+| `src/core/plan-geometry.js` | `segDir`, `wallExtensions`, `wallPieces`, `planJoints`, `legacyWalls` |
+| `src/core/surfaces.js`, `fixtures.js`, `sun.js`, `entities.js`, `sh3d.js` | Textures, fixtures and string lights, sun position, entity icons and states, `parseProps`/`zipFind`/the `IDB` cache |
+| `src/core/strategy.js` | `class Home3DStrategy`: `generate(config)` → `{views:[panel view with the card]}` |
+| `src/card/card.js` | `class Home3DCard`: lifecycle (config, hass, connection, attach/detach, teardown) and `_rebuild()`. It extends one mixin per topic: |
+| `src/card/startup.js` … `plan.js` | `_init` (startup), camera, rooms, scene build, models, lights, picking, live update and looks, the plan layer |
+| `src/ha-3dhome-editor.js` | Editor entry: checks the version, then copies the methods of each `src/editor/` part onto the card prototype |
+| `src/editor/*.js` | `session` (enter/exit, toolbar, keys), `selection` (gizmo, drags, undo), `panels`, `inspector`, `plan` (floor plan editor), `save`, `library` |
 
 ## Lifecycle
 
