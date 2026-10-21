@@ -2711,7 +2711,6 @@ if (!customElements.get("ha-3dhome-card")) {
    * awaits whenDefined(), always finds them — and only by the core that actually owns the element. */
   window.__ha3dhome = { VERSION3D, ACTIVE, ic, inPoly, CX, CY, DOOR_CLASSES, KINDS, LIBS, LIB_DIR, PLAN, R1, ROOM_FILLS, ROTATABLE, SF, STRATEGY_TYPES: ["custom:" + STRATEGY_NAME, "custom:" + OLD_NAMES.strategy], CARD_TYPES: ["custom:ha-3dhome-card", "custom:" + OLD_NAMES.card], STRUCT_TYPES, SURFACES, DOOR_STYLES, FIXTURES, TC_URL, bArr, entIcon, esc, itemCenter, itemBase, itemZ, scaleItem, SIZED, jclone, legacyWalls, lookOf, AMBIENT, mapPts, mean, stringCount, stringLen, solarPosition, stableJSON, strategyCard: (c) => Home3DStrategy.cardConfig(c), sunVector, polyArea, roomTitle, rotPt, segDir, shiftItem, zipFind };
   customElements.define("ha-3dhome-card", Home3DCard);
-  if (!customElements.get(OLD_NAMES.card)) customElements.define(OLD_NAMES.card, class extends Home3DCard {});
   /* HACS registers only this file as a resource, so load the editor from next to it. The query string is kept, so an
    * editor that is also registered as its own resource (same folder, same ?v=) resolves to the same module. Skipped when
    * the core isn't a .js file (inlined into a test page). */
@@ -2739,8 +2738,26 @@ class Home3DStrategy extends HTMLElement {
   static cardConfig(config) { const { type, title, path, icon, extra_views, ...card } = config || {}; return { fill: true, ...card, type: "custom:ha-3dhome-card" }; }
   static async generateDashboard(info) { return Home3DStrategy.generate(info?.config?.strategy || info?.config || {}); } // older HA
 }
-for (const name of [STRATEGY_NAME, OLD_NAMES.strategy]) for (const tag of ["ll-strategy-dashboard-" + name, "ll-strategy-" + name])
+for (const tag of ["ll-strategy-dashboard-" + STRATEGY_NAME, "ll-strategy-" + STRATEGY_NAME])
   if (!customElements.get(tag)) customElements.define(tag, class extends Home3DStrategy {});
+/* The old names (iso-home-3d-card, custom:iso-home) are aliases for dashboards made before v5. If the old ha-iso-home card
+ * is still installed as well, they stay with it: whichever module loaded first would otherwise claim them, and old
+ * dashboards would randomly run this code. Home Assistant loads resources once it is connected, so ask it for the list. */
+async function claimOldNames() {
+  const ha = document.querySelector("home-assistant");
+  for (let i = 0; ha && !ha.hass?.connection && i < 50; i++) await new Promise((r) => setTimeout(r, 100));
+  try {
+    const res = ha?.hass?.connection ? await ha.hass.callWS({ type: "lovelace/resources" }) : [];
+    if (res?.some((r) => /iso-home-3d-card(\.min)?\.js/.test(r.url || ""))) {
+      console.info("3D Home: the old iso-home card is also installed, so it keeps the iso-home-3d-card and custom:iso-home names. Remove its resource to hand them to 3D Home.");
+      return;
+    }
+  } catch (e) { /* resources unknown (YAML mode, no permission): claim the names */ }
+  if (!customElements.get(OLD_NAMES.card)) customElements.define(OLD_NAMES.card, class extends Home3DCard {});
+  for (const tag of ["ll-strategy-dashboard-" + OLD_NAMES.strategy, "ll-strategy-" + OLD_NAMES.strategy])
+    if (!customElements.get(tag)) customElements.define(tag, class extends Home3DStrategy {});
+}
+if (customElements.get("ha-3dhome-card") === Home3DCard) claimOldNames();
 // HA 2026.5+ lists registered dashboard strategies under Settings → Dashboards → Add dashboard → Community dashboards
 window.customStrategies = window.customStrategies || [];
 if (!window.customStrategies.some((s) => s.type === STRATEGY_NAME && s.strategyType === "dashboard"))

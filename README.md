@@ -35,6 +35,8 @@ Copy `ha-3dhome.js` and `ha-3dhome-editor.js` from the [latest release](https://
 
 **Start from the demo home:** create a new dashboard, open its raw configuration editor and paste [examples/sample-home.json](examples/sample-home.json). Then open the map, press **✎ Edit** and use floor plan mode to trace your own walls (an uploaded photo of your floor plan works as a tracing image), swap the sample entity ids for yours and **Save**. The layout lives in the dashboard config.
 
+**Coming from ha-iso-home:** dashboards that use the old names (`custom:iso-home-3d-card`, `custom:iso-home`) keep working, and 3D Home takes those names over once the old card's resource is removed. While both are installed the old names stay with the old card, so nothing switches code halfway.
+
 Optional: add the **Downloader** integration with download directory `www`, so the editor can fetch the Sweet Home 3D furniture libraries.
 
 ## Features

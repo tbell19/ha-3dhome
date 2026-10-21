@@ -63,7 +63,7 @@ const esm = (rel) => fs.readFileSync(path.join(ROOT, "node_modules/three/example
   p.on("pageerror", (e) => { errors.push(e.message); console.log("pageerror:", e.message); });
 
   // CDN modules -> local node_modules
-  await p.route("https://cdn.jsdelivr.net/**", (r) => {
+  await ctx.route("https://cdn.jsdelivr.net/**", (r) => {
     const u = r.request().url();
     if (u.includes("js-yaml")) return r.fulfill(js("export default { dump: (v) => JSON.stringify(v, null, 2), load: (t) => JSON.parse(t) };"));
     if (u.includes("jszip")) return r.fulfill(js("var module={exports:{}};var exports=module.exports;" +
@@ -317,6 +317,18 @@ window.card=__card;</script></body></html>`;
   await p.screenshot({ path: path.join(OUT, `${MOBILE ? "mobile" : "desktop"}-empty.png`) });
   await ev(`card2._enterEdit()`); await wait(800);
   check("the hint goes away in the editor", errors.length === 0 && await ev(`!!card2._edit && !card2.shadowRoot.querySelector('.empty')`), errors.join(" | "));
+
+  // with the old ha-iso-home card also installed, the old names must stay with it (otherwise load order decides)
+  for (const old of [true, false]) {
+    const q = await ctx.newPage();
+    await q.route("http://ha.test/**", (r) => r.fulfill({ contentType: "text/html", body: `<!doctype html><body><home-assistant></home-assistant>
+<script>document.querySelector('home-assistant').hass={connection:{},callWS:async(m)=>m.type==='lovelace/resources'?[{url:'/hacsfiles/ha-3dhome/ha-3dhome.js'}${old ? ",{url:'/local/iso-home/iso-home-3d-card.min.js?v=4.20.0'}" : ""}]:null}</script>
+<script type=module>${fs.readFileSync(CARD, "utf8")}</script></body>` }));
+    await q.goto("http://ha.test/two"); await q.waitForTimeout(1500);
+    const got = await q.evaluate(`!!customElements.get('iso-home-3d-card') && !!customElements.get('ll-strategy-dashboard-iso-home')`);
+    check(old ? "old names stay with the old card when it is installed too" : "old names are claimed when the old card is not installed", got === !old);
+    await q.close();
+  }
 
   await browser.close();
   const failed = results.filter((r) => !r.ok).length;

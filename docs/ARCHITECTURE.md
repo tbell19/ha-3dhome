@@ -188,3 +188,5 @@ It then calls `lovelace/config/save`.
 `fill: true` makes the card fill the viewport height (`100vh − header`).
 
 The core also pushes `{type: "ha-3dhome", strategyType: "dashboard", name, description, documentationURL}` onto `window.customStrategies`. Home Assistant 2026.5 and later read that list for the *Community dashboards* section of Settings → Dashboards → Add dashboard, as long as the resource is loaded (HACS does that). A dashboard made there holds only `{strategy: {type: "custom:ha-3dhome"}}`; with no walls, floors, boxes, objects or lights the card shows an empty-map hint (`_showEmpty()`, called from `_rebuild()`, hidden while editing). Save fills the strategy in as usual.
+
+The old names (`iso-home-3d-card`, `ll-strategy-dashboard-iso-home`) are defined by `claimOldNames()` a moment after load. It asks Home Assistant for the resource list and leaves the names alone when the old ha-iso-home card is registered too, so load order can't decide which code an old dashboard runs.
