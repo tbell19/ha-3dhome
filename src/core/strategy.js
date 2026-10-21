@@ -12,12 +12,22 @@ export class Home3DStrategy extends HTMLElement {
     return {
       title: title || "Home Map",
       views: [
-        { title: title || "Home", path: path || "3d", icon: icon || "mdi:floor-plan", type: "panel",
-          cards: [Home3DStrategy.cardConfig(config)] },
+        {
+          title: title || "Home",
+          path: path || "3d",
+          icon: icon || "mdi:floor-plan",
+          type: "panel",
+          cards: [Home3DStrategy.cardConfig(config)],
+        },
         ...(Array.isArray(extra_views) ? extra_views : []),
       ],
     };
   }
-  static cardConfig(config) { const { type, title, path, icon, extra_views, ...card } = config || {}; return { fill: true, ...card, type: "custom:ha-3dhome-card" }; }
-  static async generateDashboard(info) { return Home3DStrategy.generate(info?.config?.strategy || info?.config || {}); } // older HA
+  static cardConfig(config) {
+    const { type, title, path, icon, extra_views, ...card } = config || {};
+    return { fill: true, ...card, type: "custom:ha-3dhome-card" };
+  }
+  static async generateDashboard(info) {
+    return Home3DStrategy.generate(info?.config?.strategy || info?.config || {});
+  } // older HA
 }

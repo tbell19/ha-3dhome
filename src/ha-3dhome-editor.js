@@ -10,7 +10,10 @@
 const EDITOR_VERSION = "5.1.0";
 await customElements.whenDefined("ha-3dhome-card");
 const H = window.__ha3dhome;
-if (!H || H.VERSION3D !== EDITOR_VERSION) throw new Error(`3D Home editor ${EDITOR_VERSION} doesn't match the card core ${H?.VERSION3D || "(missing)"} — refresh, or update both resources`);
+if (!H || H.VERSION3D !== EDITOR_VERSION)
+  throw new Error(
+    `3D Home editor ${EDITOR_VERSION} doesn't match the card core ${H?.VERSION3D || "(missing)"} — refresh, or update both resources`,
+  );
 
 // loaded only now, because the parts read the core's helpers as they load
 const parts = await import("./editor/index.js");

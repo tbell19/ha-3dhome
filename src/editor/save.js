@@ -5,9 +5,12 @@ import { STRATEGY_TYPES, CARD_TYPES, SAVED, strategyCard, stableJSON } from "./s
 export class EditorSave {
   /* ----- save ----- */
   async _save() {
-    const h = this._hass, btn = this._ed.querySelector('[data-a="save"]');
-    if (this._offSince) return this._toast("Not connected to Home Assistant. Your changes are kept: save again once it's back", 5000);
-    btn.disabled = true; btn.textContent = "Saving…";
+    const h = this._hass,
+      btn = this._ed.querySelector('[data-a="save"]');
+    if (this._offSince)
+      return this._toast("Not connected to Home Assistant. Your changes are kept: save again once it's back", 5000);
+    btn.disabled = true;
+    btn.textContent = "Saving…";
     try {
       const seg = this._config.dashboard || decodeURIComponent(location.pathname.split("/")[1] || "lovelace");
       const url_path = seg === "lovelace" ? null : seg;
@@ -20,13 +23,25 @@ export class EditorSave {
         for (const k of SAVED) lc.strategy[k] = this._work[k];
         found = true;
       }
-      const match = (c) => c && CARD_TYPES.includes(c.type) && (!this._config.card_id || c.card_id === this._config.card_id);
+      const match = (c) =>
+        c && CARD_TYPES.includes(c.type) && (!this._config.card_id || c.card_id === this._config.card_id);
       const walk = (arr) => {
         if (!Array.isArray(arr) || found) return;
         for (let i = 0; i < arr.length && !found; i++) {
           const c = arr[i];
-          if (match(c)) { arr[i] = out; found = true; return; }
-          if (c && typeof c === "object") { walk(c.cards); walk(c.sections); if (c.card && match(c.card)) { c.card = out; found = true; } }
+          if (match(c)) {
+            arr[i] = out;
+            found = true;
+            return;
+          }
+          if (c && typeof c === "object") {
+            walk(c.cards);
+            walk(c.sections);
+            if (c.card && match(c.card)) {
+              c.card = out;
+              found = true;
+            }
+          }
         }
       };
       walk(lc.views);
@@ -41,7 +56,8 @@ export class EditorSave {
     } catch (e) {
       console.error(e);
       this._toast("Save failed: " + (e.message || e.code || e), 5000);
-      btn.disabled = false; this._syncBar();
+      btn.disabled = false;
+      this._syncBar();
     }
   }
 }

@@ -3,9 +3,12 @@
  *   node tools/demo.js --out D   copy the finished site into D (what the GitHub Pages workflow publishes)
  * The page expects the built card in ./card/ and the layout at ./sample-home.json; both come from this repo.
  */
-const fs = require("fs"), path = require("path"), http = require("http");
+const fs = require("fs"),
+  path = require("path"),
+  http = require("http");
 const ROOT = path.join(__dirname, "..");
-const FILES = {   // published path -> source
+const FILES = {
+  // published path -> source
   "card/ha-3dhome.js": "dist/ha-3dhome.js",
   "card/ha-3dhome-editor.js": "dist/ha-3dhome-editor.js",
   "sample-home.json": "examples/sample-home.json",
@@ -20,13 +23,27 @@ if (out > 0) {
   }
   console.log(`demo site written to ${dir}`);
 } else {
-  const TYPES = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png" };
+  const TYPES = {
+    ".html": "text/html",
+    ".js": "text/javascript",
+    ".json": "application/json",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+  };
   const port = +process.env.PORT || 8080;
-  http.createServer((req, res) => {
-    const p = decodeURIComponent(new URL(req.url, "http://x").pathname).replace(/^\/+/, "") || "index.html";
-    const src = FILES[p];
-    if (!src || !fs.existsSync(path.join(ROOT, src))) { res.writeHead(404); return res.end("not found"); }
-    res.writeHead(200, { "content-type": TYPES[path.extname(p)] || "application/octet-stream", "cache-control": "no-store" });
-    fs.createReadStream(path.join(ROOT, src)).pipe(res);
-  }).listen(port, () => console.log(`demo at http://localhost:${port}/`));
+  http
+    .createServer((req, res) => {
+      const p = decodeURIComponent(new URL(req.url, "http://x").pathname).replace(/^\/+/, "") || "index.html";
+      const src = FILES[p];
+      if (!src || !fs.existsSync(path.join(ROOT, src))) {
+        res.writeHead(404);
+        return res.end("not found");
+      }
+      res.writeHead(200, {
+        "content-type": TYPES[path.extname(p)] || "application/octet-stream",
+        "cache-control": "no-store",
+      });
+      fs.createReadStream(path.join(ROOT, src)).pipe(res);
+    })
+    .listen(port, () => console.log(`demo at http://localhost:${port}/`));
 }

@@ -12,12 +12,16 @@
     "test:plan": "node tools/plan-test.js",
     "shots:looks": "node tools/look-shots.js",
     "demo": "node tools/demo.js",
-    "test:demo": "node tools/demo-test.js"
+    "test:demo": "node tools/demo-test.js",
+    "test:all": "sh tools/all-tests.sh",
+    "format": "prettier --write src tools",
+    "format:check": "prettier --check src tools"
   },
   "devDependencies": {
     "esbuild": "0.24.0",
     "jszip": "3.10.1",
     "playwright": "^1.47.0",
+    "prettier": "3.3.3",
     "terser": "^5.31.0",
     "three": "0.160.0"
   }

@@ -1,0 +1,7 @@
+dist/
+node_modules/
+site/
+tools/out/
+*.md
+*.json
+*.yml
