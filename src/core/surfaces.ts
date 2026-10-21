@@ -1,8 +1,8 @@
 /* Surface textures: subtle, tileable greyscale patterns that are multiplied by a wall or floor colour.
  */
 
-// name → [label, real size of one texture tile in cm, where it fits: "f" floors, "w" walls]
-export const SURFACES = {
+/** name → [label, real size of one texture tile in cm, where it fits: "f" floors, "w" walls] */
+export const SURFACES: Record<string, [string, number, string]> = {
   wood: ["Wood planks", 120, "f"],
   tile: ["Tiles", 60, "fw"],
   stone: ["Stone slabs", 160, "f"],
@@ -12,10 +12,14 @@ export const SURFACES = {
   plaster: ["Plaster", 150, "w"],
   boards: ["Wood panelling", 120, "w"],
 };
-export function paintSurface(name, S = 256) {
-  const c = document.createElement("canvas");
+/** A texture canvas, plus its average brightness (0..1). */
+export type SurfaceCanvas = HTMLCanvasElement & { mean?: number };
+
+/** Paint one tile of the named texture, S×S pixels. The pattern is seeded by the name, so it is the same every time. */
+export function paintSurface(name: string, S = 256): SurfaceCanvas {
+  const c: SurfaceCanvas = document.createElement("canvas");
   c.width = c.height = S;
-  const g = c.getContext("2d");
+  const g = c.getContext("2d")!;
   let seed = [...name].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) | 0, 7);
   const rnd = () => {
     seed = (seed + 0x6d2b79f5) | 0;
@@ -23,11 +27,11 @@ export function paintSurface(name, S = 256) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-  const grey = (v, a = 1) => `rgba(${v},${v},${v},${a})`;
-  const wrap = (fn) => {
+  const grey = (v: number, a = 1) => `rgba(${v},${v},${v},${a})`;
+  const wrap = (fn: (dx: number, dy: number) => void) => {
     for (const dx of [-S, 0, S]) for (const dy of [-S, 0, S]) fn(dx, dy);
   }; // draw at 9 offsets so edges tile
-  const blotch = (n, r0, r1, lo, hi, a) => {
+  const blotch = (n: number, r0: number, r1: number, lo: number, hi: number, a: number) => {
     for (let i = 0; i < n; i++) {
       const x = rnd() * S,
         y = rnd() * S,
@@ -42,7 +46,7 @@ export function paintSurface(name, S = 256) {
       });
     }
   };
-  const speckle = (amp) => {
+  const speckle = (amp: number) => {
     const im = g.getImageData(0, 0, S, S),
       d = im.data;
     for (let i = 0; i < d.length; i += 4) {

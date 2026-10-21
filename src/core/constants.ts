@@ -1,5 +1,6 @@
 /* Versions, names and URLs the card depends on, plus the plan-to-scene offset and the render-look defaults.
  */
+import type { CardConfig, Looks } from "../types";
 
 export const VERSION3D = "5.1.0";
 export const STRATEGY_NAME = "ha-3dhome";
@@ -15,18 +16,25 @@ export const JSZIP_URL = CDN + "jszip@3.10.1/+esm";
 export const CX = 296,
   CY = 391;
 /* render looks, each a strength 0..1 under `look:`. A missing key or true uses the default strength, 0 or false turns it off, and `look: false` turns them all off. */
-export const LOOKS = { light: 1, ao: 1, stage: 1, bloom: 0.5 };
+export const LOOKS: Looks = { light: 1, ao: 1, stage: 1, bloom: 0.5 };
 export const AMBIENT = 0.35; // default `ambient`: how much flat daytime fill lights every surface
-export const lookOf = (cfg) =>
+export const lookOf = (cfg: CardConfig | undefined): Looks =>
   Object.fromEntries(
     Object.entries(LOOKS).map(([k, d]) => {
-      const v = cfg?.look === false ? 0 : cfg?.look?.[k];
+      const v = cfg?.look === false ? 0 : cfg?.look?.[k as keyof Looks];
       return [k, v === true || v == null ? d : Math.max(0, Math.min(1, +v || 0))];
     }),
-  );
+  ) as Looks;
 export const OUTDOOR = /balcony|patio|deck|porch|terrace|garden|yard/i; // rooms left without a roof (set `roof: true/false` on a room to override)
 export const SF = "https://downloads.sourceforge.net/project/sweethome3d/SweetHome3D-models/3DModels-1.9.3/";
-export const LIBS = [
+export interface LibraryInfo {
+  file: string;
+  title: string;
+  size: string;
+  n: number;
+  lic: string;
+}
+export const LIBS: LibraryInfo[] = [
   {
     file: "3DModels-LucaPresidente-1.9.3.zip",
     title: "Luca Presidente",

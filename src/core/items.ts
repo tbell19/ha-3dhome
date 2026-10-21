@@ -1,11 +1,18 @@
 /* Plan items (boxes, objects, overlays, lights, hotspots, chips, doors) as plain data: their kinds, centres,
  * heights, and how to move, rotate and resize them. Pure functions, shared with the editor.
  */
+import type { BoxArray, BoxEntry, Pt3 } from "../types";
 import { CX, CY } from "./constants.js";
 import { R1, mean } from "./util.js";
 
-export const bArr = (e) => (Array.isArray(e) ? e : e.b);
-export const KINDS = {
+/** Item kinds by key prefix: an item's key is `<kind>:<index in its list>`, e.g. "b:3" is scene.boxes[3]. */
+export type ItemKind = "b" | "o" | "v" | "l" | "h" | "c" | "d" | "w" | "n" | "p" | "r";
+/** These helpers work on an item of any list by its fields, so items are typed loosely here. */
+export type GenericItem = Record<string, any>;
+
+/** a box's array form, whichever form it is stored in */
+export const bArr = (e: BoxEntry): BoxArray => (Array.isArray(e) ? e : e.b);
+export const KINDS: Record<string, string> = {
   b: "box",
   o: "object",
   v: "fixture",
@@ -22,15 +29,16 @@ export const ROTATABLE = new Set(["b", "o", "v", "n", "p"]);
 export const PLAN = new Set(["w", "n", "p", "r"]); // items edited in floor-plan mode (walls, openings, blueprints, rooms)
 export const ROOM_FILLS = ["#c9b99d", "#b7c2ae", "#c7b3a3", "#aebdca", "#d0c29b", "#bfb0c4"];
 export const STRUCT_TYPES = new Set(["glasswall", "cornerglass", "railing", "frontwalls", "doorpanel"]); // stay visible while editing the plan
-export function itemCenter(k, it) {
+/** an item's centre [x, y, z] in plan units (null for markers that have no place) */
+export function itemCenter(k: string, it: GenericItem): number[] | null {
   if (k === "b") {
-    const b = bArr(it);
+    const b = bArr(it as BoxEntry);
     return [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2, b[6] || 0];
   }
   if (!ROTATABLE.has(k)) {
     if (k === "w") return [(it.a[0] + it.b[0]) / 2, (it.a[1] + it.b[1]) / 2, 0];
     if (k === "r") return [...mean(it.pts), 0];
-    if (it.x != null) return [it.x, it.y, it.z ?? { l: 40, c: 50, d: 22 }[k] ?? 10];
+    if (it.x != null) return [it.x, it.y, it.z ?? ({ l: 40, c: 50, d: 22 } as Record<string, number>)[k] ?? 10];
     if (it.points?.length) return [...mean(it.points), it.z ?? 17];
     if (it.rect) return [(it.rect[0] + it.rect[1]) / 2, it.rect[4], (it.rect[2] + it.rect[3]) / 2];
     return [CX, CY, 0];
@@ -64,19 +72,19 @@ export function itemCenter(k, it) {
   }
 }
 /* translate a rotatable item (box / object / overlay) by dx, dy (and dz where it means elevation) */
-export function shiftItem(k, it, dx, dy, dz = 0) {
-  const P = (p) => {
+export function shiftItem(k: string, it: GenericItem, dx: number, dy: number, dz = 0) {
+  const P = (p: number[]) => {
     p[0] = R1(p[0] + dx);
     p[1] = R1(p[1] + dy);
   };
-  const bx = (b) => {
+  const bx = (b: BoxArray | number[]) => {
     b[0] = R1(b[0] + dx);
     b[1] = R1(b[1] + dx);
     b[2] = R1(b[2] + dy);
     b[3] = R1(b[3] + dy);
   };
   if (k === "b") {
-    const b = bArr(it);
+    const b = bArr(it as BoxEntry);
     bx(b);
     if (dz) b[6] = R1(Math.max(0, (b[6] || 0) + dz));
     return;
@@ -85,10 +93,10 @@ export function shiftItem(k, it, dx, dy, dz = 0) {
     case "doorpanel":
       if (it.axis === "y") {
         it.at = R1(it.at + dx);
-        it.span = it.span.map((v) => R1(v + dy));
+        it.span = it.span.map((v: number) => R1(v + dy));
       } else {
         it.at = R1(it.at + dy);
-        it.span = it.span.map((v) => R1(v + dx));
+        it.span = it.span.map((v: number) => R1(v + dx));
       }
       break;
     case "shelf":
@@ -116,7 +124,7 @@ export function shiftItem(k, it, dx, dy, dz = 0) {
       it.x = R1(it.x + dx);
       it.y1 = R1(it.y1 + dy);
       it.y2 = R1(it.y2 + dy);
-      it.posts = (it.posts || []).map((v) => R1(v + dy));
+      it.posts = (it.posts || []).map((v: number) => R1(v + dy));
       if (it.handle != null) it.handle = R1(it.handle + dy);
       break;
     case "cornerglass":
@@ -136,7 +144,7 @@ export function shiftItem(k, it, dx, dy, dz = 0) {
   }
   if (dz) {
     // raise or lower: every height the item is built from moves together
-    const up = (o, f, d) => {
+    const up = (o: GenericItem, f: string, d?: number) => {
       if (o[f] != null || d != null) o[f] = R1(Math.max(0, (o[f] ?? d) + dz));
     };
     if (it.type === "plantwall") {
@@ -148,10 +156,10 @@ export function shiftItem(k, it, dx, dy, dz = 0) {
     } else if (!FLOOR_TYPES.has(it.type)) up(it, "z", ZDEF[it.type] ?? (it.type === "model" ? 0 : undefined)); // a pendant keeps its cord to the ceiling
   }
 }
-export const ZDEF = { fan: 44, screen: 20 }; // default heights of objects that may leave `z` out
+export const ZDEF: Record<string, number> = { fan: 44, screen: 20 }; // default heights of objects that may leave `z` out
 export const FLOOR_TYPES = new Set([...STRUCT_TYPES, "shelf", "table", "floorlamp"]); // always stand on the floor (a lamp's `z` is its height)
 /* the height an item's inspector shows as its elevation; null for things that always stand on the floor */
-export function itemZ(k, it) {
+export function itemZ(k: string, it: GenericItem): number | null {
   if (k === "b" || !ROTATABLE.has(k)) return itemCenter(k, it)?.[2] ?? 0;
   if (FLOOR_TYPES.has(it.type)) return null;
   if (it.type === "plantwall") return it.z1;
@@ -161,29 +169,32 @@ export function itemZ(k, it) {
 /* Objects with a fixed shape (no size fields of their own) take a `size` multiplier: a number, or [x, y, z] along the
  * object's own axes. It is applied about the point they stand on or hang from, so a fan stays on the ceiling. */
 export const SIZED = new Set(["plant", "floorlamp", "tablelamp", "pendant", "fan", "burners", "bulbs", "sink"]);
-export const sizeOf = (it) => (Array.isArray(it.size) ? it.size : [it.size ?? 1, it.size ?? 1, it.size ?? 1]);
-export const sizeAnchor = (o) =>
-  ({ pendant: o.top ?? 62, fan: o.ceiling ?? (o.z ?? 44) + 8, floorlamp: 0 })[o.type] ?? (o.z || 0);
+export const sizeOf = (it: GenericItem): Pt3 =>
+  Array.isArray(it.size) ? (it.size as Pt3) : [it.size ?? 1, it.size ?? 1, it.size ?? 1];
+export const sizeAnchor = (o: GenericItem): number =>
+  (({ pendant: o.top ?? 62, fan: o.ceiling ?? (o.z ?? 44) + 8, floorlamp: 0 }) as Record<string, number>)[o.type] ??
+  (o.z || 0);
 /* the height that stays put when an item is resized on its own */
-export function itemBase(k, it) {
-  if (k === "b") return bArr(it)[6] || 0;
+export function itemBase(k: string, it: GenericItem): number {
+  if (k === "b") return bArr(it as BoxEntry)[6] || 0;
   if (!ROTATABLE.has(k)) return itemCenter(k, it)?.[2] ?? 0;
   if (SIZED.has(it.type)) return sizeAnchor(it);
-  return FLOOR_TYPES.has(it.type) ? 0 : itemZ(k, it);
+  return FLOOR_TYPES.has(it.type) ? 0 : (itemZ(k, it) ?? 0);
 }
 /* Resize an item by sx, sy (its own plan axes, before rotation) and sz (heights, about z0; default: its own base).
  * Rotatable items scale about their own centre. Point items (light / hotspot / chip / door) store world points, so the
  * caller maps those (mapPts); here they only change height and size. */
-export function scaleItem(k, it, sx, sy, sz, z0) {
+export function scaleItem(k: string, it: GenericItem, sx: number, sy: number, sz: number, z0?: number) {
   z0 ??= itemBase(k, it);
   const c = itemCenter(k, it) || [CX, CY, 0],
     u = sx !== 1 ? sx : sy;
-  const X = (x) => R1(c[0] + (x - c[0]) * sx),
-    Y = (y) => R1(c[1] + (y - c[1]) * sy),
-    Z = (z) => R1(Math.max(0, z0 + (z - z0) * sz));
-  const mul = (v, f, min = 0.3) => R1(Math.max(min, v * f)),
-    R2 = (v) => Math.round(v * 100) / 100;
-  const setSize = (s) => {
+  const base = z0;
+  const X = (x: number) => R1(c[0] + (x - c[0]) * sx),
+    Y = (y: number) => R1(c[1] + (y - c[1]) * sy),
+    Z = (z: number) => R1(Math.max(0, base + (z - base) * sz));
+  const mul = (v: number, f: number, min = 0.3) => R1(Math.max(min, v * f)),
+    R2 = (v: number) => Math.round(v * 100) / 100;
+  const setSize = (s: number[]) => {
     s = s.map(R2);
     if (s.every((v) => v === 1)) delete it.size;
     else it.size = s.every((v) => v === s[0]) ? s[0] : s;
@@ -197,7 +208,7 @@ export function scaleItem(k, it, sx, sy, sz, z0) {
       r[3] = Z(r[3]);
       return;
     }
-    const z = itemCenter(k, it)[2],
+    const z = itemCenter(k, it)![2],
       nz = Z(z);
     if (nz !== R1(z)) it.z = nz;
     if (it.gz != null) it.gz = Z(it.gz);
@@ -206,7 +217,7 @@ export function scaleItem(k, it, sx, sy, sz, z0) {
     return;
   }
   if (k === "b") {
-    const b = bArr(it);
+    const b = bArr(it as BoxEntry);
     b[0] = X(b[0]);
     b[1] = X(b[1]);
     b[2] = Y(b[2]);
@@ -245,7 +256,7 @@ export function scaleItem(k, it, sx, sy, sz, z0) {
       b[2] = Y(b[2]);
       b[3] = Y(b[3]);
       b[4] = mul(b[4], sz);
-      if (it.shelves) it.shelves = it.shelves.map((z) => R1(z * sz));
+      if (it.shelves) it.shelves = it.shelves.map((z: number) => R1(z * sz));
       break;
     }
     case "table":
@@ -289,8 +300,8 @@ export function scaleItem(k, it, sx, sy, sz, z0) {
   }
 }
 /* map every plan point of an entity-like item (light / hotspot / chip / door) */
-export function mapPts(it, f, dz = 0) {
-  const m = (xk, yk) => {
+export function mapPts(it: GenericItem, f: (x: number, y: number) => number[], dz = 0) {
+  const m = (xk: string, yk: string) => {
     if (it[xk] != null && it[yk] != null) {
       const [a, b] = f(it[xk], it[yk]);
       it[xk] = R1(a);
@@ -300,7 +311,7 @@ export function mapPts(it, f, dz = 0) {
   m("x", "y");
   m("gx", "gy");
   m("hx", "hy");
-  if (it.points) it.points = it.points.map((p) => f(p[0], p[1]).map(R1));
+  if (it.points) it.points = it.points.map((p: number[]) => f(p[0], p[1]).map(R1));
   if (it.rect) {
     const r = it.rect,
       cx = (r[0] + r[1]) / 2,
@@ -314,5 +325,5 @@ export function mapPts(it, f, dz = 0) {
     it.a = f(it.a[0], it.a[1]).map(R1);
     it.b = f(it.b[0], it.b[1]).map(R1);
   } // wall segment ends
-  if (it.pts) it.pts = it.pts.map((p) => f(p[0], p[1]).map(R1)); // room outline
+  if (it.pts) it.pts = it.pts.map((p: number[]) => f(p[0], p[1]).map(R1)); // room outline
 }

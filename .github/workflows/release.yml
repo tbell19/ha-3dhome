@@ -30,6 +30,7 @@ jobs:
       - name: Tests
         run: |
           npx playwright install --with-deps chromium
+          npm run typecheck
           npm test
           npm run test:plan
           npm run test:demo

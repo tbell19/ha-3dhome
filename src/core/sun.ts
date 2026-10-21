@@ -3,7 +3,7 @@
 
 /* Sun position (NOAA approximation, good to ~0.5°). Returns compass azimuth (0 = north, clockwise) and elevation, in degrees.
  * Only a fallback: HA's sun.sun already carries azimuth/elevation attributes. */
-export function solarPosition(date, lat, lon) {
+export function solarPosition(date: Date, lat: number, lon: number) {
   const rad = Math.PI / 180,
     d = date.getTime() / 86400000 + 2440587.5 - 2451545; // days since J2000
   const g = (357.529 + 0.98560028 * d) * rad,
@@ -21,7 +21,7 @@ export function solarPosition(date, lat, lon) {
 }
 /* Unit vector (Three.js X, Y, Z) pointing at the sun. `north` is how far north is turned clockwise from "up" on the
  * floor plan (towards the back wall, −y), in degrees: 0 = north is up, 90 = north is to the right. */
-export function sunVector(azimuth, elevation, north = 0) {
+export function sunVector(azimuth: number, elevation: number, north = 0): [number, number, number] {
   const b = ((azimuth + (north || 0)) * Math.PI) / 180,
     e = (elevation * Math.PI) / 180;
   return [Math.sin(b) * Math.cos(e), Math.sin(e), -Math.cos(b) * Math.cos(e)];

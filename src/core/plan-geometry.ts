@@ -1,27 +1,29 @@
 /* Floor plan geometry (pure functions): wall joints, wall pieces around openings, and the legacy wall format.
  */
+import type { LegacyWall, Opening, Pt, Scene, WallSeg } from "../types";
 import { R1, rotPt } from "./util.js";
 
-/* ---------- floor plan geometry (pure functions) ----------
+/*
  * wall segment  {a:[x,y], b:[x,y], t?, h?, low?, color?}   — centre line from a to b
  * opening       {kind, x, y, w, d, h, z, rot}              — a "negative box" cut out of every wall it overlaps
  * blueprint     {src, x, y, w, h, rot, opacity, locked?, show?} */
-export const segDir = (s) => {
+/** a wall's unit direction and length: [ux, uy, length] */
+export const segDir = (s: WallSeg): [number, number, number] => {
   const dx = s.b[0] - s.a[0],
     dy = s.b[1] - s.a[1],
     L = Math.hypot(dx, dy) || 1e-6;
   return [dx / L, dy / L, L];
 };
 /* ends that meet another wall at an angle are pushed out by half that wall's thickness, so corners close */
-export function wallExtensions(segs, WT) {
-  const ext = segs.map(() => [0, 0]);
+export function wallExtensions(segs: WallSeg[], WT: number): [number, number][] {
+  const ext = segs.map((): [number, number] => [0, 0]);
   segs.forEach((s, i) =>
-    ["a", "b"].forEach((e, ei) => {
+    (["a", "b"] as const).forEach((e, ei) => {
       const p = s[e],
         di = segDir(s);
       segs.forEach((o, j) => {
         if (j === i) return;
-        for (const f of ["a", "b"]) {
+        for (const f of ["a", "b"] as const) {
           if (Math.hypot(o[f][0] - p[0], o[f][1] - p[1]) > 1) continue;
           const dj = segDir(o);
           if (Math.abs(di[0] * dj[1] - di[1] * dj[0]) > 0.17) ext[i][ei] = Math.max(ext[i][ei], (o.t ?? WT) / 2);
@@ -31,15 +33,18 @@ export function wallExtensions(segs, WT) {
   );
   return ext;
 }
-export const openingCorners = (o) =>
-  [
-    [-1, -1],
-    [1, -1],
-    [1, 1],
-    [-1, 1],
-  ].map(([sx, sy]) => rotPt(o.x + (sx * o.w) / 2, o.y + (sy * (o.d ?? 6)) / 2, o.x, o.y, o.rot || 0));
+/** the four plan corners of an opening's box */
+export const openingCorners = (o: Opening) =>
+  (
+    [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ] as const
+  ).map(([sx, sy]) => rotPt(o.x + (sx * o.w) / 2, o.y + (sy * (o.d ?? 6)) / 2, o.x, o.y, o.rot || 0));
 /* split a wall into solid blocks [s0, s1, z0, z1] (s = distance along the wall from a) around the openings that overlap it */
-export function wallPieces(s, ext, openings, H, WT) {
+export function wallPieces(s: WallSeg, ext: [number, number], openings: Opening[], H: number, WT: number) {
   const [ux, uy, L] = segDir(s),
     nx = -uy,
     ny = ux,
@@ -47,7 +52,7 @@ export function wallPieces(s, ext, openings, H, WT) {
     h = s.h ?? H,
     lo = -ext[0],
     hi = L + ext[1];
-  const holes = [];
+  const holes: [number, number, number, number][] = [];
   for (const o of openings) {
     let s0 = Infinity,
       s1 = -Infinity,
@@ -69,7 +74,7 @@ export function wallPieces(s, ext, openings, H, WT) {
     if (z1 > z0) holes.push([Math.max(lo, s0), Math.min(hi, s1), z0, z1]);
   }
   const cuts = [...new Set([lo, hi, ...holes.flatMap((x) => [x[0], x[1]])])].sort((a, b) => a - b),
-    pieces = [];
+    pieces: [number, number, number, number][] = [];
   for (let i = 0; i < cuts.length - 1; i++) {
     const a = cuts[i],
       b = cuts[i + 1],
@@ -80,7 +85,7 @@ export function wallPieces(s, ext, openings, H, WT) {
       .map((x) => [x[2], x[3]])
       .sort((p, q) => p[0] - q[0]);
     let z = 0;
-    const solid = [];
+    const solid: [number, number][] = [];
     for (const [z0, z1] of zs) {
       if (z0 > z) solid.push([z, z0]);
       z = Math.max(z, z1);
@@ -95,10 +100,14 @@ export function wallPieces(s, ext, openings, H, WT) {
   return pieces;
 }
 /* corners where wall ends meet: one draggable handle per joint */
-export function planJoints(segs) {
-  const js = [];
+export interface Joint {
+  p: Pt;
+  m: [number, "a" | "b"][]; // the wall ends that meet here: [wall index, end]
+}
+export function planJoints(segs: WallSeg[]) {
+  const js: Joint[] = [];
   segs.forEach((s, i) =>
-    ["a", "b"].forEach((e) => {
+    (["a", "b"] as const).forEach((e) => {
       const p = s[e];
       let j = js.find((q) => Math.hypot(q.p[0] - p[0], q.p[1] - p[1]) < 0.6);
       if (!j) js.push((j = { p: [p[0], p[1]], m: [] }));
@@ -108,21 +117,21 @@ export function planJoints(segs) {
   return js;
 }
 /* the original axis-aligned walls ({axis, at, spans, doors}) → free segments + door openings; looks identical */
-export function legacyWalls(sc) {
+export function legacyWalls(sc: Scene) {
   const H = sc.wall_height ?? 46,
     LIN = sc.lintel ?? 8,
     LOW = sc.low ?? 8,
     WT = sc.wall_thickness ?? 4,
-    segs = [],
-    opens = [];
-  const pt = (axis, at, v) => (axis === "y" ? [at, v] : [v, at]);
-  const run = (w, low) => {
+    segs: WallSeg[] = [],
+    opens: Opening[] = [];
+  const pt = (axis: string, at: number, v: number): Pt => (axis === "y" ? [at, v] : [v, at]);
+  const run = (w: LegacyWall, low: boolean) => {
     const h = w.h ?? (low ? LOW : H);
     const iv = [
       ...(w.spans || []).map(([a, b]) => [Math.min(a, b), Math.max(a, b), 0]),
       ...(low ? [] : (w.doors || []).map(([a, b]) => [Math.min(a, b), Math.max(a, b), 1])),
     ].sort((p, q) => p[0] - q[0]);
-    let cur = null;
+    let cur: number[] | null = null;
     const flush = () => {
       if (cur)
         segs.push({

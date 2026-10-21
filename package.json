@@ -15,14 +15,17 @@
     "test:demo": "node tools/demo-test.js",
     "test:all": "sh tools/all-tests.sh",
     "format": "prettier --write src tools",
-    "format:check": "prettier --check src tools"
+    "format:check": "prettier --check src tools",
+    "typecheck": "tsc -p ."
   },
   "devDependencies": {
+    "@types/three": "0.160.0",
     "esbuild": "0.24.0",
     "jszip": "3.10.1",
     "playwright": "^1.47.0",
     "prettier": "3.3.3",
     "terser": "^5.31.0",
-    "three": "0.160.0"
+    "three": "0.160.0",
+    "typescript": "5.6.3"
   }
 }

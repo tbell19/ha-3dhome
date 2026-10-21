@@ -1,7 +1,8 @@
 /* Light fixtures and door leaves: the choices offered, and the pure maths behind string lights.
  */
+import type { LightConfig, Pt } from "../types";
 
-export const FIXTURES = {
+export const FIXTURES: Record<string, string> = {
   none: "Glow only",
   can: "Can light",
   ceiling: "Ceiling light",
@@ -13,23 +14,23 @@ export const FIXTURES = {
 };
 /* string lights: bulb count (fixed `count`, else one per `spacing` along the run), and where each bulb hangs.
  * Each span between points sags by `sag` (default 5% of its length) in a parabola. stringBulbs → [[x, y, drop], …]. */
-export function stringLen(pts) {
+export function stringLen(pts: Pt[]) {
   let L = 0;
   for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
   return L;
 }
-export function stringCount(L) {
+export function stringCount(L: LightConfig) {
   const len = stringLen(L.points || []);
-  return Math.min(200, L.count > 0 ? Math.round(L.count) : Math.max(2, Math.round(len / (L.spacing || 14)) + 1));
+  return Math.min(200, L.count! > 0 ? Math.round(L.count!) : Math.max(2, Math.round(len / (L.spacing || 14)) + 1));
 }
-export function spanSag(L, span) {
+export function spanSag(L: LightConfig, span: number) {
   return L.sag ?? Math.min(8, span * 0.05);
 }
-export function stringBulbs(L) {
+export function stringBulbs(L: LightConfig): [number, number, number][] {
   const pts = L.points || [],
     n = stringCount(L),
     len = stringLen(pts),
-    out = [];
+    out: [number, number, number][] = [];
   if (pts.length < 2 || !len) return out;
   for (let k = 0; k < n; k++) {
     let d = n === 1 ? len / 2 : (len * k) / (n - 1);
@@ -47,7 +48,8 @@ export function stringBulbs(L) {
   }
   return out;
 }
-export const DOOR_STYLES = {
+/** door style → [label, default colour] */
+export const DOOR_STYLES: Record<string, [string, string?]> = {
   none: ["Opening only"],
   panel: ["Solid door", "#7a5a40"],
   glass: ["Glass door", "#2f2f2f"],

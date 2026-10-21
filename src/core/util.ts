@@ -1,15 +1,17 @@
 /* Small pure helpers: rounding, cloning, HTML escaping, polygon maths and a key-order-independent JSON.
  */
+import type { Pt } from "../types";
 
-export const R1 = (v) => Math.round(v * 10) / 10;
-export const jclone = (o) => JSON.parse(JSON.stringify(o));
-export const ic = (name) => `<ha-icon icon="mdi:${name}"></ha-icon>`; // HA's own icon element, for buttons and labels
-export const esc = (s) =>
+export const R1 = (v: number) => Math.round(v * 10) / 10;
+export const jclone = <T>(o: T): T => JSON.parse(JSON.stringify(o));
+export const ic = (name: string) => `<ha-icon icon="mdi:${name}"></ha-icon>`; // HA's own icon element, for buttons and labels
+export const esc = (s: unknown) =>
   String(s ?? "").replace(
     /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
   );
-export const rotPt = (x, y, cx, cy, deg) => {
+/** rotate (x, y) about (cx, cy) by `deg` degrees, clockwise seen from above */
+export const rotPt = (x: number, y: number, cx: number, cy: number, deg: number): Pt => {
   const r = (deg * Math.PI) / 180,
     c = Math.cos(r),
     s = Math.sin(r),
@@ -17,8 +19,8 @@ export const rotPt = (x, y, cx, cy, deg) => {
     dy = y - cy;
   return [cx + dx * c - dy * s, cy + dx * s + dy * c];
 };
-export const inPoly = (x, y, pts) => {
-  // ray casting
+/** is (x, y) inside the polygon? (ray casting) */
+export const inPoly = (x: number, y: number, pts: Pt[]) => {
   let inside = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
     const [xi, yi] = pts[i],
@@ -27,29 +29,32 @@ export const inPoly = (x, y, pts) => {
   }
   return inside;
 };
-export const polyArea = (pts) =>
+export const polyArea = (pts: Pt[]) =>
   Math.abs(
     pts.reduce((s, p, i) => {
       const q = pts[(i + 1) % pts.length];
       return s + p[0] * q[1] - q[0] * p[1];
     }, 0),
   ) / 2;
-export const roomTitle = (s) =>
+/** "living_room" → "Living Room" */
+export const roomTitle = (s: unknown) =>
   String(s)
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
-export const mean = (pts) => [
+/** the average of some points */
+export const mean = (pts: number[][]): Pt => [
   pts.reduce((s, p) => s + p[0], 0) / pts.length,
   pts.reduce((s, p) => s + p[1], 0) / pts.length,
 ];
-export const clamp01 = (v) => Math.min(1, Math.max(0, v));
-export const smooth = (a, b, v) => {
+export const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+/** smoothstep: 0 below a, 1 above b, an S-curve between */
+export const smooth = (a: number, b: number, v: number) => {
   const t = clamp01((v - a) / (b - a));
   return t * t * (3 - 2 * t);
 };
 /* JSON with sorted keys, so configs compare equal whatever order HA builds them in */
-export const stableJSON = (v) =>
-  JSON.stringify(v, (k, x) =>
+export const stableJSON = (v: unknown) =>
+  JSON.stringify(v, (_k, x) =>
     x && typeof x === "object" && !Array.isArray(x)
       ? Object.fromEntries(
           Object.keys(x)

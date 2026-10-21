@@ -1,12 +1,16 @@
 /* Sweet Home 3D libraries: catalog parsing, zip lookups and the per-device model cache.
  */
+import type JSZip from "jszip";
 
-export function parseProps(text) {
-  const unesc = (s) =>
-    s.replace(/\\(u([0-9a-fA-F]{4})|.)/g, (m, a, u) =>
-      u ? String.fromCharCode(parseInt(u, 16)) : ({ t: "\t", n: "\n", r: "\r", f: "\f" }[a] ?? a),
+/** parse a Java .properties file (the furniture catalog) into key → value */
+export function parseProps(text: string) {
+  const unesc = (s: string) =>
+    s.replace(/\\(u([0-9a-fA-F]{4})|.)/g, (_m, a: string, u: string) =>
+      u
+        ? String.fromCharCode(parseInt(u, 16))
+        : (({ t: "\t", n: "\n", r: "\r", f: "\f" } as Record<string, string>)[a] ?? a),
     );
-  const out = {};
+  const out: Record<string, string> = {};
   let buf = "";
   for (const raw of text.split(/\r?\n/)) {
     let line = raw.replace(/^\s+/, "");
@@ -34,14 +38,15 @@ export function parseProps(text) {
   }
   return out;
 }
-export function zipFind(zip, p) {
+/** a file in a zip by path, forgiving URL-encoding and letter case */
+export function zipFind(zip: JSZip, p: string | undefined) {
   if (!p) return null;
   const a = p.replace(/^\/+/, "");
   let f = zip.file(a);
   if (!f) {
     try {
       f = zip.file(decodeURIComponent(a));
-    } catch (e) {
+    } catch {
       /* ignore */
     }
   }
@@ -52,9 +57,11 @@ export function zipFind(zip, p) {
   }
   return f;
 }
-export const dirOf = (p) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/") + 1) : "");
+export const dirOf = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/") + 1) : "");
+/* ---------- small IndexedDB cache (per device) for extracted model files ---------- */
 export const IDB = {
-  db() {
+  _db: null as Promise<IDBDatabase> | null,
+  db(): Promise<IDBDatabase> {
     return (this._db ||= new Promise((res, rej) => {
       const r = indexedDB.open("ha-3dhome", 1);
       r.onupgradeneeded = () => r.result.createObjectStore("models");
@@ -62,26 +69,26 @@ export const IDB = {
       r.onerror = () => rej(r.error);
     }));
   },
-  async get(k) {
+  async get(k: string): Promise<any> {
     try {
       const db = await this.db();
-      return await new Promise((res) => {
+      return await new Promise<any>((res) => {
         const q = db.transaction("models").objectStore("models").get(k);
         q.onsuccess = () => res(q.result);
         q.onerror = () => res(null);
       });
-    } catch (e) {
+    } catch {
       return null;
     }
   },
-  async put(k, v) {
+  async put(k: string, v: unknown) {
     try {
       const db = await this.db();
       db.transaction("models", "readwrite").objectStore("models").put(v, k);
-    } catch (e) {
+    } catch {
       /* cache is optional */
     }
   },
 };
-export const LIBCACHE = new Map(); // file -> Promise<{sh3fs, items}>
-export const MODELCACHE = new Map(); // key  -> Promise<{node, size, center, min}>
+export const LIBCACHE = new Map<string, Promise<any>>(); // file -> Promise<{sh3fs, items}>
+export const MODELCACHE = new Map<string, Promise<any>>(); // key  -> Promise<{node, size, center, min}>
