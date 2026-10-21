@@ -2,19 +2,7 @@
  * these helpers it reads them from window.__ha3dhome, which the core sets before it defines the card.
  */
 import type { StrategyConfig } from "./types";
-import {
-  VERSION3D,
-  STRATEGY_NAME,
-  OLD_NAMES,
-  TC_URL,
-  CX,
-  CY,
-  AMBIENT,
-  lookOf,
-  SF,
-  LIBS,
-  LIB_DIR,
-} from "./core/constants";
+import { VERSION3D, TC_URL, CX, CY, AMBIENT, lookOf, SF, LIBS, LIB_DIR, LAYOUT_KEYS } from "./core/constants";
 import { R1, jclone, ic, esc, rotPt, inPoly, polyArea, roomTitle, mean, stableJSON } from "./core/util";
 import { entIcon, ACTIVE, DOOR_CLASSES } from "./core/entities";
 import {
@@ -38,6 +26,8 @@ import { solarPosition, sunVector } from "./core/sun";
 import { segDir, legacyWalls } from "./core/plan-geometry";
 import { zipFind } from "./core/sh3d";
 import { Home3DStrategy } from "./core/strategy";
+import { provideEditor } from "./card/editor-loader";
+import { STRATEGY_TYPES, CARD_TYPES, findCard } from "./core/lovelace";
 
 export const editorApi = {
   VERSION3D,
@@ -55,8 +45,9 @@ export const editorApi = {
   ROOM_FILLS,
   ROTATABLE,
   SF,
-  STRATEGY_TYPES: ["custom:" + STRATEGY_NAME, "custom:" + OLD_NAMES.strategy],
-  CARD_TYPES: ["custom:ha-3dhome-card", "custom:" + OLD_NAMES.card],
+  STRATEGY_TYPES,
+  CARD_TYPES,
+  findCard,
   STRUCT_TYPES,
   SURFACES,
   DOOR_STYLES,
@@ -88,6 +79,9 @@ export const editorApi = {
   segDir,
   shiftItem,
   zipFind,
+  LAYOUT_KEYS,
+  /** the editor module registers itself with this */
+  provideEditor,
 };
 
 export type EditorApi = typeof editorApi;

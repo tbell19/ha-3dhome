@@ -1,6 +1,6 @@
 /* <ha-3dhome-card>: the custom element. This file holds its lifecycle (config, hass, connection state,
  * attach/detach, teardown) and world rebuilds. The rest of the card is split by topic into the parts
- * below (startup.ts, camera.ts, …), whose methods are copied onto this class, and the editor adds its parts when it loads.
+ * below (startup.ts, camera.ts, …), whose methods are copied onto this class. The editor is a separate object.
  */
 import type * as THREE from "three";
 import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -8,10 +8,22 @@ import type { TransformControls } from "three/examples/jsm/controls/TransformCon
 import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import type { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import type { CardConfig, Chip, DoorConfig, Hass, HassEntity, LightConfig, Opening, Pt, SceneItem } from "../types";
+import type {
+  CardConfig,
+  LayoutStore,
+  Chip,
+  DoorConfig,
+  Hass,
+  HassEntity,
+  LightConfig,
+  Opening,
+  Pt,
+  SceneItem,
+} from "../types";
 import type { Joint } from "../core/plan-geometry";
 import { ic, esc, stableJSON } from "../core/util";
 import { watchedEntities } from "../core/entities";
+import { LAYOUT_KEYS } from "../core/constants";
 import { editorAvailable } from "./editor-loader";
 import { StartupPart } from "./startup";
 import { CameraPart } from "./camera";
@@ -22,13 +34,7 @@ import { LightsPart } from "./lights";
 import { PickingPart } from "./picking";
 import { LivePart } from "./live";
 import { PlanPart } from "./plan";
-import type { EditorSession } from "../editor/session";
-import type { EditorSelection } from "../editor/selection";
-import type { EditorPanels } from "../editor/panels";
-import type { EditorInspector } from "../editor/inspector";
-import type { EditorPlan } from "../editor/plan";
-import type { EditorSave } from "../editor/save";
-import type { EditorLibrary } from "../editor/library";
+import type { CardEditor } from "../editor-contract";
 
 /** A room the camera can frame: from the room menu, or one per floor. */
 export interface Room {
@@ -107,11 +113,17 @@ const PARKED = new Map<string, Home3DCard>();
 const CONN_GRACE = 2500;
 /* how long a lost WebGL context may stay lost on a visible page before the card rebuilds itself from scratch */
 const CTX_GRACE = 3000;
+/* two configs that differ at most in their layout (what the editor changes) need no new renderer */
+const sameOptions = (a: CardConfig, b: CardConfig) => {
+  const options = (c: CardConfig) => stableJSON({ ...c, ...Object.fromEntries(LAYOUT_KEYS.map((k) => [k, null])) });
+  return options(a) === options(b);
+};
 const cardIdent = (cfg: CardConfig) =>
   `${cfg.dashboard || decodeURIComponent(location.pathname.split("/")[1] || "lovelace")}|${cfg.card_id || ""}`;
 
-/* The card's methods live in its parts (one file per topic) and are copied onto the prototype below; the editor's
- * parts are copied on when the editor module loads, and the core only calls them while editing. */
+/* The card's methods live in its parts (one file per topic) and are copied onto the prototype below. The editor is a
+ * separate object (src/editor/editor.ts), created when Edit is first pressed, that the card talks to through CardEditor
+ * (src/editor-contract.ts). */
 export interface Home3DCard
   extends StartupPart,
     CameraPart,
@@ -121,14 +133,7 @@ export interface Home3DCard
     LightsPart,
     PickingPart,
     LivePart,
-    PlanPart,
-    EditorSession,
-    EditorSelection,
-    EditorPanels,
-    EditorInspector,
-    EditorPlan,
-    EditorSave,
-    EditorLibrary {}
+    PlanPart {}
 
 export class Home3DCard extends HTMLElement {
   /* `declare` adds types only: no field is created, so nothing changes at runtime. */
@@ -149,6 +154,7 @@ export class Home3DCard extends HTMLElement {
   } | null;
   declare _seenCfg: CardConfig | null;
   declare _inner: Home3DCard | null; // set when this element is only a shell around an adopted card
+  declare _layoutStore: LayoutStore | null; // where Save writes (see layoutStore); the dashboard when not set
 
   // lifecycle
   declare _ready: boolean;
@@ -234,7 +240,6 @@ export class Home3DCard extends HTMLElement {
   declare _stageSpot: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | null; // the spotlit backdrop under the house
   declare _targets: THREE.Object3D[]; // tap targets
   declare _modelErr: Record<string, string>;
-  declare _dl: Record<string, boolean>;
 
   // lights and looks
   declare _amb: THREE.AmbientLight;
@@ -279,30 +284,16 @@ export class Home3DCard extends HTMLElement {
   declare _smidMeshes: THREE.Mesh[] | null;
 
   // editing (set by the editor)
+  declare _editor: CardEditor | null; // created when Edit is first pressed, dropped by _teardown
   declare _edit: EditState | null;
   declare _work: CardConfig | null; // the config being edited
-  declare _coarse: boolean; // touch-first device
   declare _drag: Record<string, any> | null;
   declare _tool: string;
-  declare _draw: Record<string, any> | null;
-  declare _measure: any;
   declare _vsel: any;
   declare _pivot: THREE.Object3D;
-  declare _pivotC: Pt;
   declare _tcDragging: boolean;
   declare _tcUsed: boolean;
-  declare _inspMin: boolean;
-  declare _ltuneOpen: boolean;
-  declare _ltDrag: boolean;
-  declare _lookDrag: boolean;
-  declare _planHinted: boolean;
-  declare _planTopped: boolean;
   declare _cycleHinted: boolean;
-  declare _prevDot: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | null;
-  declare _prevLine: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial> | null;
-  declare _prevMesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | null;
-  declare _entsRender: () => void;
-  declare _libEl: HTMLElement;
   setConfig(config: CardConfig): void {
     if (this._inner) return this._inner.setConfig(config); // a shell around an adopted card
     // HA hands cards a fresh (but often identical) config whenever it re-renders — e.g. strategy dashboards are
@@ -310,11 +301,21 @@ export class Home3DCard extends HTMLElement {
     // contexts, so ignore no-op updates and fully tear down before a real rebuild.
     const json = stableJSON(config || {});
     if (json === this._cfgJSON && (this._ready || this._loading)) return;
+    const layoutOnly = this._ready && !this._edit && sameOptions(this._config, config || {});
     this._cfgJSON = json;
     this._config = config || {};
     this._ident = cardIdent(this._config);
+    if (layoutOnly) return this._applyLayout(); // a new layout (saved here or on another device): keep the renderer
     this._teardown();
     this._kick();
+  }
+
+  /* the config's layout changed but none of the card's options: rebuild the world in the running scene */
+  _applyLayout() {
+    this._rebuild();
+    this._buildRoomBar();
+    this._showRoomCards(this._rcRoom || "home");
+    this._requestRender();
   }
 
   /* start up, a tick later: HA may attach this card before it detaches the one it replaces, which we'd rather adopt */
@@ -332,6 +333,7 @@ export class Home3DCard extends HTMLElement {
         root.innerHTML = "<style>:host { display: block; }</style>";
         root.append(old);
         old.hass = this._hass;
+        old.layoutStore = this._layoutStore;
         old.setConfig(this._config); // usually identical, so nothing is rebuilt
         return;
       }
@@ -370,7 +372,8 @@ export class Home3DCard extends HTMLElement {
       hp.dispose?.();
     }
     this._helpers = [];
-    this._disposePreview?.();
+    this._editor?.disposePreview();
+    this._editor = null; // its scene objects are gone; Edit makes a new one
     this._plan = false;
     if (this._world) this._disposeWorld();
     for (const t of this._bpTex?.values() || []) t.dispose();
@@ -424,6 +427,12 @@ export class Home3DCard extends HTMLElement {
 
   getGridOptions() {
     return { columns: "full", rows: "auto" };
+  }
+
+  /** Where Save writes. The 3D Home panel sets it; a card on a dashboard leaves it unset and saves into the dashboard. */
+  set layoutStore(store: LayoutStore | null) {
+    this._layoutStore = store;
+    if (this._inner) this._inner.layoutStore = store;
   }
 
   set hass(hass: Hass) {
@@ -597,6 +606,21 @@ export class Home3DCard extends HTMLElement {
     return this._work || this._config;
   }
 
+  /** a short message at the bottom of the map (the editor's feedback, mostly) */
+  _toast(msg: string, ms = 2600) {
+    if (!this._ed) return;
+    let t = this._ed.querySelector<HTMLElement>(".toast");
+    if (!t) {
+      t = document.createElement("div");
+      t.className = "toast";
+      this._ed.append(t);
+    }
+    t.textContent = msg;
+    t.style.opacity = "1";
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => (t.style.opacity = "0"), ms);
+  }
+
   _fail(e: any) {
     console.error("ha-3dhome-card", e);
     const root = this.shadowRoot || this.attachShadow({ mode: "open" });
@@ -627,7 +651,7 @@ export class Home3DCard extends HTMLElement {
     this._buildLights();
     this._buildTargets();
     this._buildOverlays();
-    if (this._edit) this._applyPlanVis();
+    if (this._edit) this._editor.applyPlanVis();
     if (this._renderer) this._renderer.shadowMap.needsUpdate = true;
     this._loadModels();
     if (this._focus) this._focus.polys = this._roomPolys(this._focus.room); // room outlines may have changed
@@ -636,7 +660,7 @@ export class Home3DCard extends HTMLElement {
     if (this._ready) this._update();
   }
 
-  /* a new dashboard (Settings → Dashboards → Add → 3D Home) starts with nothing in it: say how to begin */
+  /* a new panel or dashboard starts with nothing in it: say how to begin */
   _showEmpty() {
     const cfg = this._cfg(),
       sc = cfg.scene || {};
@@ -652,7 +676,7 @@ export class Home3DCard extends HTMLElement {
     }
     el.innerHTML = `<b>Your 3D home is empty</b><span>${
       this._hass?.user?.is_admin
-        ? `Press ${ic("pencil-outline")}Edit, then Floor plan, to draw your walls and rooms. Save puts them in this dashboard.`
+        ? `Press ${ic("pencil-outline")}Edit, then Floor plan, to draw your walls and rooms. Save keeps them ${this._layoutStore ? "here" : "in this dashboard"}.`
         : "Ask an administrator to draw the floor plan with the Edit button."
     }</span>`;
   }

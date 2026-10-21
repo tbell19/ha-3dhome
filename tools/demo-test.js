@@ -91,8 +91,8 @@ const check = (name, ok, detail = "") => {
     await p.evaluate(`${card}._edBtn.click()`);
     await p.waitForTimeout(1500);
     check("edit mode opens", await p.evaluate(`!!${card}._edit`));
-    await p.evaluate(`${card}._mutate(() => { ${card}._work.scene.floors[0].fill = '#123456'; return []; })`);
-    await p.evaluate(`${card}._save()`);
+    await p.evaluate(`${card}._editor._mutate(() => { ${card}._work.scene.floors[0].fill = '#123456'; return []; })`);
+    await p.evaluate(`${card}._editor._save()`);
     await p.waitForTimeout(1000);
     const saved = await p.evaluate(
       `JSON.parse(localStorage.getItem('ha-3dhome-demo-layout'))?.scene?.floors?.[0]?.fill`,

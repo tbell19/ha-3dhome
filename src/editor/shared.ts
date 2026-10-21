@@ -21,6 +21,7 @@ export const {
   SF,
   STRATEGY_TYPES,
   CARD_TYPES,
+  findCard,
   STRUCT_TYPES,
   SURFACES,
   DOOR_STYLES,
@@ -48,10 +49,10 @@ export const {
   segDir,
   shiftItem,
   zipFind,
+  LAYOUT_KEYS,
 } = H;
 
 export const YAML_URL = "https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/+esm";
-export const SAVED = ["scene", "lights", "hotspots", "chips", "doors", "look", "ambient", "idle_view", "room_cards"]; // what Save writes back (a missing one is removed)
 export const IDLE_AFTER: [number, string][] = [
   [0, "Never"],
   [30, "After 30 seconds"],

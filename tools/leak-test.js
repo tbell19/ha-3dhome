@@ -129,13 +129,13 @@ window.card=__card;</script>`;
   check("hass updates: JS heap flat (<8 MB growth)", s1.heap - s0.heap < 8, `${s0.heap} -> ${s1.heap} MB`);
 
   // 2. editor churn
-  await ev(`card._enterEdit()`);
+  await ev(`card._openEditor()`);
   await p.waitForTimeout(1500);
   for (let i = 0; i < 30; i++)
     await ev(
-      `card._mutate(()=>{ const k=card._work.scene.boxes.map((b,j)=>b.group==='sofa'?'b:'+j:null).filter(Boolean); card._applyMove(k, ${i % 2 ? 2 : -2}, 0); return [k[0]]; })`,
+      `card._editor._mutate(()=>{ const k=card._work.scene.boxes.map((b,j)=>b.group==='sofa'?'b:'+j:null).filter(Boolean); card._editor._applyMove(k, ${i % 2 ? 2 : -2}, 0); return [k[0]]; })`,
     );
-  await ev(`card._exitEdit(false)`);
+  await ev(`card._editor._exitEdit(false)`);
   await p.waitForTimeout(800);
   const s2 = await snap();
   console.log("after 30 edits", s2);
@@ -146,16 +146,16 @@ window.card=__card;</script>`;
   );
 
   // 2b. floor-plan churn: corner drags rebuild the plan layer on every pointer move
-  await ev(`card._enterEdit()`);
+  await ev(`card._openEditor()`);
   await p.waitForTimeout(800);
-  await ev(`card._setPlanMode(true)`);
+  await ev(`card._editor._setPlanMode(true)`);
   await p.waitForTimeout(800);
   await ev(
-    `(async()=>{ const s=card._work.scene.wall_segs[0]; for(let i=0;i<60;i++){ s.b[1]+= i%2?2:-2; card._rebuildPlan(); if(i%10===9) await new Promise(r=>requestAnimationFrame(r)); } })()`,
+    `(async()=>{ const s=card._work.scene.wall_segs[0]; for(let i=0;i<60;i++){ s.b[1]+= i%2?2:-2; card._editor.rebuildPlan(); if(i%10===9) await new Promise(r=>requestAnimationFrame(r)); } })()`,
   );
   for (let i = 0; i < 10; i++)
-    await ev(`card._mutate(()=>{ card._applyMove(['w:0'], ${i % 2 ? 2 : -2}, 0); return ['w:0']; })`);
-  await ev(`card._setPlanMode(false); card._exitEdit(false)`);
+    await ev(`card._editor._mutate(()=>{ card._editor._applyMove(['w:0'], ${i % 2 ? 2 : -2}, 0); return ['w:0']; })`);
+  await ev(`card._editor._setPlanMode(false); card._editor._exitEdit(false)`);
   await p.waitForTimeout(800);
   const s2b = await snap();
   console.log("after floor-plan churn", s2b);
@@ -168,16 +168,16 @@ window.card=__card;</script>`;
   // 2c. switching modes over and over: edit, floor plan, its tools, the look panel, rooms (see-through fade), back out
   const s2c0 = await snap();
   for (let i = 0; i < 8; i++) {
-    await ev(`card._enterEdit()`);
+    await ev(`card._openEditor()`);
     await p.waitForTimeout(300);
-    await ev(`card._setPlanMode(true)`);
+    await ev(`card._editor._setPlanMode(true)`);
     await p.waitForTimeout(200);
     await ev(
-      `card._setTool('wall'); card._showPreview([100,300],[200,300],'wall'); card._showMarker([100,300],'joint'); card._showRoomPreview([[100,300],[200,300],[200,400]]); card._setTool('select')`,
+      `card._editor._setTool('wall'); card._editor._showPreview([100,300],[200,300],'wall'); card._editor.showMarker([100,300],'joint'); card._editor._showRoomPreview([[100,300],[200,300],[200,400]]); card._editor._setTool('select')`,
     );
-    await ev(`card._setPlanMode(false)`);
+    await ev(`card._editor._setPlanMode(false)`);
     await p.waitForTimeout(200);
-    await ev(`card._toggleLookPanel(); card._toggleLookPanel(); card._exitEdit(false)`);
+    await ev(`card._editor._toggleLookPanel(); card._editor._toggleLookPanel(); card._editor._exitEdit(false)`);
     await p.waitForTimeout(300);
     await ev(`(()=>{ const r=card._rooms(); card._focusRoom(r[${i} % r.length]); })()`);
     await p.waitForTimeout(900);

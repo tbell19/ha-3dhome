@@ -106,7 +106,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
   await wait(6000);
   if (MOBILE) {
     // phone: taps draw walls; toolbar scrolls; toast sits under the bar
-    await ev(`card._enterEdit()`);
+    await ev(`card._openEditor()`);
     await wait(1200);
     await btn("m-plan");
     await wait(2500);
@@ -146,7 +146,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
   const before = await shot("plan-0-legacy.png");
 
   // 1. migration: entering edit converts the old axis walls; saving + reloading looks the same
-  await ev(`card._enterEdit()`);
+  await ev(`card._openEditor()`);
   await wait(1200);
   const m = await ev(
     `({segs:card._work.scene.wall_segs.length, opens:card._work.scene.openings.length, legacy:!!card._work.scene.walls})`,
@@ -156,7 +156,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
     m.segs >= legacyRuns && m.opens === legacyDoors && !m.legacy,
     JSON.stringify(m),
   );
-  await ev(`card._save()`);
+  await ev(`card._editor._save()`);
   await wait(800);
   await ev(`card.setConfig({...genCfg, ...window.saved.strategy, type:'custom:ha-3dhome-card', fill:true})`);
   await wait(5000);
@@ -165,7 +165,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
   check("converted walls render (almost) identically", diff < 0.01, `${(diff * 100).toFixed(2)}% of pixels differ`);
 
   // 2. floor plan mode
-  await ev(`card._enterEdit()`);
+  await ev(`card._openEditor()`);
   await wait(1200);
   await btn("m-plan");
   await wait(2500);
@@ -228,12 +228,12 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
   check("plan view shows walls at their real height", Math.abs(tall[0] - tall[1]) < 0.5, JSON.stringify(tall));
   await btn("t-select");
   await wait(200);
-  await ev(`card._select([])`);
+  await ev(`card._editor._select([])`);
   await click(410, 470, 60);
   const picked = await ev(`card._edit.primary`),
     nDoor = await ev(`'n:'+(card._work.scene.openings.length-1)`);
   check("a click on a door picks the door, not the wall above it", picked === nDoor, `${picked} (door is ${nDoor})`);
-  await ev(`card._select([])`);
+  await ev(`card._editor._select([])`);
   await btn("t-window");
   await wait(200);
   await click(450, 495, 30);
@@ -251,7 +251,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
 
   // 5. drag the shared corner: both walls follow
   await btn("t-select");
-  await ev(`card._select([])`);
+  await ev(`card._editor._select([])`);
   await wait(200);
   const j = await screen(450, 470, 60);
   await p.mouse.move(j[0], j[1]);
@@ -266,12 +266,12 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
     moved[0].b[0] > 451 && moved[0].b[0] === moved[1].a[0] && moved[0].b[1] === moved[1].a[1],
     JSON.stringify(moved),
   );
-  await ev(`card._undo()`);
+  await ev(`card._editor._undo()`);
   await wait(300);
   check("undo puts the corner back", await ev(`card._work.scene.wall_segs[${n0}].b[0] === 450`));
 
   // 6. inspector: wall length in feet/inches (HA unit system = imperial)
-  await ev(`card._select(['w:${n0}'])`);
+  await ev(`card._editor._select(['w:${n0}'])`);
   await wait(200);
   const sub = await ev(`card.shadowRoot.querySelector('.insp .sub').textContent`);
   check("wall inspector shows imperial lengths", /′/.test(sub), sub);
@@ -286,7 +286,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
 
   // 7. blueprint: upload → HA image store, then calibrate scale with two clicks
   await ev(`(async()=>{const c=document.createElement('canvas');c.width=800;c.height=400;const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,800,400);g.strokeStyle='#000';g.lineWidth=8;g.strokeRect(40,40,720,320);
-    const b=await new Promise(r=>c.toBlob(r,'image/png'));await card._addBlueprint(new File([b],'plan.png',{type:'image/png'}))})()`);
+    const b=await new Promise(r=>c.toBlob(r,'image/png'));await card._editor._addBlueprint(new File([b],'plan.png',{type:'image/png'}))})()`);
   await wait(1500);
   const bp = await ev(`card._work.scene.blueprints?.[0]`);
   check(
@@ -295,17 +295,17 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
     JSON.stringify(bp),
   );
   await shot("plan-4-blueprint.png");
-  await ev(`card._select(['p:0'])`);
+  await ev(`card._editor._select(['p:0'])`);
   await wait(200);
   await ev(`card.shadowRoot.querySelector('[data-pb=scale]').click()`);
   await wait(200);
   await click(160, 330);
   await click(260, 330);
-  const meas = await ev(`card._measure.pts`);
+  const meas = await ev(`card._editor._measure.pts`);
   if (!meas?.[1])
     console.log(
       "measure",
-      JSON.stringify(await ev(`[card._measure, card._work.scene.blueprints[0], card._edit.tool]`)),
+      JSON.stringify(await ev(`[card._editor._measure, card._work.scene.blueprints[0], card._edit.tool]`)),
     );
   const mlen = Math.hypot(meas[1][0] - meas[0][0], meas[1][1] - meas[0][1]);
   await ev(
@@ -318,7 +318,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
     `(()=>{const i=card.shadowRoot.querySelector('.insp input[data-p=locked]'); i.checked=true; i.dispatchEvent(new Event('change'))})()`,
   );
   await wait(300);
-  await ev(`card._select([])`);
+  await ev(`card._editor._select([])`);
   await click(bp2.x + bp2.w * 0.3, bp2.y + bp2.h * 0.3);
   check(
     "a locked blueprint can't be grabbed by clicks",
@@ -326,7 +326,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
   );
 
   // 7b. rooms: select by clicking the floor, reshape with corner / midpoint handles, draw a new one, rename it
-  await ev(`card._select([])`);
+  await ev(`card._editor._select([])`);
   await wait(200);
   const RI = await ev(`card._work.scene.floors.findIndex(f=>f.name==='lounge')`);
   await click(185, 440);
@@ -405,7 +405,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
       `card._work.scene.floors[${nf - 1}].texture === 'wood' && card._floorMeshes.some(m=>m.userData.room==='study' && m.material.map)`,
     ),
   );
-  await ev(`card._select(['w:0'])`);
+  await ev(`card._editor._select(['w:0'])`);
   await wait(300);
   await ev(
     `(()=>{const i=card.shadowRoot.querySelector('.insp select[data-p=texture]'); i.value='brick'; i.dispatchEvent(new Event('change'))})()`,
@@ -434,8 +434,10 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
 
   // 7c. overlapping walls: clicking the same spot again picks the one underneath
   const nw = await ev(`card._work.scene.wall_segs.length`);
-  await ev(`card._mutate(()=>[card._push('w',{a:[600,420],b:[660,420]}), card._push('w',{a:[610,420],b:[650,420]})])`);
-  await ev(`card._select([])`);
+  await ev(
+    `card._editor._mutate(()=>[card._editor._push('w',{a:[600,420],b:[660,420]}), card._editor._push('w',{a:[610,420],b:[650,420]})])`,
+  );
+  await ev(`card._editor._select([])`);
   await wait(300);
   await click(630, 420, 20);
   const c1 = await ev(`card._edit.primary`);
@@ -446,7 +448,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
     c1 !== c2 && [c1, c2].every((k) => k === "w:" + nw || k === "w:" + (nw + 1)),
     `${c1} -> ${c2}`,
   );
-  await ev(`card._select(['w:${nw}','w:${nw + 1}']); card._delete()`);
+  await ev(`card._editor._select(['w:${nw}','w:${nw + 1}']); card._editor._delete()`);
   await wait(300);
 
   // 8. back to furniture mode, save, reload
@@ -456,7 +458,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
     "furniture mode shows furniture again",
     await ev(`card._items.get('b:14').visible !== false && !card._jointMeshes.length`),
   );
-  await ev(`card._save()`);
+  await ev(`card._editor._save()`);
   await wait(800);
   const st = await ev(
     `({segs:saved.strategy.scene.wall_segs.length, opens:saved.strategy.scene.openings.length, bp:saved.strategy.scene.blueprints.length, legacy:!!saved.strategy.scene.walls})`,
@@ -548,7 +550,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
   );
   await setSun(90, 30, `,config:{...card._hass.config,latitude:51.48,longitude:0}`);
   await wait(300);
-  await ev(`card._enterEdit()`);
+  await ev(`card._openEditor()`);
   await wait(1200);
   await btn("m-plan");
   await wait(2000);
@@ -575,19 +577,19 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
   await wait(300);
   check("sun preview at midnight is dark", await ev(`card._sun.intensity === 0`));
   await shot("plan-6-north.png");
-  await ev(`card._exitEdit(false)`);
+  await ev(`card._editor._exitEdit(false)`);
   await wait(800);
   check("leaving the editor ends the preview", await ev(`card._sunPreview == null && card._sun.intensity > 1`));
   // 9. light fixtures: a table lamp, and a string light whose bulbs follow its length
-  await ev(`card._enterEdit()`);
+  await ev(`card._openEditor()`);
   await wait(1200);
-  await ev(`card._select(['l:2']); card._setFixture('l:2','tablelamp')`);
+  await ev(`card._editor._select(['l:2']); card._editor._setFixture('l:2','tablelamp')`);
   await wait(800);
   const lamp = await ev(
     `(()=>{const g=card._lightGroups.find(g=>g.keys.includes('l:2'));return [g.fixtures.length, g.group.children.some(c=>c.userData.fixture), card._work.lights[2].z]})()`,
   );
   check("a light can be given a table lamp", lamp[0] >= 1 && lamp[1] && lamp[2] === 25, JSON.stringify(lamp));
-  await ev(`card._select(['l:8']); card._setFixture('l:8','string')`);
+  await ev(`card._editor._select(['l:8']); card._editor._setFixture('l:8','string')`);
   await wait(800);
   const bulbs = () => ev(`card._lightGroups.find(g=>g.keys.includes('l:8')).bulbs.length`);
   const b0 = await bulbs(),
@@ -601,14 +603,14 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
     "a selected string light shows end and middle handles",
     (await ev(`[card._sptMeshes.length, card._smidMeshes.length].join()`)) === "2,1",
   );
-  await ev(`card._field('l:8','len', String(card._toReal(120)))`);
+  await ev(`card._editor._field('l:8','len', String(card._editor._toReal(120)))`);
   await wait(600);
   const b1 = await bulbs();
   check("a longer string gets more bulbs", b1 > b0 + 2, `${b0} -> ${b1}`);
-  await ev(`card._field('l:8','count','5')`);
+  await ev(`card._editor._field('l:8','count','5')`);
   await wait(600);
   check("the bulb count can be set", (await bulbs()) === 5);
-  await ev(`card._field('l:8','count','0')`);
+  await ev(`card._editor._field('l:8','count','0')`);
   await wait(600);
   {
     const L = await ev(`card._work.lights[8]`),
@@ -630,12 +632,12 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
       L2.points.at(-1)[0] > e[0] + 40 && b2 > b1,
       JSON.stringify({ end: L2.points.at(-1), b1, b2 }),
     );
-    await ev(`card._undo()`);
+    await ev(`card._editor._undo()`);
     await wait(600);
     check("undo puts the string's end back", (await ev(`card._work.lights[8].points.at(-1)[0]`)) === e[0]);
   }
   await shot("plan-9-fixtures.png");
-  await ev(`card._exitEdit(true)`);
+  await ev(`card._editor._exitEdit(true)`);
   await wait(1500);
 
   // 9. door leaves follow a sensor

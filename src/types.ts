@@ -24,6 +24,8 @@ export interface HassEntity {
 
 export interface HassConnection {
   subscribeEvents(cb: (ev: unknown) => void, type: string): Promise<() => void>;
+  /** a websocket subscription; Home Assistant renews it after a reconnect */
+  subscribeMessage<T>(cb: (msg: T) => void, msg: Record<string, unknown>): Promise<() => Promise<void>>;
   ping?(): Promise<unknown>;
   reconnect?(force?: boolean): void;
   connected?: boolean;
@@ -378,3 +380,27 @@ export interface StrategyConfig extends CardConfig {
 
 /** One wall end: the wall's index in scene.wall_segs and which end. */
 export type WallEnd = [number, "a" | "b"];
+
+/** The parts of the config that the editor changes and Save writes back (LAYOUT_KEYS lists them at runtime). */
+export type LayoutKey =
+  | "scene"
+  | "lights"
+  | "hotspots"
+  | "chips"
+  | "doors"
+  | "look"
+  | "ambient"
+  | "idle_view"
+  | "room_cards";
+
+/** A saved layout: what the editor changes, without the card's own options. */
+export type Layout = Pick<CardConfig, LayoutKey>;
+
+/** Where Save writes the layout. A card on a dashboard saves into the dashboard; the 3D Home panel hands its card a
+ * store that saves through the integration instead (card.layoutStore). */
+export interface LayoutStore {
+  /** what the toast says once saved, e.g. "Saved to the dashboard" */
+  readonly savedMessage: string;
+  /** write the layout; resolves to the card config it now corresponds to, which the card takes as its own */
+  save(layout: Layout, config: CardConfig): Promise<CardConfig>;
+}

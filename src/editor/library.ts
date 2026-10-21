@@ -1,22 +1,22 @@
 /* The Sweet Home 3D library browser: downloading libraries and placing models.
  */
 import type { GenericItem } from "../core/items";
-import type { Home3DCard } from "../card/card";
+import type { Editor } from "./editor";
 import { LIBS, LIB_DIR, R1, SF, esc, ic, zipFind } from "./shared";
 import type { Library } from "../core/sh3d";
 
 export class EditorLibrary {
   /* ----- model library ----- */
-  _openLibrary(this: Home3DCard) {
-    this._ed.querySelector<HTMLElement>(".lib")?.remove();
+  _openLibrary(this: Editor) {
+    this.card._ed.querySelector<HTMLElement>(".lib")?.remove();
     const lib = document.createElement("div");
     lib.className = "lib";
-    this._ed.append(lib);
+    this.card._ed.append(lib);
     this._libEl = lib;
     this._libHome();
   }
 
-  _libHome(this: Home3DCard) {
+  _libHome(this: Editor) {
     const lib = this._libEl;
     lib.innerHTML = `<header><span class="ttl">Sweet Home 3D model libraries</span><button data-x title="Close">${ic("close")}</button></header>
       <div class="body"><div class="note">Libraries are downloaded once into <code>/config/www/sh3d/</code> by Home Assistant's Downloader integration,
@@ -30,7 +30,7 @@ export class EditorLibrary {
     for (const row of lib.querySelectorAll<HTMLElement>(".librow")) this._libRow(row);
   }
 
-  async _libRow(this: Home3DCard, row: HTMLElement, wait?: boolean) {
+  async _libRow(this: Editor, row: HTMLElement, wait?: boolean) {
     const file = row.dataset.f,
       st = row.querySelector<HTMLElement>(".st"),
       btn = row.querySelector<HTMLButtonElement>(".act");
@@ -53,8 +53,8 @@ export class EditorLibrary {
     btn.onclick = () => (ok ? this._libBrowse(file) : this._download(file, row));
   }
 
-  async _download(this: Home3DCard, file: string, row: HTMLElement) {
-    const h = this._hass,
+  async _download(this: Editor, file: string, row: HTMLElement) {
+    const h = this.card._hass,
       st = row.querySelector<HTMLElement>(".st"),
       btn = row.querySelector<HTMLButtonElement>(".act");
     if (!h.services?.downloader?.download_file) {
@@ -98,7 +98,7 @@ export class EditorLibrary {
     }
   }
 
-  async _libBrowse(this: Home3DCard, file: string) {
+  async _libBrowse(this: Editor, file: string) {
     const lib = this._libEl,
       meta = LIBS.find((l) => l.file === file);
     lib.innerHTML = `<header><button data-back>${ic("chevron-left")}Libraries</button><span class="ttl">${esc(meta?.title || file)}</span><button data-x title="Close">${ic("close")}</button></header>
@@ -107,7 +107,7 @@ export class EditorLibrary {
     lib.querySelector<HTMLElement>("[data-back]").addEventListener("click", () => this._libHome());
     let data;
     try {
-      data = await this._openLib(file);
+      data = await this.card._openLib(file);
     } catch (e: any) {
       lib.querySelector<HTMLElement>(".body").innerHTML =
         `<div class="note">Couldn't open this library: ${esc(e.message || e)}. If it was still downloading, wait and try again; otherwise re-download it.</div>`;
@@ -150,7 +150,7 @@ export class EditorLibrary {
     render();
   }
 
-  async _icon(this: Home3DCard, data: Library, it: GenericItem) {
+  async _icon(this: Editor, data: Library, it: GenericItem) {
     if (it._url !== undefined) return it._url;
     const s = data.sh3fs.find((x) => x.name === it.sh3f) || data.sh3fs[0];
     const f = zipFind(s.zip, it.icon);
@@ -158,9 +158,9 @@ export class EditorLibrary {
     return it._url;
   }
 
-  _placeModel(this: Home3DCard, it: GenericItem) {
+  _placeModel(this: Editor, it: GenericItem) {
     this._libEl?.remove();
-    const [sxy, sz] = this._modelScale(),
+    const [sxy, sz] = this.card._modelScale(),
       [x, y] = this._target();
     this._mutate(() => [
       this._push("o", {
@@ -181,6 +181,6 @@ export class EditorLibrary {
         cm: [it.w, it.d, it.h],
       }),
     ]);
-    this._toast(`Placed ${it.name} at the centre of the view — drag it into place`);
+    this.card._toast(`Placed ${it.name} at the centre of the view — drag it into place`);
   }
 }

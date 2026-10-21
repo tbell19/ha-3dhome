@@ -21,7 +21,7 @@ export const cardStyles = (cfg: CardConfig) => `
     border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #fff; }
   .door ha-icon { --mdc-icon-size: 70%; }
   .door.open { background: #c2483d; box-shadow: 0 0 0 3px rgba(194,72,61,.3); } .door.closed { background: rgba(40,90,60,.85); }
-  .weather { position: absolute; left: 2.5%; top: 3.5%; color: #f2ebe0; pointer-events: auto;
+  .weather { position: absolute; left: calc(2.5% + var(--ha-3dhome-inset-left, 0px)); top: 3.5%; color: #f2ebe0; pointer-events: auto;
     display: grid; grid-template-columns: auto auto; column-gap: .6em; align-items: center; cursor: pointer; }
   .weather ha-icon { --mdc-icon-size: max(26px, 4cqw); color: #f5d27a; grid-row: span 2; }
   .weather .t { font-size: max(18px, 3.2cqw); font-weight: 600; line-height: 1; } .weather .s { font-size: max(9px, 1.1cqw); opacity: .8; }

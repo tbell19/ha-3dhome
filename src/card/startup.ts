@@ -63,11 +63,14 @@ export class StartupPart {
 
   /** Edit pressed: fetch the editor the first time, then enter edit mode */
   async _openEditor(this: Home3DCard) {
-    if (!this._enterEdit) {
-      const btn = this._edBtn;
+    if (!this._editor) {
+      const btn = this._edBtn,
+        gen = this._gen;
       btn.style.opacity = ".5";
       try {
-        await loadEditor();
+        const mod = await loadEditor();
+        if (gen !== this._gen) return; // torn down meanwhile
+        this._editor = mod.create(this);
       } catch (e) {
         console.warn("3D Home: the editor didn't load", e);
         btn.title = "The editor didn't load. Check the connection and try again.";
@@ -76,7 +79,7 @@ export class StartupPart {
         btn.style.opacity = "";
       }
     }
-    if (!this._edit && this._enterEdit) this._enterEdit();
+    if (!this._edit) await this._editor.enter();
   }
 
   /** the WebGL renderer, its canvas first in .wrap, with context loss handling (phones drop background contexts) */

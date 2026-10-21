@@ -123,7 +123,7 @@ window.card=__card;</script></body></html>`;
         await p.evaluate(`card.shadowRoot.querySelector('.edbtn').click()`);
         await p.waitForTimeout(1500);
         const key = await p.evaluate(
-          `(()=>{const g=card._lightGroups.find(g=>g.kind==='glow'&&g.members.some(m=>m.entity==='light.kitchen_downlights')); card._select([g.keys[0]]); return g.keys[0]})()`,
+          `(()=>{const g=card._lightGroups.find(g=>g.kind==='glow'&&g.members.some(m=>m.entity==='light.kitchen_downlights')); card._editor._select([g.keys[0]]); return g.keys[0]})()`,
         );
         await p.waitForTimeout(500);
         const before = await p.evaluate(`card._lightGroups.find(g=>g.keys.includes('${key}')).light.intensity`),
@@ -134,7 +134,7 @@ window.card=__card;</script></body></html>`;
         const r=d.querySelector('[data-lt=r]'); r.value=90; r.dispatchEvent(new Event('input',{bubbles:true})); r.dispatchEvent(new Event('change',{bubbles:true}))})()`);
         await p.waitForTimeout(1500);
         const r = await p.evaluate(
-          `[card._get('${key}').intensity, card._get('${key}').r, card._edit.undo.length, card._lightGroups.find(g=>g.keys.includes('${key}')).light.intensity, !!card.shadowRoot.querySelector('.insp .ltune[open]')]`,
+          `[card._editor.item('${key}').intensity, card._editor.item('${key}').r, card._edit.undo.length, card._lightGroups.find(g=>g.keys.includes('${key}')).light.intensity, !!card.shadowRoot.querySelector('.insp .ltune[open]')]`,
         );
         if (!(r[0] === 2.5 && r[1] === 90 && r[2] === u0 + 1 && r[3] > before * 3 && r[4]))
           errors.push("light settings did not apply: " + JSON.stringify([before, ...r]));

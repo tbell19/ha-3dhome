@@ -1,8 +1,8 @@
 /* Versions, names and URLs the card depends on, plus the plan-to-scene offset and the render-look defaults.
  */
-import type { CardConfig, Looks } from "../types";
+import type { CardConfig, LayoutKey, Looks } from "../types";
 
-export const VERSION3D = "5.2.0";
+export const VERSION3D = "5.3.0";
 export const STRATEGY_NAME = "ha-3dhome";
 export const OLD_NAMES = { card: "iso-home-3d-card", strategy: "iso-home" }; // the project was called ha-iso-home before v5; both still work
 export const CDN = "https://cdn.jsdelivr.net/npm/";
@@ -57,3 +57,16 @@ export const LIBS: LibraryInfo[] = [
   { file: "3DModels-Scopia-1.9.3.zip", title: "Scopia", size: "69.5 MB", n: 500, lic: "CC-BY" },
 ];
 export const LIB_DIR = "/local/sh3d/";
+
+/** what the editor changes and Save writes back; a missing one is removed */
+export const LAYOUT_KEYS: readonly LayoutKey[] = [
+  "scene",
+  "lights",
+  "hotspots",
+  "chips",
+  "doors",
+  "look",
+  "ambient",
+  "idle_view",
+  "room_cards",
+];

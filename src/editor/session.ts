@@ -2,12 +2,13 @@
  */
 import type { Scene, WallSeg } from "../types";
 import type { GenericItem } from "../core/items";
-import type { EditState, Home3DCard } from "../card/card";
+import type { EditState } from "../card/card";
+import type { Editor } from "./editor";
 import { KINDS, TC_URL, ic, jclone, roomTitle, segDir } from "./shared";
 
 export class EditorSession {
-  _list(this: Home3DCard, k: string, create?: boolean): GenericItem[] {
-    const w = this._work;
+  _list(this: Editor, k: string, create?: boolean): GenericItem[] {
+    const w = this.card._work;
     if ("bovwnpr".includes(k)) {
       w.scene ||= {};
       const n = (<Record<string, keyof Scene>>{
@@ -29,53 +30,53 @@ export class EditorSession {
     return lists[n] || [];
   }
 
-  _get(this: Home3DCard, key: string): GenericItem {
+  item(this: Editor, key: string): GenericItem {
     const [k, i] = key.split(":");
     return this._list(k)[+i];
   }
 
-  _setBoxObj(this: Home3DCard, key: string): GenericItem {
+  _setBoxObj(this: Editor, key: string): GenericItem {
     const [k, i] = key.split(":");
     const l = this._list(k);
     if (k === "b" && Array.isArray(l[+i])) l[+i] = { b: l[+i] };
     return l[+i];
   }
 
-  _allKeys(this: Home3DCard) {
+  _allKeys(this: Editor) {
     const out: string[] = [];
     for (const k of "bovlhcdwnpr") this._list(k).forEach((_, i) => out.push(k + ":" + i));
     return out;
   }
 
-  _label(this: Home3DCard, key: string) {
+  _label(this: Editor, key: string) {
     const [k] = key.split(":"),
-      it = this._get(key);
+      it = this.item(key);
     if (!it) return key;
     if (k === "b") return "Box" + (it.group ? ` · ${it.group}` : "");
     if (k === "o" || k === "v")
       return (it.type === "model" ? it.name || "Model" : it.type) + (it.group ? ` · ${it.group}` : "");
-    if (k === "w") return `Wall · ${this._fmtLen(segDir(it as WallSeg)[2])}`;
+    if (k === "w") return `Wall · ${this.card._fmtLen(segDir(it as WallSeg)[2])}`;
     if (k === "n") return (<Record<string, string>>{ door: "Door", window: "Window" })[it.kind] || "Cut-out";
     if (k === "p") return "Blueprint";
     if (k === "r") return `Room · ${roomTitle(it.name || "unnamed")}`;
-    const ent = it.entity ? this._hass?.states[it.entity]?.attributes?.friendly_name || it.entity : "";
+    const ent = it.entity ? this.card._hass?.states[it.entity]?.attributes?.friendly_name || it.entity : "";
     return `${KINDS[k][0].toUpperCase() + KINDS[k].slice(1)}${ent ? " · " + ent : it.label ? " · " + it.label : ""}`;
   }
 
-  async _enterEdit(this: Home3DCard) {
-    if (this._edit) return;
-    const { TransformControls } = await this._mod(TC_URL);
-    this._work = jclone({
-      scene: this._config.scene || {},
-      lights: this._config.lights || [],
-      hotspots: this._config.hotspots || [],
-      chips: this._config.chips || [],
-      doors: this._config.doors || [],
-      room_cards: this._config.room_cards,
+  async enter(this: Editor) {
+    if (this.card._edit) return;
+    const { TransformControls } = await this.card._mod(TC_URL);
+    this.card._work = jclone({
+      scene: this.card._config.scene || {},
+      lights: this.card._config.lights || [],
+      hotspots: this.card._config.hotspots || [],
+      chips: this.card._config.chips || [],
+      doors: this.card._config.doors || [],
+      room_cards: this.card._config.room_cards,
     });
-    this._work = { ...this._config, ...this._work };
+    this.card._work = { ...this.card._config, ...this.card._work };
     this._migrateWalls();
-    this._edit = {
+    this.card._edit = {
       sel: new Set(),
       undo: [],
       redo: [],
@@ -86,92 +87,79 @@ export class EditorSession {
       snap: true,
       showFurn: false,
     };
-    this._plan = false;
-    this._tool = "select";
+    this.card._plan = false;
+    this.card._tool = "select";
     this._coarse = matchMedia("(pointer: coarse)").matches; // touch-first device: no gizmo, drag selected items directly
-    this._inspMin = this._coarse && this._wrap.clientWidth < 640; // phones: inspector starts folded to its title bar
-    this._wrap.classList.add("editing");
-    this._edBtn.style.display = "none";
-    const T = this.T;
-    this._pivot = new T.Object3D();
-    this._scene.add(this._pivot);
-    const tc = (this._tc = new TransformControls(this._cam, this._renderer.domElement));
+    this._inspMin = this._coarse && this.card._wrap.clientWidth < 640; // phones: inspector starts folded to its title bar
+    this.card._wrap.classList.add("editing");
+    this.card._edBtn.style.display = "none";
+    const T = this.card.T;
+    this.card._pivot = new T.Object3D();
+    this.card._scene.add(this.card._pivot);
+    const tc = (this.card._tc = new TransformControls(this.card._cam, this.card._renderer.domElement));
     tc.setSize(0.9);
-    tc.addEventListener("change", () => this._requestRender());
+    tc.addEventListener("change", () => this.card._requestRender());
     tc.addEventListener("dragging-changed", (e: { value?: boolean }) => {
-      this._controls.enabled = !e.value;
-      this._tcDragging = e.value;
-      if (e.value) this._tcUsed = true;
+      this.card._controls.enabled = !e.value;
+      this.card._tcDragging = e.value;
+      if (e.value) this.card._tcUsed = true;
     });
-    tc.addEventListener("mouseDown", () => this._dragStart(this._edit.mode));
-    tc.addEventListener("objectChange", () => this._dragPreview());
-    tc.addEventListener("mouseUp", () => this._dragEnd());
-    this._scene.add(tc);
+    tc.addEventListener("mouseDown", () => this.dragStart(this.card._edit.mode));
+    tc.addEventListener("objectChange", () => this.dragPreview());
+    tc.addEventListener("mouseUp", () => this.dragEnd());
+    this.card._scene.add(tc);
     this._applySnap();
-    this._keys = (ev) => this._onKey(ev);
-    window.addEventListener("keydown", this._keys);
+    this.card._keys = (ev) => this._onKey(ev);
+    window.addEventListener("keydown", this.card._keys);
     this._renderEditorUI();
-    this._rebuild();
+    this.card._rebuild();
     this._select([]);
+    this.card.dispatchEvent(new CustomEvent("ha-3dhome-editing", { detail: { editing: true } }));
   }
 
-  _exitEdit(this: Home3DCard, discard?: boolean) {
-    if (!this._edit) return;
-    if (discard && this._edit.dirty && !confirm("Discard your unsaved layout changes?")) return;
-    window.removeEventListener("keydown", this._keys);
-    this._tc.detach();
-    this._scene.remove(this._tc);
-    this._tc.dispose();
-    this._tc = null;
-    this._scene.remove(this._pivot);
-    for (const hp of this._helpers || []) {
-      this._scene.remove(hp);
+  _exitEdit(this: Editor, discard?: boolean) {
+    if (!this.card._edit) return;
+    if (discard && this.card._edit.dirty && !confirm("Discard your unsaved layout changes?")) return;
+    window.removeEventListener("keydown", this.card._keys);
+    this.card._tc.detach();
+    this.card._scene.remove(this.card._tc);
+    this.card._tc.dispose();
+    this.card._tc = null;
+    this.card._scene.remove(this.card._pivot);
+    for (const hp of this.card._helpers || []) {
+      this.card._scene.remove(hp);
       hp.dispose?.();
     }
-    this._helpers = [];
-    this._disposePreview();
-    if (this._plan && this._planTopped && this._sph().phi < 0.3) this._toggleTop();
-    this._plan = false;
+    this.card._helpers = [];
+    this.disposePreview();
+    if (this.card._plan && this._planTopped && this.card._sph().phi < 0.3) this.card._toggleTop();
+    this.card._plan = false;
     this._planTopped = false;
-    this._tool = "select";
-    this._sunPreview = null;
-    this._edit = null;
-    this._work = null;
-    this._controls.enabled = true;
-    this._wrap.classList.remove("editing", "plan", "tool");
-    this._ed.innerHTML = "";
-    this._edBtn.style.display = this._hass?.user?.is_admin ? "" : "none";
-    this._rebuild();
-    this._buildRoomBar();
-    this._showRoomCards(this._rcRoom || "home");
+    this.card._tool = "select";
+    this.card._sunPreview = null;
+    this.card._edit = null;
+    this.card._work = null;
+    this.card._controls.enabled = true;
+    this.card._wrap.classList.remove("editing", "plan", "tool");
+    this.card._ed.innerHTML = "";
+    this.card._edBtn.style.display = this.card._hass?.user?.is_admin ? "" : "none";
+    this.card._applyLayout(); // the saved config, or the one from before editing
+    this.card.dispatchEvent(new CustomEvent("ha-3dhome-editing", { detail: { editing: false } }));
   }
 
-  _applySnap(this: Home3DCard) {
-    const s = this._edit.snap;
-    this._tc.setTranslationSnap(s ? 2 : null);
-    this._tc.setRotationSnap(s ? Math.PI / 12 : null);
-    this._tc.setScaleSnap(s ? 0.05 : null);
-  }
-
-  _toast(this: Home3DCard, msg: string, ms = 2600) {
-    let t = this._ed.querySelector<HTMLElement>(".toast");
-    if (!t) {
-      t = document.createElement("div");
-      t.className = "toast";
-      this._ed.append(t);
-    }
-    t.textContent = msg;
-    t.style.opacity = "1";
-    clearTimeout(this._toastT);
-    this._toastT = setTimeout(() => (t.style.opacity = "0"), ms);
+  _applySnap(this: Editor) {
+    const s = this.card._edit.snap;
+    this.card._tc.setTranslationSnap(s ? 2 : null);
+    this.card._tc.setRotationSnap(s ? Math.PI / 12 : null);
+    this.card._tc.setScaleSnap(s ? 0.05 : null);
   }
 
   /* The toolbar: a top row (mode switch, undo/redo, Cancel, Save) and a row of tools for what is selected. Item tools
    * (`.selo`) show only with a selection and scene tools (`.idle`) only without one; the rest sit in the Draw and More
    * menus. On a phone the rows stack and only `.ico` buttons drop their label. */
-  _renderEditorUI(this: Home3DCard) {
-    const ed = this._ed,
-      plan = !!this._plan;
+  _renderEditorUI(this: Editor) {
+    const ed = this.card._ed,
+      plan = !!this.card._plan;
     const b = (a: string, icon: string, label: string, title: string, cls = "") =>
       `<button data-a="${a}"${cls ? ` class="${cls}"` : ""}${title ? ` title="${title}"` : ""}>${ic(icon)}<span class="lbl">${label}</span></button>`;
     const menu = (m: string, icon: string, label: string, title: string, cls = "") =>
@@ -212,15 +200,15 @@ export class EditorSession {
       if (a === "m-furn" || a === "m-plan") this._setPlanMode(a === "m-plan");
       else if (a === "translate" || a === "rotate" || a === "scale" || a === "t-select") {
         this._setMode(a === "t-select" ? "translate" : a);
-        if (this._plan && this._tool !== "select") this._setTool("select");
+        if (this.card._plan && this.card._tool !== "select") this._setTool("select");
         else this._syncBar();
       } else if (a === "space") {
-        this._edit.space = this._edit.space === "local" ? "world" : "local";
+        this.card._edit.space = this.card._edit.space === "local" ? "world" : "local";
         this._placePivot();
         this._syncBar();
       } else if (a === "t-wall" || a === "t-door" || a === "t-window" || a === "t-room") {
         const t = a.slice(2);
-        this._setTool(this._tool === t ? "select" : t);
+        this._setTool(this.card._tool === t ? "select" : t);
       } else if (a === "bp") {
         const n = this._list("p").length;
         if (n) {
@@ -228,12 +216,12 @@ export class EditorSession {
           this._select(["p:0"]);
         } else this._pickBlueprintFile();
       } else if (a === "furnvis") {
-        this._edit.showFurn = !this._edit.showFurn;
-        this._applyPlanVis();
+        this.card._edit.showFurn = !this.card._edit.showFurn;
+        this.applyPlanVis();
         this._syncBar();
-        this._requestRender();
+        this.card._requestRender();
       } else if (a === "snap") {
-        this._edit.snap = !this._edit.snap;
+        this.card._edit.snap = !this.card._edit.snap;
         this._applySnap();
         this._syncBar();
       } else if (a === "add") this._toggleEntityPanel();
@@ -253,7 +241,7 @@ export class EditorSession {
       else if (a === "cancel") this._exitEdit(true);
       else if (a === "save") this._save();
     });
-    const wrap = this._wrap as HTMLElement & { _popWired?: boolean };
+    const wrap = this.card._wrap as HTMLElement & { _popWired?: boolean };
     if (!wrap._popWired) {
       // a press anywhere outside an open menu closes it
       wrap._popWired = true;
@@ -270,15 +258,15 @@ export class EditorSession {
   }
 
   /* Opens the Draw or More menu under its button (or closes it when it's already open); null closes any open menu. */
-  _togglePop(this: Home3DCard, name: string | null, btn?: HTMLElement) {
-    const ed = this._ed;
+  _togglePop(this: Editor, name: string | null, btn?: HTMLElement) {
+    const ed = this.card._ed;
     if (!ed) return;
     for (const p of ed.querySelectorAll<HTMLElement>(".pop")) {
       const open = p.dataset.pop === name && p.classList.contains("hide");
       p.classList.toggle("hide", !open);
       ed.querySelector<HTMLElement>(`[data-m="${p.dataset.pop}"]`)?.classList.toggle("open", open);
       if (!open || !btn) continue;
-      const wr = this._wrap.getBoundingClientRect(),
+      const wr = this.card._wrap.getBoundingClientRect(),
         br = btn.getBoundingClientRect(),
         bar = ed.querySelector<HTMLElement>(".bar").getBoundingClientRect();
       p.style.top = bar.bottom - wr.top + 6 + "px";
@@ -286,21 +274,21 @@ export class EditorSession {
     }
   }
 
-  _syncBar(this: Home3DCard) {
-    const ed = this._ed,
+  _syncBar(this: Editor) {
+    const ed = this.card._ed,
       bar = ed?.querySelector<HTMLElement>(".bar");
     if (!bar) return;
-    const e = this._edit,
+    const e = this.card._edit,
       q = (a: string) => ed.querySelector<HTMLButtonElement>(`.tb [data-a="${a}"]`),
       on = (a: string, v: unknown) => q(a)?.classList.toggle("on", !!v),
       dis = (a: string, v: unknown) => {
         const b = q(a);
         if (b) b.disabled = !!v;
       };
-    const sel = !this._plan || this._tool === "select",
+    const sel = !this.card._plan || this.card._tool === "select",
       n = e.sel.size;
-    on("m-furn", !this._plan);
-    on("m-plan", this._plan);
+    on("m-furn", !this.card._plan);
+    on("m-plan", this.card._plan);
     on("translate", e.mode === "translate");
     on("t-select", sel && e.mode !== "rotate");
     on("rotate", sel && e.mode === "rotate");
@@ -318,11 +306,11 @@ export class EditorSession {
       window: ["window-closed-variant", "Window"],
       room: ["vector-polygon", "Room"],
     };
-    for (const t in tools) on("t-" + t, this._tool === t);
+    for (const t in tools) on("t-" + t, this.card._tool === t);
     const dm = ed.querySelector<HTMLElement>('[data-m="draw"]');
     if (dm) {
-      const [icon, label] = tools[this._tool] || ["pencil-ruler", "Draw"];
-      dm.classList.toggle("on", !!tools[this._tool]);
+      const [icon, label] = tools[this.card._tool] || ["pencil-ruler", "Draw"];
+      dm.classList.toggle("on", !!tools[this.card._tool]);
       dm.innerHTML = `${ic(icon)}<span class="lbl">${label}</span>${ic("menu-down")}`;
     }
     for (const b of bar.querySelectorAll<HTMLElement>(".selo")) b.classList.toggle("hide", !n);
@@ -339,27 +327,27 @@ export class EditorSession {
     dis("undo", !e.undo.length);
     dis("redo", !e.redo.length);
     q("save").textContent = e.dirty ? "Save •" : "Save";
-    this._wrap.classList.toggle("tool", !!this._plan && this._tool !== "select");
+    this.card._wrap.classList.toggle("tool", !!this.card._plan && this.card._tool !== "select");
   }
 
-  _onKey(this: Home3DCard, ev: KeyboardEvent) {
+  _onKey(this: Editor, ev: KeyboardEvent) {
     const t = ev.composedPath()[0] as HTMLElement;
     if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
-    if (!this.isConnected) return;
+    if (!this.card.isConnected) return;
     const mod = ev.ctrlKey || ev.metaKey;
-    const sel = [...this._edit.sel];
-    if (this._plan && !mod) {
-      if ((ev.key === "Delete" || ev.key === "Backspace") && this._vsel && this._tool === "select") {
+    const sel = [...this.card._edit.sel];
+    if (this.card._plan && !mod) {
+      if ((ev.key === "Delete" || ev.key === "Backspace") && this.card._vsel && this.card._tool === "select") {
         ev.preventDefault();
-        this._planField(this._vsel.key, "delcorner");
+        this._planField(this.card._vsel.key, "delcorner");
         return;
       }
-      if ((ev.key === "Escape" || ev.key === "Enter") && this._tool !== "select") {
-        if (this._tool === "wall" && this._draw?.start && ev.key === "Enter") {
+      if ((ev.key === "Escape" || ev.key === "Enter") && this.card._tool !== "select") {
+        if (this.card._tool === "wall" && this._draw?.start && ev.key === "Enter") {
           this._setTool("wall");
           return;
         }
-        if (this._tool === "room" && ev.key === "Enter" && this._draw?.pts?.length >= 3) {
+        if (this.card._tool === "room" && ev.key === "Enter" && this._draw?.pts?.length >= 3) {
           this._finishRoom();
           return;
         }
@@ -380,7 +368,7 @@ export class EditorSession {
     };
     if (arrows[ev.key] && sel.length) {
       ev.preventDefault();
-      const [dx, dy] = this._screenDir(...arrows[ev.key]),
+      const [dx, dy] = this.card._screenDir(...arrows[ev.key]),
         step = ev.shiftKey ? 10 : 1;
       this._mutate(() => {
         this._applyMove(sel, dx * step, dy * step);
@@ -394,7 +382,7 @@ export class EditorSession {
       "{": -1,
       "]": 1,
       "}": 1,
-      ...(this._plan ? { q: -1, Q: -1, e: 1, E: 1 } : {}),
+      ...(this.card._plan ? { q: -1, Q: -1, e: 1, E: 1 } : {}),
     };
     const turn = turns[ev.key];
     if (turn && !mod && sel.length) {
@@ -406,18 +394,18 @@ export class EditorSession {
     }
     // Unity / Godot gizmo keys in furniture mode: W move, E rotate, R scale, X local / global axes
     const gizmoKeys: Record<string, EditState["mode"]> = { w: "translate", e: "rotate", r: "scale" };
-    const gk = !this._plan && !mod && gizmoKeys[ev.key.toLowerCase()];
+    const gk = !this.card._plan && !mod && gizmoKeys[ev.key.toLowerCase()];
     if (gk) {
       this._setMode(gk);
       this._syncBar();
       return;
     }
-    if (!this._plan && !mod && ev.key.toLowerCase() === "x") {
-      this._ed.querySelector<HTMLElement>('[data-a="space"]')?.click();
+    if (!this.card._plan && !mod && ev.key.toLowerCase() === "x") {
+      this.card._ed.querySelector<HTMLElement>('[data-a="space"]')?.click();
       return;
     }
     if (ev.key === "Delete" || ev.key === "Backspace") {
-      if (this._edit.sel.size) {
+      if (this.card._edit.sel.size) {
         ev.preventDefault();
         this._delete();
       }
@@ -428,8 +416,8 @@ export class EditorSession {
       ev.preventDefault();
       this._duplicate();
     } else if (ev.key === "Escape") this._select([]);
-    else if (ev.key === "r" && !mod) this._ed.querySelector<HTMLElement>('[data-a="rotate"]')?.click();
+    else if (ev.key === "r" && !mod) this.card._ed.querySelector<HTMLElement>('[data-a="rotate"]')?.click();
     else if ((ev.key === "g" || ev.key === "t") && !mod)
-      this._ed.querySelector<HTMLElement>('[data-a="translate"]')?.click();
+      this.card._ed.querySelector<HTMLElement>('[data-a="translate"]')?.click();
   }
 }

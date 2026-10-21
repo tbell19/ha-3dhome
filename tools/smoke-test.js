@@ -306,11 +306,11 @@ window.card=__card;</script></body></html>`;
   check("edit mode opens", await ev(`!!card._edit && !!card.shadowRoot.querySelector('.bar')`));
   const SOFA = await ev(`card._work.scene.boxes.findIndex(b=>b.group==='sofa')`),
     FAN = await ev(`'v:'+card._work.scene.overlays.findIndex(o=>o.type==='fan')`);
-  await ev(`card._clickSelect('b:${SOFA}')`);
+  await ev(`card._editor.clickSelect('b:${SOFA}')`);
   check("clicking a grouped piece selects the whole group", (await ev(`card._edit.sel.size`)) === 4);
-  const fanSel = await ev(`(card._clickSelect('${FAN}'), [...card._edit.sel].filter(k=>k[0]==='l').length)`);
+  const fanSel = await ev(`(card._editor.clickSelect('${FAN}'), [...card._edit.sel].filter(k=>k[0]==='l').length)`);
   check("selecting a fan brings its lights along", fanSel >= 2);
-  await ev(`card._select([])`);
+  await ev(`card._editor._select([])`);
 
   if (!MOBILE) {
     const before = await boxCenter(SOFA),
@@ -327,7 +327,7 @@ window.card=__card;</script></body></html>`;
       Math.hypot(after[0] - before[0], after[1] - before[1]) > 4,
       `${before} -> ${after}`,
     );
-    await ev(`card._undo()`);
+    await ev(`card._editor._undo()`);
     await wait(300);
     check("undo restores", JSON.stringify(await boxCenter(SOFA)) === JSON.stringify(before));
 
@@ -338,15 +338,15 @@ window.card=__card;</script></body></html>`;
       );
     const grp = () =>
       ev(
-        `[...card._edit.sel].filter(k=>k[0]==='b').map(k=>{const b=__ha3dhome.bArr(card._get(k));return [(b[0]+b[1])/2,(b[2]+b[3])/2,b[1]-b[0],b[3]-b[2],b[4]]})`,
+        `[...card._edit.sel].filter(k=>k[0]==='b').map(k=>{const b=__ha3dhome.bArr(card._editor.item(k));return [(b[0]+b[1])/2,(b[2]+b[3])/2,b[1]-b[0],b[3]-b[2],b[4]]})`,
       );
-    await ev(`card._clickSelect('b:${SOFA}')`);
+    await ev(`card._editor.clickSelect('b:${SOFA}')`);
     const g0 = await grp(),
       x0 = await ev(`+card.shadowRoot.querySelector('.insp input[data-f="px"]').value`);
     check(
       "position is shown in cm",
       /Position cm/.test(await ev(`card.shadowRoot.querySelector('.insp .xf').textContent`)) &&
-        Math.abs(x0 - (await ev(`card._pivotC[0]*2.1`))) < 0.2,
+        Math.abs(x0 - (await ev(`card._editor._pivotC[0]*2.1`))) < 0.2,
       String(x0),
     );
     await setF("px", x0 + 210);
@@ -357,12 +357,12 @@ window.card=__card;</script></body></html>`;
       g1.every((b, i) => Math.abs(b[0] - g0[i][0] - 100) < 0.2 && Math.abs(b[1] - g0[i][1]) < 0.2),
       JSON.stringify(g1.map((b) => b[0])),
     );
-    await ev(`card._undo()`);
+    await ev(`card._editor._undo()`);
     await wait(300);
     await setF("sx", 50);
     await wait(300);
     const g2 = await grp(),
-      pc = await ev(`card._pivotC`);
+      pc = await ev(`card._editor._pivotC`);
     check(
       "scaling a group shrinks the pieces and pulls them together",
       g2.every((b, i) => Math.abs(b[2] - g0[i][2] / 2) < 0.2 && Math.abs(b[4] - g0[i][4] / 2) < 0.2) &&
@@ -370,12 +370,12 @@ window.card=__card;</script></body></html>`;
           Math.hypot(g0[0][0] - g0[1][0], g0[0][1] - g0[1][1]) * 0.6,
       JSON.stringify(g2),
     );
-    await ev(`card._undo()`);
+    await ev(`card._editor._undo()`);
     await wait(300);
     await setF("ry", 90);
     await wait(300);
     const g3 = await grp(),
-      rots = await ev(`[...card._edit.sel].filter(k=>k[0]==='b').map(k=>card._get(k).rot||0)`);
+      rots = await ev(`[...card._edit.sel].filter(k=>k[0]==='b').map(k=>card._editor.item(k).rot||0)`);
     const d0 = [g0[1][0] - g0[0][0], g0[1][1] - g0[0][1]],
       d3 = [g3[1][0] - g3[0][0], g3[1][1] - g3[0][1]];
     check(
@@ -383,45 +383,45 @@ window.card=__card;</script></body></html>`;
       rots.every((r) => r % 90 === 0 && r !== 0) && Math.abs(d3[0] + d0[1]) < 0.3 && Math.abs(d3[1] - d0[0]) < 0.3,
       JSON.stringify({ rots, d0, d3 }),
     );
-    await ev(`card._undo()`);
+    await ev(`card._editor._undo()`);
     await wait(300);
-    await ev(`card._select(['${FAN}'])`);
-    const fanDims = await ev(`card._dims('${FAN}')`);
+    await ev(`card._editor._select(['${FAN}'])`);
+    const fanDims = await ev(`card._editor._dims('${FAN}')`);
     await ev(`card._edit.lock = true`);
     await setF("sx", 200);
     await wait(300);
     await ev(`card._edit.lock = false`);
-    const fanDims2 = await ev(`card._dims('${FAN}')`);
+    const fanDims2 = await ev(`card._editor._dims('${FAN}')`);
     check(
       "a fixed-shape fixture (fan) scales",
-      (await ev(`card._get('${FAN}').size`)) === 2 && Math.abs(fanDims2[0] / fanDims[0] - 2) < 0.05,
+      (await ev(`card._editor.item('${FAN}').size`)) === 2 && Math.abs(fanDims2[0] / fanDims[0] - 2) < 0.05,
       JSON.stringify([fanDims, fanDims2]),
     );
-    await ev(`card._undo()`);
-    await ev(`card._select([])`);
+    await ev(`card._editor._undo()`);
+    await ev(`card._editor._select([])`);
     await wait(300);
 
     // three axes, Unity / Godot style: W / E / R pick the gizmo, every axis shows, tilt (X / Z) works for one item and for a group
-    await ev(`card._clickSelect('b:${SOFA}', false, true)`);
-    await ev(`card._onKey(new KeyboardEvent('keydown',{key:'r'}))`);
+    await ev(`card._editor.clickSelect('b:${SOFA}', false, true)`);
+    await ev(`card._editor._onKey(new KeyboardEvent('keydown',{key:'r'}))`);
     check(
       "R picks the scale gizmo with all three axes",
       await ev(
         `card._edit.mode==='scale' && card._tc.mode==='scale' && card._tc.showX && card._tc.showY && card._tc.showZ`,
       ),
     );
-    const w0 = await ev(`card._dims('b:${SOFA}')`);
-    await ev(`(()=>{card._dragStart('scale'); card._pivot.scale.set(1, 2, 1.5); card._dragEnd()})()`);
+    const w0 = await ev(`card._editor._dims('b:${SOFA}')`);
+    await ev(`(()=>{card._editor.dragStart('scale'); card._pivot.scale.set(1, 2, 1.5); card._editor.dragEnd()})()`);
     await wait(300);
-    const w1 = await ev(`card._dims('b:${SOFA}')`);
+    const w1 = await ev(`card._editor._dims('b:${SOFA}')`);
     check(
       "the scale gizmo stretches one item along each axis",
       Math.abs(w1[0] - w0[0]) < 0.2 && Math.abs(w1[1] / w0[1] - 1.5) < 0.02 && Math.abs(w1[2] / w0[2] - 2) < 0.05,
       JSON.stringify([w0, w1]),
     );
-    await ev(`card._undo()`);
+    await ev(`card._editor._undo()`);
     await wait(300);
-    await ev(`card._onKey(new KeyboardEvent('keydown',{key:'e'}))`);
+    await ev(`card._editor._onKey(new KeyboardEvent('keydown',{key:'e'}))`);
     check(
       "E picks the rotate gizmo with all three rings",
       await ev(`card._edit.mode==='rotate' && card._tc.showX && card._tc.showY && card._tc.showZ`),
@@ -430,27 +430,27 @@ window.card=__card;</script></body></html>`;
     await wait(300);
     check(
       "one item tilts about X",
-      (await ev(`card._get('b:${SOFA}').rx`)) === 30 &&
+      (await ev(`card._editor.item('b:${SOFA}').rx`)) === 30 &&
         Math.abs((await ev(`card._items.get('b:${SOFA}').children[0].rotation.x`)) - Math.PI / 6) < 1e-3,
     );
     await p.screenshot({ path: path.join(OUT, "desktop-transform.png") });
-    await ev(`card._undo()`);
+    await ev(`card._editor._undo()`);
     await wait(300);
-    await ev(`card._clickSelect('b:${SOFA}')`);
-    const z0s = await ev(`[...card._edit.sel].map(k=>__ha3dhome.bArr(card._get(k))[6]||0)`);
+    await ev(`card._editor.clickSelect('b:${SOFA}')`);
+    const z0s = await ev(`[...card._edit.sel].map(k=>__ha3dhome.bArr(card._editor.item(k))[6]||0)`);
     await setF("rz", 90);
     await wait(300);
     const tilted = await ev(
-      `[...card._edit.sel].map(k=>{const o=card._get(k);return [o.rz, __ha3dhome.bArr(o)[6]||0]})`,
+      `[...card._edit.sel].map(k=>{const o=card._editor.item(k);return [o.rz, __ha3dhome.bArr(o)[6]||0]})`,
     );
     check(
       "a group tilts about Z as one piece (pieces swing up)",
       tilted.every(([rz]) => rz === 90) && tilted.some(([, z], i) => Math.abs(z - z0s[i]) > 5),
       JSON.stringify(tilted),
     );
-    await ev(`card._undo()`);
-    await ev(`card._onKey(new KeyboardEvent('keydown',{key:'w'}))`);
-    await ev(`card._select([])`);
+    await ev(`card._editor._undo()`);
+    await ev(`card._editor._onKey(new KeyboardEvent('keydown',{key:'w'}))`);
+    await ev(`card._editor._select([])`);
     await wait(300);
 
     // entity panel: drag an entity onto the floor
@@ -490,10 +490,10 @@ window.card=__card;</script></body></html>`;
     );
     await wait(1200);
     check("media player can be shown as a screen", (await ev(`card._work.scene.objects.at(-1).type`)) === "screen");
-    await ev(`card._toggleEntityPanel()`);
+    await ev(`card._editor._toggleEntityPanel()`);
 
     // model library (mock)
-    await ev(`card._openLibrary()`);
+    await ev(`card._editor._openLibrary()`);
     await wait(800);
     await ev(`card.shadowRoot.querySelector('.librow .act').click()`);
     await wait(1500);
@@ -519,7 +519,7 @@ window.card=__card;</script></body></html>`;
       "a model's elevation is set in cm (vertical scale)",
       Math.abs((await ev(`card._work.scene.objects.at(-1).z`)) - 10) < 0.1,
     );
-    await ev(`card._select(['c:'+(card._work.chips.length-1)])`);
+    await ev(`card._editor._select(['c:'+(card._work.chips.length-1)])`);
     await setF("size", 150);
     await wait(300);
     check(
@@ -529,7 +529,7 @@ window.card=__card;</script></body></html>`;
     );
     await p.screenshot({ path: path.join(OUT, "desktop-edit.png") });
 
-    await ev(`card._toggleLookPanel()`);
+    await ev(`card._editor._toggleLookPanel()`);
     await wait(200);
     await ev(
       `(()=>{const q=(k)=>card.shadowRoot.querySelector('.lookp [data-i="'+k+'"]'), r=q('room'); r.value=r.options[1].value; q('after').value='120'; q('after').dispatchEvent(new Event('change',{bubbles:true}))})()`,
@@ -539,12 +539,12 @@ window.card=__card;</script></body></html>`;
       await ev(`card._work.idle_view?.after===120 && card._work.idle_view.room===card._rooms()[0].name`),
       JSON.stringify(await ev(`card._work.idle_view`)),
     );
-    await ev(`card._toggleLookPanel()`);
+    await ev(`card._editor._toggleLookPanel()`);
     // room controls: Lovelace cards per room
     await ev(`card.shadowRoot.querySelector('[data-a="controls"]').click()`);
     await wait(300);
     check("controls panel opens", await ev(`!!card.shadowRoot.querySelector('.rcp')`));
-    const rcRoom = await ev(`card._rooms().map(r=>r.name).find(n=>card._roomEntities(n).length)`);
+    const rcRoom = await ev(`card._rooms().map(r=>r.name).find(n=>card._editor._roomEntities(n).length)`);
     await ev(
       `(()=>{const s=card.shadowRoot.querySelector('.rcp [data-room]'); s.value='${rcRoom}'; s.dispatchEvent(new Event('change'))})()`,
     );
@@ -554,7 +554,7 @@ window.card=__card;</script></body></html>`;
     const nAuto = await ev(`card._work.room_cards['${rcRoom}'].length`);
     check(
       "room's own devices become tiles",
-      nAuto > 0 && nAuto === (await ev(`card._roomEntities('${rcRoom}').length`)),
+      nAuto > 0 && nAuto === (await ev(`card._editor._roomEntities('${rcRoom}').length`)),
       String(nAuto),
     );
     await ev(
@@ -577,13 +577,13 @@ window.card=__card;</script></body></html>`;
       "controls preview renders the card",
       (await ev(`card.shadowRoot.querySelector('.rcp .rcprev').textContent`)).includes("heat_cool"),
     );
-    await ev(`card._undo(false)`);
+    await ev(`card._editor._undo(false)`);
     await wait(300);
     check("undo restores the room's cards", (await ev(`card._work.room_cards['${rcRoom}'].length`)) === nAuto + 1);
-    await ev(`card._undo(true)`);
+    await ev(`card._editor._undo(true)`);
     await wait(300);
 
-    await ev(`card._save()`);
+    await ev(`card._editor._save()`);
     await wait(800);
     check("save keeps the idle view", await ev(`saved.strategy.idle_view?.after===120`));
     check(
@@ -670,7 +670,7 @@ window.card=__card;</script></body></html>`;
       "inspector starts folded on phones",
       await ev(`card.shadowRoot.querySelector('.insp').classList.contains('min')`),
     );
-    check("no transform gizmo on touch devices", await ev(`card._coarse === true`));
+    check("no transform gizmo on touch devices", await ev(`card._editor._coarse === true`));
     let c = await screen(...(await boxCenter(SOFA)));
     const u0 = await ev(`card._edit.undo.length`);
     await tdrag(c[0], c[1], 40, 10);
@@ -724,7 +724,7 @@ window.card=__card;</script></body></html>`;
     errors.join(" | "),
   );
   await p.screenshot({ path: path.join(OUT, `${MOBILE ? "mobile" : "desktop"}-empty.png`) });
-  await ev(`card2._enterEdit()`);
+  await ev(`card2._openEditor()`);
   await wait(800);
   check(
     "the hint goes away in the editor",

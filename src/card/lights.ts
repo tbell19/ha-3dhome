@@ -334,7 +334,7 @@ export class LightsPart {
         rec.group.remove(c);
         this._disposeTree(c);
       }
-    const L = (rec.L = rec.members[0] = this._get(key) as LightConfig);
+    const L = (rec.L = rec.members[0] = this._editor.item(key) as LightConfig);
     if (rec.kind === "string") {
       rec.bulbs = this._buildFixture(L, rec.group);
       const [mx, my] = mean(L.points!);

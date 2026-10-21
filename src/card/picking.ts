@@ -255,9 +255,9 @@ export class PickingPart {
       const keys = [...pickKeys(ev)];
       for (const k of extra) if (!keys.includes(k)) keys.push(k);
       const add = ev.shiftKey || ev.ctrlKey || ev.metaKey;
-      if (!this._plan || add) return this._clickSelect(keys[0] || null, add, ev.altKey);
+      if (!this._plan || add) return this._editor.clickSelect(keys[0] || null, add, ev.altKey);
       const i = keys.indexOf(this._edit!.primary);
-      this._clickSelect(keys.length ? keys[(i + 1) % keys.length] : null, false, true);
+      this._editor.clickSelect(keys.length ? keys[(i + 1) % keys.length] : null, false, true);
       if (keys.length > 1 && i < 0 && !this._cycleHinted) {
         this._cycleHinted = true;
         this._toast("Several things here — click again to pick the next one underneath");
@@ -268,14 +268,14 @@ export class PickingPart {
       if (down?.dragging && this._drag) {
         this._pivot.position.copy(down.piv0!);
         this._pivot.quaternion.copy(this._drag.quat);
-        this._dragPreview();
+        this._editor.dragPreview();
         this._drag = null;
       }
       if (down?.jdrag) {
         this._work = JSON.parse(down.snap0!);
-        if (down.spt) this._commit();
-        else this._rebuildPlan();
-        this._hideTip();
+        if (down.spt) this._editor.commit();
+        else this._editor.rebuildPlan();
+        this._editor.hideTip();
       }
       if (down) {
         down.key = null;
@@ -361,7 +361,7 @@ export class PickingPart {
       if (h.type === "joint") press.m = h.d.m!.map((x) => [...x] as WallEnd);
       else if (h.type === "spt" || h.type === "smid") {
         // string light: move a point, or bend a span by adding one
-        const L = this._get(h.d.key!);
+        const L = this._editor.item(h.d.key!);
         if (h.type === "smid") {
           const a = L.points[h.d.k!],
             b = L.points[h.d.k! + 1];
@@ -369,7 +369,7 @@ export class PickingPart {
         }
         press.spt = { key: h.d.key!, k: h.type === "smid" ? h.d.k! + 1 : h.d.k! };
       } else {
-        const f = this._get(h.d.key!);
+        const f = this._editor.item(h.d.key!);
         if (h.type === "mid") {
           const a = f.pts[h.d.k!],
             b = f.pts[(h.d.k! + 1) % f.pts.length];
@@ -382,48 +382,48 @@ export class PickingPart {
     const dragHandle = (ev: PointerEvent, press: PointerPress) => {
       if (!press.jdrag) startHandleDrag(press, press.handle!);
       if (press.spt) {
-        const L = this._get(press.spt.key),
+        const L = this._editor.item(press.spt.key),
           q = floorPoint(ev, L.z ?? 17);
         if (!q) return;
         let pt: Pt = [q.x + CX, q.z + CY];
         if (this._edit!.snap) pt = [Math.round(pt[0]), Math.round(pt[1])];
         L.points[press.spt.k] = [R1(pt[0]), R1(pt[1])];
         this._refreshFixture(press.spt.key);
-        this._buildStringHandles();
-        this._showTip(ev, `${this._fmtLen(stringLen(L.points))} · ${stringCount(L)} bulbs`);
+        this._editor.buildStringHandles();
+        this._editor.showTip(ev, `${this._fmtLen(stringLen(L.points))} · ${stringCount(L)} bulbs`);
         this._requestRender();
         return;
       }
       const p = planPt(ev);
       if (!p) return;
       if (press.vert) {
-        const f = this._get(press.vert.key),
+        const f = this._editor.item(press.vert.key),
           n = f.pts.length,
           k = press.vert.k,
           prev = f.pts[(k - 1 + n) % n];
-        const s = this._snapPoint(p, { from: prev, room: press.vert });
+        const s = this._editor.snapPoint(p, { from: prev, room: press.vert });
         f.pts[k] = [R1(s.p[0]), R1(s.p[1])];
         this._vsel = press.vert;
-        this._rebuildPlan();
-        this._showMarker(s.p, s.kind);
-        this._showTip(ev, this._fmtArea(polyArea(f.pts)));
+        this._editor.rebuildPlan();
+        this._editor.showMarker(s.p, s.kind);
+        this._editor.showTip(ev, this._fmtArea(polyArea(f.pts)));
         return;
       }
       const segs = this._work!.scene!.wall_segs!,
         m = press.m!,
         [i0, e0] = m[0],
         other = segs[i0][e0 === "a" ? "b" : "a"];
-      const s = this._snapPoint(p, { from: m.length === 1 ? other : null, exclude: m });
+      const s = this._editor.snapPoint(p, { from: m.length === 1 ? other : null, exclude: m });
       for (const [i, e] of m) segs[i][e] = [R1(s.p[0]), R1(s.p[1])];
-      this._rebuildPlan();
-      this._showMarker(s.p, s.kind);
-      this._showTip(ev, m.map(([i]) => this._fmtLen(segDir(segs[i])[2])).join(" · "));
+      this._editor.rebuildPlan();
+      this._editor.showMarker(s.p, s.kind);
+      this._editor.showTip(ev, m.map(([i]) => this._fmtLen(segDir(segs[i])[2])).join(" · "));
     };
     /** first move of an item drag: freeze the camera, select the item if needed, and start the move or turn */
     const startItemDrag = (ev: PointerEvent, press: PointerPress): boolean => {
       this._controls.enabled = false;
       camRestore(press.cam!);
-      if (!this._edit!.sel.has(press.key!)) this._clickSelect(press.key!, false, ev.altKey);
+      if (!this._edit!.sel.has(press.key!)) this._editor.clickSelect(press.key!, false, ev.altKey);
       press.prevMode = this._edit!.mode;
       press.rot = press.prevMode === "rotate"; // scale mode drags move things too
       press.piv0 = this._pivot.position.clone();
@@ -433,7 +433,7 @@ export class PickingPart {
         this._controls.enabled = true;
         return false;
       }
-      this._dragStart(press.rot ? "rotate" : "translate");
+      this._editor.dragStart(press.rot ? "rotate" : "translate");
       press.dragging = true;
       el.style.cursor = "grabbing";
       return true;
@@ -465,7 +465,7 @@ export class PickingPart {
         }
         this._pivot.position.set(piv0.x + dx, piv0.y, piv0.z + dz);
       }
-      this._dragPreview();
+      this._editor.dragPreview();
     };
     /** mouse hover with nothing pressed: show what a press would do through the cursor */
     const hover = (ev: PointerEvent) => {
@@ -488,7 +488,7 @@ export class PickingPart {
       if (dragging && down!.handle) return dragHandle(ev, down!);
       if (dragging && down!.key) return dragItem(ev, down!);
       if (this._plan && this._tool !== "select" && (!down || !down.moved) && ev.pointerType === "mouse") {
-        this._toolHover(ev, planPt(ev));
+        this._editor.toolHover(ev, planPt(ev));
         return;
       }
       if (!down && ev.pointerType === "mouse") hover(ev);
@@ -500,18 +500,18 @@ export class PickingPart {
       if (press.jdrag) {
         this._edit!.undo.push(press.snap0!);
         this._edit!.redo = [];
-        this._hideTip();
-        this._hidePreview();
-        this._commit();
-      } else if (press.dragging) this._dragEnd();
+        this._editor.hideTip();
+        this._editor.hidePreview();
+        this._editor.commit();
+      } else if (press.dragging) this._editor.dragEnd();
       else if (!press.moved && !press.cancelled && !this._tcUsed && !this._tcDragging && ev.type === "pointerup") {
         if (press.tool) {
           const p = planPt(ev);
-          if (p) this._toolClick(p, pickKey(ev), ev);
+          if (p) this._editor.toolClick(p, pickKey(ev), ev);
         } else if (press.handle?.type === "vert") {
           this._vsel = press.handle.d;
-          this._buildRoomHandles();
-          this._renderInspector();
+          this._editor.buildRoomHandles();
+          this._editor.renderInspector();
           this._requestRender();
         } else if (press.handle?.type === "joint")
           clickPick(
@@ -542,7 +542,7 @@ export class PickingPart {
     el.addEventListener("pointerup", up);
     el.addEventListener("pointercancel", up);
     el.addEventListener("pointerleave", () => {
-      if (this._plan && !down) this._hidePreview(true);
+      if (this._plan && !down) this._editor.hidePreview(true);
     });
   }
 

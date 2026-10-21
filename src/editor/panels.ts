@@ -2,7 +2,7 @@
  */
 import type { LovelaceCardConfig, Looks } from "../types";
 import type { GenericItem } from "../core/items";
-import type { Home3DCard } from "../card/card";
+import type { Editor } from "./editor";
 import {
   inPoly,
   ACTIVE,
@@ -22,11 +22,11 @@ import {
 
 export class EditorPanels {
   /* Look panel: a strength slider per render look (light, ao, stage, bloom), applied live while dragging. One undo step per drag. */
-  _toggleLookPanel(this: Home3DCard) {
-    const old = this._ed.querySelector<HTMLElement>(".lookp");
-    this._ed.querySelector<HTMLElement>('[data-a="look"]')?.classList.toggle("on", !old);
+  _toggleLookPanel(this: Editor) {
+    const old = this.card._ed.querySelector<HTMLElement>(".lookp");
+    this.card._ed.querySelector<HTMLElement>('[data-a="look"]')?.classList.toggle("on", !old);
     if (old) return old.remove();
-    if (this._ed.querySelector<HTMLElement>(".rcp")) this._toggleRoomCardsPanel();
+    if (this.card._ed.querySelector<HTMLElement>(".rcp")) this._toggleRoomCardsPanel();
     const rows = [
       ["ambient", "Room fill", "Even daylight on every surface"],
       ["light", "Soft lighting", "Gradient sky light, soft shadows"],
@@ -40,57 +40,60 @@ export class EditorPanels {
       ${rows.map(([k, n, d]) => `<label><span class="n">${n}</span><output data-o="${k}"></output><input type="range" min="0" max="100" step="5" data-k="${k}"><span class="d">${d}</span></label>`).join("")}
       <div class="idle"><span class="n">When left alone</span><span class="d">Go back to a view after nobody has touched the map for a while</span>
         <select data-i="after" aria-label="Idle time">${IDLE_AFTER.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>
-        <select data-i="room" aria-label="View to return to"><option value="">Whole home</option>${this._rooms()
+        <select data-i="room" aria-label="View to return to"><option value="">Whole home</option>${this.card
+          ._rooms()
           .map((r) => `<option value="${esc(r.name)}">${esc(r.label)}</option>`)
           .join("")}</select></div>`;
-    this._ed.append(p);
+    this.card._ed.append(p);
     p.querySelector<HTMLElement>("[data-x]").addEventListener("click", () => this._toggleLookPanel());
     p.addEventListener("input", (ev) => {
       const k = (ev.target as HTMLElement).dataset.k as keyof Looks | "ambient" | undefined;
       if (!k) return;
       if (!this._lookDrag) {
-        this._edit.undo.push(JSON.stringify(this._work));
-        this._edit.redo = [];
-        this._edit.dirty = true;
+        this.card._edit.undo.push(JSON.stringify(this.card._work));
+        this.card._edit.redo = [];
+        this.card._edit.dirty = true;
         this._lookDrag = true;
       }
       const look: Partial<Record<keyof Looks, number | boolean>> =
-          this._work.look === false ? { light: 0, ao: 0, stage: 0, bloom: 0 } : { ...(this._work.look || {}) },
+          this.card._work.look === false
+            ? { light: 0, ao: 0, stage: 0, bloom: 0 }
+            : { ...(this.card._work.look || {}) },
         v = +(ev.target as HTMLInputElement).value / 100;
       if (k === "ambient") {
-        if (v === AMBIENT) delete this._work.ambient;
-        else this._work.ambient = v;
+        if (v === AMBIENT) delete this.card._work.ambient;
+        else this.card._work.ambient = v;
       } // top-level, default AMBIENT
       else {
         if (v === lookOf({})[k]) delete look[k];
         else look[k] = v; // stored only when it differs from the default
-        if (Object.keys(look).length) this._work.look = look;
-        else delete this._work.look;
+        if (Object.keys(look).length) this.card._work.look = look;
+        else delete this.card._work.look;
       }
       p.querySelector<HTMLElement>(`[data-o="${k}"]`).textContent = v ? Math.round(v * 100) + "%" : "Off";
-      this._update();
-      this._requestRender();
+      this.card._update();
+      this.card._requestRender();
     });
     p.addEventListener("change", (ev) => {
       this._lookDrag = false;
       if (!(ev.target as HTMLElement).dataset.i) return;
-      this._edit.undo.push(JSON.stringify(this._work));
-      this._edit.redo = [];
-      this._edit.dirty = true;
+      this.card._edit.undo.push(JSON.stringify(this.card._work));
+      this.card._edit.redo = [];
+      this.card._edit.dirty = true;
       const after = +p.querySelector<HTMLSelectElement>('[data-i="after"]').value,
         room = p.querySelector<HTMLSelectElement>('[data-i="room"]').value;
-      if (after > 0) this._work.idle_view = room ? { room, after } : { after };
-      else delete this._work.idle_view;
+      if (after > 0) this.card._work.idle_view = room ? { room, after } : { after };
+      else delete this.card._work.idle_view;
       this._syncLookPanel();
     });
     this._syncLookPanel();
   }
 
-  _syncLookPanel(this: Home3DCard) {
-    const p = this._ed?.querySelector<HTMLElement>(".lookp");
+  _syncLookPanel(this: Editor) {
+    const p = this.card._ed?.querySelector<HTMLElement>(".lookp");
     if (!p || this._lookDrag) return;
-    const L = { ...lookOf(this._work), ambient: this._work.ambient ?? AMBIENT };
-    const iv = this._work.idle_view,
+    const L = { ...lookOf(this.card._work), ambient: this.card._work.ambient ?? AMBIENT };
+    const iv = this.card._work.idle_view,
       after = p.querySelector<HTMLSelectElement>('[data-i="after"]'),
       room = p.querySelector<HTMLSelectElement>('[data-i="room"]');
     if (after) {
@@ -109,15 +112,15 @@ export class EditorPanels {
 
   /* Controls panel: the Lovelace cards each room shows top right (`room_cards`). Tiles for entities, the room's own devices in one go,
    * or any card as YAML (pasted from another dashboard's card code editor). One undo step per change; no 3D rebuild. */
-  _toggleRoomCardsPanel(this: Home3DCard) {
-    const old = this._ed.querySelector<HTMLElement>(".rcp");
+  _toggleRoomCardsPanel(this: Editor) {
+    const old = this.card._ed.querySelector<HTMLElement>(".rcp");
     if (old) {
       old.remove();
       this._syncBar();
       return;
     }
-    if (this._ed.querySelector<HTMLElement>(".ents")) this._toggleEntityPanel();
-    if (this._ed.querySelector<HTMLElement>(".lookp")) this._toggleLookPanel();
+    if (this.card._ed.querySelector<HTMLElement>(".ents")) this._toggleEntityPanel();
+    if (this.card._ed.querySelector<HTMLElement>(".lookp")) this._toggleLookPanel();
     const p = document.createElement("div");
     p.className = "rcp";
     p.innerHTML = `<header><span class="ttl">Room controls</span><button data-x title="Close">${ic("close")}</button></header>
@@ -131,24 +134,24 @@ export class EditorPanels {
           <div class="hint">YAML or JSON: one card, or a list of cards. You can paste a card's code from another dashboard (edit the card, then Show code editor).</div>
           <div class="rcadd"><button data-apply class="primary">Apply</button><button data-codex>Close</button></div></div>
         <div class="hint">Preview</div><div class="rcprev"></div></div>`;
-    this._ed.append(p);
+    this.card._ed.append(p);
     const room = p.querySelector<HTMLSelectElement>("[data-room]"),
       ta = p.querySelector<HTMLTextAreaElement>("textarea"),
       code = p.querySelector<HTMLElement>(".rccode");
-    room.innerHTML = [["home", "Whole home"], ...this._rooms().map((r) => [r.name, r.label])]
+    room.innerHTML = [["home", "Whole home"], ...this.card._rooms().map((r) => [r.name, r.label])]
       .map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`)
       .join("");
-    room.value = this._rooms().some((r) => r.name === this._rcRoom) ? this._rcRoom : "home";
-    p.querySelector<HTMLElement>("datalist").innerHTML = Object.entries(this._hass?.states || {})
+    room.value = this.card._rooms().some((r) => r.name === this.card._rcRoom) ? this.card._rcRoom : "home";
+    p.querySelector<HTMLElement>("datalist").innerHTML = Object.entries(this.card._hass?.states || {})
       .map(([id, st]) => `<option value="${esc(id)}">${esc(st.attributes?.friendly_name || "")}</option>`)
       .join("");
     room.addEventListener("change", () => {
-      this._rcRoom = room.value;
+      this.card._rcRoom = room.value;
       code.classList.add("hide");
       this._syncRoomCardsPanel(true);
-      this._focusRoom(this._rooms().find((r) => r.name === room.value) || null);
+      this.card._focusRoom(this.card._rooms().find((r) => r.name === room.value) || null);
     });
-    const cur = () => this._work.room_cards?.[room.value] || [];
+    const cur = () => this.card._work.room_cards?.[room.value] || [];
     p.querySelector<HTMLElement>("[data-x]").addEventListener("click", () => this._toggleRoomCardsPanel());
     p.querySelector<HTMLElement>(".rcl").addEventListener("click", (ev) => {
       const b = (ev.target as HTMLElement).closest<HTMLElement>("button[data-i]");
@@ -167,7 +170,7 @@ export class EditorPanels {
       addTile = () => {
         const e = ent.value.trim();
         if (!e) return;
-        if (!this._hass?.states[e]) return this._toast("No entity called " + e);
+        if (!this.card._hass?.states[e]) return this.card._toast("No entity called " + e);
         this._rcSet(room.value, [...cur(), { type: "tile", entity: e }]);
         ent.value = "";
       };
@@ -183,12 +186,13 @@ export class EditorPanels {
         ),
         add = this._roomEntities(room.value).filter((e) => !have.has(e));
       if (!add.length)
-        return this._toast(room.value === "home" ? "Pick a room first" : "No more devices placed in this room");
+        return this.card._toast(room.value === "home" ? "Pick a room first" : "No more devices placed in this room");
       this._rcSet(room.value, [...cur(), ...add.map((entity) => ({ type: "tile", entity }))]);
-      this._toast(`Added ${add.length} ${add.length === 1 ? "tile" : "tiles"}`);
+      this.card._toast(`Added ${add.length} ${add.length === 1 ? "tile" : "tiles"}`);
     });
     const yaml = () =>
-      this._mod(YAML_URL)
+      this.card
+        ._mod(YAML_URL)
         .then((m) => m.default || m)
         .catch(() => null);
     p.querySelector<HTMLElement>("[data-code]").addEventListener("click", async () => {
@@ -212,36 +216,36 @@ export class EditorPanels {
           v = Y.load(txt);
         }
       } catch (e: any) {
-        return this._toast("That code doesn't read right: " + (e.reason || e.message || e), 5000);
+        return this.card._toast("That code doesn't read right: " + (e.reason || e.message || e), 5000);
       }
       if (v && !Array.isArray(v) && Array.isArray(v.cards) && !v.type) v = v.cards; // a pasted view or stack body
       const l = Array.isArray(v) ? v : v ? [v] : [];
       if (l.some((c) => !c || typeof c !== "object" || !c.type))
-        return this._toast("Every card needs a type, like type: tile", 5000);
+        return this.card._toast("Every card needs a type, like type: tile", 5000);
       this._rcSet(room.value, l);
       code.classList.add("hide");
     });
     this._syncRoomCardsPanel(true);
   }
 
-  _rcSet(this: Home3DCard, key: string, list: LovelaceCardConfig[]) {
-    const e = this._edit;
-    e.undo.push(JSON.stringify(this._work));
+  _rcSet(this: Editor, key: string, list: LovelaceCardConfig[]) {
+    const e = this.card._edit;
+    e.undo.push(JSON.stringify(this.card._work));
     e.redo = [];
     e.dirty = true;
-    const rc = { ...(this._work.room_cards || {}) };
+    const rc = { ...(this.card._work.room_cards || {}) };
     if (list.length) rc[key] = list;
     else delete rc[key];
-    if (Object.keys(rc).length) this._work.room_cards = rc;
-    else delete this._work.room_cards;
+    if (Object.keys(rc).length) this.card._work.room_cards = rc;
+    else delete this.card._work.room_cards;
     this._syncBar();
   }
 
   /* entities of the lights, hotspots, chips, doors and objects placed inside a room's outline */
-  _roomEntities(this: Home3DCard, key: string) {
-    const room = this._rooms().find((r) => r.name === key);
+  _roomEntities(this: Editor, key: string) {
+    const room = this.card._rooms().find((r) => r.name === key);
     if (!room) return [];
-    const w = this._work,
+    const w = this.card._work,
       polys = (w.scene?.floors || [])
         .filter((f) => room.floors.includes(f.name) && f.pts?.length >= 3)
         .map((f) => f.pts);
@@ -266,15 +270,15 @@ export class EditorPanels {
     return out;
   }
 
-  _syncRoomCardsPanel(this: Home3DCard, force?: boolean) {
-    const p = this._ed?.querySelector<HTMLElement & { _sig?: string }>(".rcp"); // _sig: what the preview shows
+  _syncRoomCardsPanel(this: Editor, force?: boolean) {
+    const p = this.card._ed?.querySelector<HTMLElement & { _sig?: string }>(".rcp"); // _sig: what the preview shows
     if (!p) return;
     const key = p.querySelector<HTMLSelectElement>("[data-room]").value,
-      list = this._work.room_cards?.[key] || [],
+      list = this.card._work.room_cards?.[key] || [],
       sig = key + JSON.stringify(list);
     if (!force && p._sig === sig) return;
     p._sig = sig;
-    const st = this._hass?.states || {};
+    const st = this.card._hass?.states || {};
     const name = (c: LovelaceCardConfig) => {
       const e = c.entity || (typeof c.entities?.[0] === "string" ? c.entities[0] : c.entities?.[0]?.entity);
       const what = c.name || c.title || (e && (st[e]?.attributes?.friendly_name || e)) || "";
@@ -296,23 +300,23 @@ export class EditorPanels {
         })
         .join("") || `<div class="hint">No controls for this room yet.</div>`;
     const prev = p.querySelector<HTMLElement>(".rcprev"),
-      gen = this._gen;
+      gen = this.card._gen;
     prev.replaceChildren();
-    this._makeCards(list).then((els) => {
-      if (gen === this._gen && p._sig === sig && p.isConnected) prev.replaceChildren(...els);
+    this.card._makeCards(list).then((els) => {
+      if (gen === this.card._gen && p._sig === sig && p.isConnected) prev.replaceChildren(...els);
     });
   }
 
-  _toggleEntityPanel(this: Home3DCard, force?: boolean) {
-    const old = this._ed.querySelector<HTMLElement>(".ents");
+  _toggleEntityPanel(this: Editor, force?: boolean) {
+    const old = this.card._ed.querySelector<HTMLElement>(".ents");
     if (old && force !== true) {
       old.remove();
-      this._ed.querySelector<HTMLElement>('[data-a="add"]')?.classList.remove("on");
+      this.card._ed.querySelector<HTMLElement>('[data-a="add"]')?.classList.remove("on");
       return;
     }
     if (old) return;
-    if (this._ed.querySelector<HTMLElement>(".rcp")) this._toggleRoomCardsPanel();
-    this._ed.querySelector<HTMLElement>('[data-a="add"]')?.classList.add("on");
+    if (this.card._ed.querySelector<HTMLElement>(".rcp")) this._toggleRoomCardsPanel();
+    this.card._ed.querySelector<HTMLElement>('[data-a="add"]')?.classList.add("on");
     const p = document.createElement("div");
     p.className = "ents";
     const doms = [
@@ -333,7 +337,7 @@ export class EditorPanels {
       <div class="quick"><button data-q="box">${ic("cube-outline")}Box</button><button data-q="label">${ic("label-outline")}Label</button><button data-q="model" title="Browse 3D model libraries">${ic("sofa-outline")}Model</button></div>
       <input type="search" placeholder="Search entities…"><div class="doms">${doms.map(([d, l]) => `<button data-d="${d}"${d === "" ? ' class="on"' : ""}>${l}</button>`).join("")}</div>
       <div class="hint">${this._coarse ? "Tap an entity to add it in the middle of the view, then drag it into place." : "Drag an entity onto the floor plan (or click to drop it in the middle of the view)."}</div><div class="list"></div>`;
-    this._ed.append(p);
+    this.card._ed.append(p);
     let dom = "";
     const q = p.querySelector<HTMLInputElement>("input"),
       list = p.querySelector<HTMLElement>(".list");
@@ -341,7 +345,7 @@ export class EditorPanels {
     const render = () => {
       const s = q.value.trim().toLowerCase(),
         placed = this._placedEntities(),
-        states = this._hass?.states || {};
+        states = this.card._hass?.states || {};
       const rows = Object.entries(states)
         .map(([id, st]) => ({ id, st, name: String(st.attributes?.friendly_name || id) }))
         .filter(({ id, name }) => {
@@ -405,14 +409,14 @@ export class EditorPanels {
   }
 
   /* pointer-driven drag from the panel onto the canvas (works with mouse and touch) */
-  _dragEntity(this: Home3DCard, id: string, ev0: PointerEvent, row: HTMLElement) {
-    const st = this._hass?.states[id],
-      wrapR = () => this._wrap.getBoundingClientRect(),
-      canvas = this._renderer.domElement;
+  _dragEntity(this: Editor, id: string, ev0: PointerEvent, row: HTMLElement) {
+    const st = this.card._hass?.states[id],
+      wrapR = () => this.card._wrap.getBoundingClientRect(),
+      canvas = this.card._renderer.domElement;
     let ghost: HTMLElement | null = null;
     const over = (ev: PointerEvent) => {
       const r = canvas.getBoundingClientRect(),
-        panel = this._ed.querySelector<HTMLElement>(".ents")?.getBoundingClientRect();
+        panel = this.card._ed.querySelector<HTMLElement>(".ents")?.getBoundingClientRect();
       const inCanvas = ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
       const inPanel =
         panel &&
@@ -428,7 +432,7 @@ export class EditorPanels {
         ghost = document.createElement("div");
         ghost.className = "ghost";
         ghost.textContent = st?.attributes.friendly_name || id;
-        this._ed.append(ghost);
+        this.card._ed.append(ghost);
       }
       const w = wrapR();
       ghost.style.left = ev.clientX - w.left + "px";
@@ -447,12 +451,12 @@ export class EditorPanels {
         return this._placeEntity(id, x, y);
       }
       if (!over(ev)) return;
-      const T = this.T,
+      const T = this.card.T,
         r = canvas.getBoundingClientRect(),
         ray = new T.Raycaster();
       ray.setFromCamera(
         new T.Vector2(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1),
-        this._cam,
+        this.card._cam,
       );
       const p = ray.ray.intersectPlane(new T.Plane(new T.Vector3(0, 1, 0), 0), new T.Vector3());
       if (p) this._placeEntity(id, R1(p.x + CX), R1(p.z + CY));
@@ -463,8 +467,8 @@ export class EditorPanels {
   }
 
   /* pick a sensible representation for an entity: light glow, door marker, climate chip, or a live badge */
-  _entityItem(this: Home3DCard, id: string, x: number, y: number, as?: string): [string, GenericItem] {
-    const st = this._hass?.states[id],
+  _entityItem(this: Editor, id: string, x: number, y: number, as?: string): [string, GenericItem] {
+    const st = this.card._hass?.states[id],
       d = id.split(".")[0],
       dc = st?.attributes?.device_class;
     as ||=
@@ -483,15 +487,15 @@ export class EditorPanels {
     return ["c", { entity: id, x, y, z: 30 }];
   }
 
-  _placeEntity(this: Home3DCard, id: string, x: number, y: number) {
+  _placeEntity(this: Editor, id: string, x: number, y: number) {
     const [k, item] = this._entityItem(id, x, y);
     this._mutate(() => [this._push(k, item)]);
-    this._toast(`Added ${this._hass?.states[id]?.attributes.friendly_name || id}. Drag it into place.`);
+    this.card._toast(`Added ${this.card._hass?.states[id]?.attributes.friendly_name || id}. Drag it into place.`);
     this._entsRender?.();
   }
 
-  _convertEntity(this: Home3DCard, key: string, as: string) {
-    const it = this._get(key),
+  _convertEntity(this: Editor, key: string, as: string) {
+    const it = this.item(key),
       id = it.entity || it.climate;
     if (!id) return;
     const c = itemCenter(key[0], it);

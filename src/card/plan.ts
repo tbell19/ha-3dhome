@@ -124,16 +124,16 @@ export class PlanPart {
       const geo = new T.SphereGeometry(1, 14, 10);
       this._joints = planJoints(segs);
       for (const j of this._joints) {
-        const m = new T.Mesh(geo, this._jointMat(false));
+        const m = new T.Mesh(geo, this._editor.jointMat(false));
         m.position.set(j.p[0] - CX, (segs[j.m[0][0]].h ?? H) + 0.6, j.p[1] - CY);
         m.renderOrder = 13;
         m.userData.joint = j;
         G.add(m);
         this._jointMeshes.push(m);
       }
-      if (edit) this._paintJoints?.();
+      if (edit) this._editor?.paintJoints();
     }
-    this._buildRoomHandles?.();
+    this._editor?.buildRoomHandles();
   }
 
   _bpTexture(this: Home3DCard, src: string) {
@@ -165,7 +165,7 @@ export class PlanPart {
     for (const m of this._jointMeshes || []) m.scale.setScalar(5 * u);
     for (const m of this._vertMeshes || []) m.scale.setScalar(5 * u);
     for (const m of this._midMeshes || []) m.scale.setScalar(3.2 * u);
-    if (this._prevDot) this._prevDot.scale.setScalar(4 * u);
+    this._editor?.scalePreview(u);
   }
 
   _buildRoomLabels(this: Home3DCard, sc: Scene) {

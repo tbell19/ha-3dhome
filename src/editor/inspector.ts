@@ -2,7 +2,8 @@
  */
 import type { BoxEntry } from "../types";
 import type { GenericItem } from "../core/items";
-import type { Home3DCard, LightGroup } from "../card/card";
+import type { LightGroup } from "../card/card";
+import type { Editor } from "./editor";
 import {
   CX,
   CY,
@@ -30,11 +31,11 @@ type TuneRow = [string, string, number, number, number, number, (v: number) => s
 
 export class EditorInspector {
   /* ----- inspector ----- */
-  _renderInspector(this: Home3DCard) {
-    const box = this._ed.querySelector<HTMLElement>(".insp");
+  renderInspector(this: Editor) {
+    const box = this.card._ed.querySelector<HTMLElement>(".insp");
     if (!box) return;
-    if (this._plan) return this._renderPlanInspector(box);
-    const e = this._edit,
+    if (this.card._plan) return this._renderPlanInspector(box);
+    const e = this.card._edit,
       n = e.sel.size;
     if (!n) {
       box.innerHTML = `<h4>Edit layout<span class="tw">${ic("chevron-down")}</span></h4><div class="sub">Tap something to select it, then drag it to move.
@@ -48,13 +49,14 @@ export class EditorInspector {
     }
     const key = e.primary,
       k = key[0],
-      it = this._get(key);
+      it = this.item(key);
     const f = (lab: string, name: string, val: unknown, type = "number", step = 1) =>
       `<label>${lab}<input data-f="${name}" type="${type}" step="${step}" value="${esc(val ?? "")}"></label>`;
     let fields = "";
     const xf = this._transformHTML(key, k, it, n);
     if (!ROTATABLE.has(k) && n === 1) {
-      if (k === "h") fields += f(`Tap radius (${this._imperial() ? "in" : "cm"})`, "hit", this._toReal(it.hit ?? 12));
+      if (k === "h")
+        fields += f(`Tap radius (${this.card._imperial() ? "in" : "cm"})`, "hit", this._toReal(it.hit ?? 12));
       else if (k !== "l" || (FIXTURES[it.fixture] && it.fixture !== "none"))
         fields += f("Size %", "size", Math.round((it.size ?? 1) * 100), "number", 5);
     }
@@ -67,22 +69,22 @@ export class EditorInspector {
         .map(([v, l]) => `<option value="${v}"${v === fx ? " selected" : ""}>${l}</option>`)
         .join("")}</select></label>`;
       if (it.points?.length && fx === "string") {
-        const U = this._imperial() ? "in" : "cm",
+        const U = this.card._imperial() ? "in" : "cm",
           len = stringLen(it.points);
         extra += `<div class="grid">${f(`Length (${U})`, "len", this._toReal(len))}${f("Bulbs (0 = auto)", "count", it.count || 0)}${f("Sag", "sag", R1(it.sag ?? Math.min(8, (len / Math.max(1, it.points.length - 1)) * 0.05)), "number", 0.5)}</div>
-          <div class="sub" style="margin:4px 0 8px">${stringCount(it)} bulbs${it.count ? "" : ", about one every " + this._fmtLen(it.spacing || 14)}. Drag the yellow dots to stretch it, or a white dot to bend it.</div>
+          <div class="sub" style="margin:4px 0 8px">${stringCount(it)} bulbs${it.count ? "" : ", about one every " + this.card._fmtLen(it.spacing || 14)}. Drag the yellow dots to stretch it, or a white dot to bend it.</div>
           ${it.points.length > 2 ? `<div class="row" style="margin:0 0 8px"><button data-b="straighten">Straighten</button></div>` : ""}`;
       }
     }
     if (k === "b") {
       const b = bArr(it as BoxEntry),
-        pal = this._work.scene?.palette || {};
+        pal = this.card._work.scene?.palette || {};
       const cur = typeof b[5] === "string" ? (pal[b[5]] || ["#888888"])[0] : b[5][0];
       extra += `<div class="grid"><label>Colour<input data-f="color" type="color" value="${esc(cur)}"></label></div>`;
     }
     if ("lhdc".includes(k) && (k !== "c" || it.entity != null || !it.label)) {
       extra += `<label style="margin-bottom:8px">Entity<input data-f="entity" list="ents" value="${esc(it.entity || "")}" placeholder="light.kitchen"></label>
-        <datalist id="ents">${Object.keys(this._hass?.states || {})
+        <datalist id="ents">${Object.keys(this.card._hass?.states || {})
           .filter((id) => k !== "l" || /^(light|switch)\./.test(id))
           .sort()
           .map((id) => `<option value="${id}">`)
@@ -109,8 +111,8 @@ export class EditorInspector {
       extra += `<div class="row" style="margin:0 0 8px"><button data-b="stand">${it.stand ? "Remove stand" : "Add stand"}</button></div>`;
     if (it.type === "model") {
       extra += `<div class="row"><button data-b="mirror">${ic("flip-horizontal")}Mirror</button><button data-b="resetsize">Reset size</button></div>`;
-      if (this._modelErr?.[key])
-        extra += `<div class="credit" style="color:#ef8b7b">Couldn't load: ${esc(this._modelErr[key])}</div>`;
+      if (this.card._modelErr?.[key])
+        extra += `<div class="credit" style="color:#ef8b7b">Couldn't load: ${esc(this.card._modelErr[key])}</div>`;
       extra += `<div class="credit">${esc(it.name || "")} — ${esc(it.creator || "unknown author")} · ${esc(it.lic || "")} · Sweet Home 3D library</div>`;
     }
     box.innerHTML = `<h4>${esc(this._label(key))}<span class="tw">${ic("chevron-down")}</span></h4><div class="sub">${n > 1 ? `${n} items selected. Position, rotation and size change them all together; other fields edit the highlighted one.` : KINDS[k]}</div>
@@ -124,8 +126,8 @@ export class EditorInspector {
       .querySelectorAll<HTMLElement>("button[data-b]")
       .forEach((b) => b.addEventListener("click", () => this._field(key, b.dataset.b)));
     box.querySelector<HTMLElement>("[data-lock]")?.addEventListener("click", () => {
-      this._edit.lock = !this._edit.lock;
-      this._renderInspector();
+      this.card._edit.lock = !this.card._edit.lock;
+      this.renderInspector();
     });
     box
       .querySelector<HTMLElement>("select[data-as]")
@@ -139,7 +141,7 @@ export class EditorInspector {
 
   /* ----- per-light tuning: what this light looks like at the bulb's full brightness and colour. The live state from
    * Home Assistant still scales it; these set the top end (see _update / _tuneLight in the core). ----- */
-  _lightTuneRows(this: Home3DCard, it: GenericItem): TuneRow[] {
+  _lightTuneRows(this: Editor, it: GenericItem): TuneRow[] {
     const aimed = it.gx != null && Math.hypot(it.gx - it.x, it.gy - it.y) > 12,
       spot = aimed || (!aimed && it.fixture === "can" && !it.points),
       glow = !it.points && it.kind !== "niche";
@@ -147,7 +149,7 @@ export class EditorInspector {
     const rows: TuneRow[] = [
       ["intensity", "Brightness", 0, 4, 0.05, 1, pct, "At the bulb's full brightness"],
       ["saturation", "Colour", 0, 2, 0.05, 1, pct, "How strongly the bulb's colour shows"],
-      ["r", "Reach", 5, 200, 1, 40, (v) => this._fmtLen(v * (spot ? 3.2 : 2.6)), "How far the light travels"],
+      ["r", "Reach", 5, 200, 1, 40, (v) => this.card._fmtLen(v * (spot ? 3.2 : 2.6)), "How far the light travels"],
       [
         "decay",
         "Falloff",
@@ -168,7 +170,7 @@ export class EditorInspector {
     return rows;
   }
 
-  _lightTuneHTML(this: Home3DCard, key: string, it: GenericItem) {
+  _lightTuneHTML(this: Editor, key: string, it: GenericItem) {
     const rows = this._lightTuneRows(it),
       set = rows.some(([n]) => it[n] != null);
     return `<details class="ltune"${this._ltuneOpen ? " open" : ""}><summary>Light settings</summary>
@@ -190,25 +192,25 @@ export class EditorInspector {
       ${set ? `<div class="row"><button data-lreset>Reset light settings</button></div>` : ""}</details>`;
   }
 
-  _bindLightTune(this: Home3DCard, box: HTMLElement, key: string) {
+  _bindLightTune(this: Editor, box: HTMLElement, key: string) {
     const det = box.querySelector<HTMLDetailsElement>(".ltune");
     if (!det) return;
     det.addEventListener("toggle", () => {
       this._ltuneOpen = det.open;
     });
-    const rows = Object.fromEntries(this._lightTuneRows(this._get(key)).map((r) => [r[0], r]));
+    const rows = Object.fromEntries(this._lightTuneRows(this.item(key)).map((r) => [r[0], r]));
     // co-located bulbs (a two-bulb fan) render as one light, so a setting applies to all of them
     const members = (): [LightGroup | null, GenericItem[]] => {
-      const rec = this._lightGroups?.find((g) => g.keys.includes(key));
-      return rec ? [rec, rec.keys.map((kk) => this._get(kk))] : [null, [this._get(key)]];
+      const rec = this.card._lightGroups?.find((g) => g.keys.includes(key));
+      return rec ? [rec, rec.keys.map((kk) => this.item(kk))] : [null, [this.item(key)]];
     };
     det.addEventListener("input", (ev) => {
       const n = (ev.target as HTMLElement).dataset.lt;
       if (!n) return;
       if (!this._ltDrag) {
-        this._edit.undo.push(JSON.stringify(this._work));
-        this._edit.redo = [];
-        this._edit.dirty = true;
+        this.card._edit.undo.push(JSON.stringify(this.card._work));
+        this.card._edit.redo = [];
+        this.card._edit.dirty = true;
         this._ltDrag = true;
       }
       const v = +(ev.target as HTMLInputElement).value,
@@ -219,31 +221,31 @@ export class EditorInspector {
         else it[n] = v;
       det.querySelector<HTMLElement>(`[data-lo="${n}"]`).textContent = fmt(v);
       if (rec) {
-        rec.L = this._get(rec.keys[0]);
-        this._tuneLight(rec);
+        rec.L = this.item(rec.keys[0]);
+        this.card._tuneLight(rec);
       }
-      this._update();
-      this._requestRender();
+      this.card._update();
+      this.card._requestRender();
     });
     det.addEventListener("change", () => {
       if (this._ltDrag) {
         this._ltDrag = false;
-        this._commit();
+        this.commit();
       }
     });
     det.querySelector<HTMLElement>("[data-lreset]")?.addEventListener("click", () =>
       this._mutate(() => {
         for (const it of members()[1]) for (const n of Object.keys(rows)) delete it[n];
-        return [...this._edit.sel];
+        return [...this.card._edit.sel];
       }),
     );
   }
 
   /* ----- north + sun preview (no selection) ----- */
-  _sunHTML(this: Home3DCard, preview?: boolean) {
-    const north = Number(this._work.scene?.north) || 0,
-      c = this._hass?.config || {},
-      hr = this._sunPreview;
+  _sunHTML(this: Editor, preview?: boolean) {
+    const north = Number(this.card._work.scene?.north) || 0,
+      c = this.card._hass?.config || {},
+      hr = this.card._sunPreview;
     const where = c.latitude != null && c.longitude != null;
     return `<div class="sun" style="margin-top:8px"><div class="grid" style="grid-template-columns:1fr 1fr"><label>North °<input data-sun="north" type="number" step="5" value="${north}"></label>
       <div class="row" style="align-items:end"><button data-sun="nl" title="Turn north left">${ic("rotate-left")}15°</button><button data-sun="nr" title="Turn north right">${ic("rotate-right")}15°</button></div></div>
@@ -256,15 +258,15 @@ export class EditorInspector {
       }</div>`;
   }
 
-  _bindSun(this: Home3DCard, box: HTMLElement) {
+  _bindSun(this: Editor, box: HTMLElement) {
     const setNorth = (v: number) => {
       if (!isFinite(v)) return;
       v = R1(((v % 360) + 360) % 360);
       this._mutate(() => {
-        this._work.scene ||= {};
-        if (v) this._work.scene.north = v;
-        else delete this._work.scene.north;
-        return [...this._edit.sel];
+        this.card._work.scene ||= {};
+        if (v) this.card._work.scene.north = v;
+        else delete this.card._work.scene.north;
+        return [...this.card._edit.sel];
       });
     };
     box
@@ -272,30 +274,30 @@ export class EditorInspector {
       ?.addEventListener("change", (ev) => setNorth(Number((ev.target as HTMLInputElement).value)));
     box
       .querySelector<HTMLElement>('[data-sun="nl"]')
-      ?.addEventListener("click", () => setNorth((Number(this._work.scene?.north) || 0) - 15));
+      ?.addEventListener("click", () => setNorth((Number(this.card._work.scene?.north) || 0) - 15));
     box
       .querySelector<HTMLElement>('[data-sun="nr"]')
-      ?.addEventListener("click", () => setNorth((Number(this._work.scene?.north) || 0) + 15));
+      ?.addEventListener("click", () => setNorth((Number(this.card._work.scene?.north) || 0) + 15));
     const hour = box.querySelector<HTMLInputElement>('[data-sun="hour"]');
     hour?.addEventListener("input", () => {
-      this._sunPreview = Number(hour.value);
-      const v = this._sunPreview;
+      this.card._sunPreview = Number(hour.value);
+      const v = this.card._sunPreview;
       box.querySelector<HTMLElement>('[data-sun="t"]').textContent = hm(v);
-      this._update();
-      this._requestRender();
+      this.card._update();
+      this.card._requestRender();
     });
     hour?.addEventListener("change", () => {
-      if (!box.querySelector<HTMLElement>('[data-sun="live"]')) this._renderInspector();
+      if (!box.querySelector<HTMLElement>('[data-sun="live"]')) this.renderInspector();
     });
     box.querySelector<HTMLElement>('[data-sun="live"]')?.addEventListener("click", () => {
-      this._sunPreview = null;
-      this._update();
-      this._requestRender();
-      this._renderInspector();
+      this.card._sunPreview = null;
+      this.card._update();
+      this.card._requestRender();
+      this.renderInspector();
     });
   }
 
-  _bindInspToggle(this: Home3DCard, box: HTMLElement) {
+  _bindInspToggle(this: Editor, box: HTMLElement) {
     box.classList.toggle("min", !!this._inspMin);
     box.querySelector<HTMLElement>("h4").onclick = () => {
       this._inspMin = !this._inspMin;
@@ -303,14 +305,14 @@ export class EditorInspector {
     };
   }
 
-  _field(this: Home3DCard, key: string, name: string, raw?: any) {
+  _field(this: Editor, key: string, name: string, raw?: any) {
     const num = Number(raw);
     if (name === "level") {
       // take out any tilt, keep the turn
-      const sel = [...this._edit.sel];
+      const sel = [...this.card._edit.sel];
       return this._mutate(() => {
         for (const kk of sel) {
-          const o = this._get(kk);
+          const o = this.item(kk);
           if (o && !Array.isArray(o) && (o.rx || o.rz)) {
             delete o.rx;
             delete o.rz;
@@ -320,7 +322,7 @@ export class EditorInspector {
       });
     }
     if (name === "rotl" || name === "rotr") {
-      const sel = [...this._edit.sel];
+      const sel = [...this.card._edit.sel];
       return this._mutate(() => {
         this._applyRotate(sel, name === "rotl" ? -90 : 90, this._pivotC);
         return sel;
@@ -329,14 +331,14 @@ export class EditorInspector {
     if (name === "json") {
       let v;
       try {
-        v = JSON.parse(this._ed.querySelector<HTMLTextAreaElement>("textarea[data-json]").value);
+        v = JSON.parse(this.card._ed.querySelector<HTMLTextAreaElement>("textarea[data-json]").value);
       } catch (e: any) {
-        return this._toast("Invalid JSON: " + e.message);
+        return this.card._toast("Invalid JSON: " + e.message);
       }
       return this._mutate(() => {
         const [kk, i] = key.split(":");
         this._list(kk)[+i] = v;
-        return [...this._edit.sel];
+        return [...this.card._edit.sel];
       });
     }
     if (!["entity", "color", "mirror", "resetsize", "stand", "straighten"].includes(name) && (isNaN(num) || raw === ""))
@@ -344,7 +346,7 @@ export class EditorInspector {
     if (["px", "py", "pz", "rx", "ry", "rz", "sx", "sy", "sz", "wx", "wy", "wz", "size", "hit"].includes(name))
       return this._transformField(name, num);
     this._mutate(() => {
-      const it = this._get(key);
+      const it = this.item(key);
       if (name === "len" && it.points?.length > 1) {
         // stretch (or shrink) the last span; bulbs follow
         const P = it.points,
@@ -361,7 +363,7 @@ export class EditorInspector {
       else if (name === "entity") it.entity = raw.trim();
       else if (name === "color") {
         const b = bArr(it as BoxEntry);
-        const T = this.T,
+        const T = this.card.T,
           col = new T.Color(raw);
         b[5] = [
           raw,
@@ -371,30 +373,30 @@ export class EditorInspector {
       } else if (name === "mirror") it.mirror = !it.mirror || undefined;
       else if (name === "stand") it.stand = !it.stand || undefined;
       else if (name === "resetsize") {
-        const [sxy, sz] = this._modelScale();
+        const [sxy, sz] = this.card._modelScale();
         it.w = R1(it.cm[0] / sxy);
         it.d = R1(it.cm[1] / sxy);
         it.h = R1(it.cm[2] / sz);
       }
-      return [...this._edit.sel];
+      return [...this.card._edit.sel];
     });
   }
 
   /* ----- transform fields: position, rotation and size of the selection. Inputs are in cm or inches (model_scale, the
    * same scale Set scale fits the blueprint to); the plan stores plan units. ----- */
-  _selPos(this: Home3DCard) {
-    const keys = [...this._edit.sel];
+  _selPos(this: Editor) {
+    const keys = [...this.card._edit.sel];
     if (keys.length === 1) {
       const k = keys[0][0],
-        it = this._get(keys[0]),
+        it = this.item(keys[0]),
         c = itemCenter(k, it) || [CX, CY];
       return [c[0], c[1], itemZ(k, it)];
     }
-    return [...this._pivotC, Math.min(...keys.map((key) => itemBase(key[0], this._get(key))))];
+    return [...this._pivotC, Math.min(...keys.map((key) => itemBase(key[0], this.item(key))))];
   }
 
   /* which way an item faces: `rot` for furniture, the run of a string light, or an aimed light's beam; null if it has no direction */
-  _itemAngle(this: Home3DCard, k: string, it: GenericItem) {
+  _itemAngle(this: Editor, k: string, it: GenericItem) {
     if (ROTATABLE.has(k)) return Array.isArray(it) ? 0 : it.rot || 0;
     const p =
       it.points?.length > 1
@@ -409,9 +411,9 @@ export class EditorInspector {
   }
 
   /* [width, depth, height] of one item along its own axes, in plan units (0 where that axis can't change) */
-  _dims(this: Home3DCard, key: string) {
+  _dims(this: Editor, key: string) {
     const k = key[0],
-      it = this._get(key);
+      it = this.item(key);
     if (k === "b") {
       const b = bArr(it as BoxEntry);
       return [b[1] - b[0], b[3] - b[2], b[4]];
@@ -422,7 +424,7 @@ export class EditorInspector {
       return [w, 0, (w * 9) / 16];
     }
     if (it.type === "table") return [it.r * 2, 0, it.z];
-    const g = this._items.get(key);
+    const g = this.card._items.get(key);
     if (!g) return null;
     const r = g.rotation.y,
       tg = g.children[0]?.userData.tilt ? g.children[0] : null,
@@ -430,27 +432,27 @@ export class EditorInspector {
     g.rotation.y = 0;
     tg?.rotation.set(0, 0, 0);
     g.updateMatrixWorld(true);
-    const box = new this.T.Box3().setFromObject(g);
+    const box = new this.card.T.Box3().setFromObject(g);
     g.rotation.y = r;
     if (tg) tg.rotation.copy(tr);
     g.updateMatrixWorld(true);
     if (box.isEmpty()) return null;
-    const s = box.getSize(new this.T.Vector3());
+    const s = box.getSize(new this.card.T.Vector3());
     return [s.x, s.z, s.y];
   }
 
   /* the selection's overall size, lined up with the plan */
-  _selDims(this: Home3DCard) {
-    const T = this.T,
+  _selDims(this: Editor) {
+    const T = this.card.T,
       box = new T.Box3();
-    for (const key of this._edit.sel) {
+    for (const key of this.card._edit.sel) {
       const k = key[0],
-        g = this._items.get(key);
+        g = this.card._items.get(key);
       if (ROTATABLE.has(k) && g) {
         g.updateMatrixWorld(true);
         box.expandByObject(g);
       } else {
-        const c = itemCenter(k, this._get(key));
+        const c = itemCenter(k, this.item(key));
         if (c) box.expandByPoint(new T.Vector3(c[0] - CX, c[2] ?? 0, c[1] - CY));
       }
     }
@@ -461,8 +463,8 @@ export class EditorInspector {
 
   /* The Transform rows, laid out like Unity / Godot: X across, Y up, Z front to back (the gizmo's red, green and blue).
    * Position and Size are in cm or inches; Rotation in degrees (Y turns, X and Z tilt); Scale in % (applied, then back to 100). */
-  _transformHTML(this: Home3DCard, key: string, k: string, it: GenericItem, n: number) {
-    const U = this._imperial() ? "in" : "cm",
+  _transformHTML(this: Editor, key: string, k: string, it: GenericItem, n: number) {
+    const U = this.card._imperial() ? "in" : "cm",
       pos = this._selPos(),
       rotatable = ROTATABLE.has(k);
     const inp = (ax: string, name: string, val: unknown, step = 1, off?: boolean) =>
@@ -485,7 +487,7 @@ export class EditorInspector {
       );
     }
     if (rotatable || n > 1) {
-      const lock = `<button data-lock title="Keep proportions">${ic(this._edit.lock || n > 1 ? "link-variant" : "link-variant-off")}</button>`;
+      const lock = `<button data-lock title="Keep proportions">${ic(this.card._edit.lock || n > 1 ? "link-variant" : "link-variant-off")}</button>`;
       h += row(
         `Scale % ${n > 1 ? "" : lock}`,
         inp("x", "sx", 100, 5) + inp("y", "sy", 100, 5) + inp("z", "sz", 100, 5),
@@ -502,12 +504,12 @@ export class EditorInspector {
     return h;
   }
 
-  _transformField(this: Home3DCard, name: string, v: number) {
-    const T = this.T,
-      sel = [...this._edit.sel],
-      key = this._edit.primary,
+  _transformField(this: Editor, name: string, v: number) {
+    const T = this.card.T,
+      sel = [...this.card._edit.sel],
+      key = this.card._edit.primary,
       k = key[0],
-      it = this._get(key),
+      it = this.item(key),
       pos = this._selPos();
     this._mutate(() => {
       if (name[0] === "p") {
@@ -528,7 +530,7 @@ export class EditorInspector {
           e.z = 0;
         }
         const dq = new T.Quaternion().setFromEuler(e).multiply(q0.invert());
-        if (Math.abs(dq.w) < 0.9999999) this._applyRotQ(sel, dq, this._pivot.position.clone());
+        if (Math.abs(dq.w) < 0.9999999) this._applyRotQ(sel, dq, this.card._pivot.position.clone());
       } else if (name === "size") {
         const s = Math.max(5, v) / 100;
         if (s === 1) delete it.size;
@@ -537,7 +539,7 @@ export class EditorInspector {
       else {
         // scale % or size: x across, y up, z front to back → scaleItem's (sx, sy = depth, sz = height)
         const i = { x: 0, z: 1, y: 2 }[name[1]],
-          uni = sel.length > 1 || this._edit.lock || !ROTATABLE.has(k);
+          uni = sel.length > 1 || this.card._edit.lock || !ROTATABLE.has(k);
         let r = v / 100;
         if (name[0] === "w") {
           const cur = (sel.length > 1 ? this._selDims() : this._dims(key))?.[i];
@@ -556,13 +558,13 @@ export class EditorInspector {
 
   /* resize the selection about its centre. One item stretches along its own axes; several scale evenly together, so the
    * gaps between them grow too and anything stacked (a lamp on a table) stays on top. */
-  _scaleSel(this: Home3DCard, keys: string[], sx: number, sy: number, sz: number) {
+  _scaleSel(this: Editor, keys: string[], sx: number, sy: number, sz: number) {
     const [px, py] = this._pivotC,
       multi = keys.length > 1;
-    const z0 = multi ? Math.min(...keys.map((key) => itemBase(key[0], this._get(key)))) : undefined;
+    const z0 = multi ? Math.min(...keys.map((key) => itemBase(key[0], this.item(key)))) : undefined;
     for (const key of keys) {
       const k = key[0],
-        it = this._get(key);
+        it = this.item(key);
       if (!it) continue;
       if (ROTATABLE.has(k)) {
         const c = itemCenter(k, it);
@@ -574,10 +576,10 @@ export class EditorInspector {
 
   /* pick a fixture model for a light. String lights run along `points`; everything else sits at x/y. Heights move to a
    * sensible spot for the new fixture (ceiling, table, floor lamp), which the Height field can then fine-tune. */
-  _setFixture(this: Home3DCard, key: string, fx: string) {
+  _setFixture(this: Editor, key: string, fx: string) {
     this._mutate(() => {
-      const L = this._get(key),
-        H = this._work.scene?.wall_height ?? 46,
+      const L = this.item(key),
+        H = this.card._work.scene?.wall_height ?? 46,
         c = itemCenter("l", L);
       if (fx === "string" && !L.points?.length) {
         L.points = [
