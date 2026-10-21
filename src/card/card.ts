@@ -1,33 +1,309 @@
 /* <ha-3dhome-card>: the custom element. This file holds its lifecycle (config, hass, connection state,
- * attach/detach, teardown) and world rebuilds. The rest of the card is split by topic into the mixins it extends.
+ * attach/detach, teardown) and world rebuilds. The rest of the card is split by topic into the parts
+ * below (startup.ts, camera.ts, …), whose methods are copied onto this class, and the editor adds its parts when it loads.
  */
-import { ic, esc, stableJSON } from "../core/util.js";
-import { watchedEntities } from "../core/entities.js";
-import { StartupMixin } from "./startup.js";
-import { CameraMixin } from "./camera.js";
-import { RoomsMixin } from "./rooms.js";
-import { SceneMixin } from "./scene.js";
-import { ModelsMixin } from "./models.js";
-import { LightsMixin } from "./lights.js";
-import { PickingMixin } from "./picking.js";
-import { LiveMixin } from "./live.js";
-import { PlanMixin } from "./plan.js";
+import type * as THREE from "three";
+import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import type { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import type { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
+import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import type { CardConfig, Chip, DoorConfig, Hass, HassEntity, LightConfig, Opening, Pt, SceneItem } from "../types";
+import type { Joint } from "../core/plan-geometry";
+import { ic, esc, stableJSON } from "../core/util";
+import { watchedEntities } from "../core/entities";
+import { editorAvailable } from "./editor-loader";
+import { StartupPart } from "./startup";
+import { CameraPart } from "./camera";
+import { RoomsPart } from "./rooms";
+import { ScenePart } from "./scene";
+import { ModelsPart } from "./models";
+import { LightsPart } from "./lights";
+import { PickingPart } from "./picking";
+import { LivePart } from "./live";
+import { PlanPart } from "./plan";
+import type { EditorSession } from "../editor/session";
+import type { EditorSelection } from "../editor/selection";
+import type { EditorPanels } from "../editor/panels";
+import type { EditorInspector } from "../editor/inspector";
+import type { EditorPlan } from "../editor/plan";
+import type { EditorSave } from "../editor/save";
+import type { EditorLibrary } from "../editor/library";
+
+/** A room the camera can frame: from the room menu, or one per floor. */
+export interface Room {
+  name: string;
+  label: string;
+  rect: number[] | null; // [x1, x2, y1, y2] in plan units
+  floors: string[];
+}
+
+/** Editor state while editing (null otherwise). */
+export interface EditState {
+  sel: Set<string>; // selected item keys
+  undo: string[]; // JSON snapshots of the config being edited
+  redo: string[];
+  dirty: boolean;
+  mode: "translate" | "rotate" | "scale";
+  space: "world" | "local";
+  lock: boolean;
+  snap: boolean;
+  showFurn: boolean;
+  [k: string]: any;
+}
+
+/** A door's moving parts, built by _buildDoorLeaf and animated by _setDoors. `t` runs 0 (shut) → 1 (open). */
+export interface DoorLeaf {
+  o: Opening;
+  parts: { node: THREE.Group; mv: { rot?: number; x?: number; y?: number }; x0: number; y0: number }[];
+  t: number;
+  target?: number;
+}
+
+/** A mesh whose material type varies (fixtures glow through MeshStandardMaterial, most else is Lambert). */
+export type AnyMesh = THREE.Mesh<THREE.BufferGeometry, any>;
+
+/** A TV or camera screen: a canvas texture showing the entity's artwork, plus a light that tints the room. */
+export interface Screen {
+  o: SceneItem;
+  mesh: THREE.Mesh;
+  tex: THREE.CanvasTexture;
+  canvas: HTMLCanvasElement;
+  light: THREE.PointLight;
+  sig: string | null; // what is painted, so unchanged states skip the repaint
+  rgb?: number[] | null; // the artwork's average colour, for the light
+}
+
+/** An overlay element, remembering what it last showed so unchanged states skip the DOM. */
+export type OverlayNode = HTMLElement & { _html?: string; _icon?: string; _sig?: string };
+
+/** An HTML element pinned to a point in the scene (chips, door dots, room labels). */
+export interface Anchor {
+  node: HTMLElement;
+  p: number[]; // [x, y, z] in plan units
+}
+
+/** A light as built: one per fixture (bulbs at the same spot share it), with what _update() needs to drive it. */
+export interface LightGroup {
+  kind: "glow" | "string" | "niche";
+  members: LightConfig[]; // the config entries of its bulbs
+  keys: string[]; // their item keys ("l:3")
+  L: LightConfig; // the first one, whose settings it uses
+  group: THREE.Group;
+  light: THREE.PointLight | THREE.SpotLight;
+  fixtures: AnyMesh[]; // meshes that glow when it is on
+  bulbs?: AnyMesh[]; // string lights
+  niche?: AnyMesh | null;
+  sprite?: THREE.Sprite; // the halo
+  down?: boolean; // a can light, aimed straight down
+  [k: string]: any; // live state kept by _update()
+}
 
 /* Cards that HA detached but haven't torn down yet, by dashboard + card_id. HA rebuilds a strategy dashboard's cards
  * whenever its config changes (every editor save), and the new element adopts the parked one instead of starting a
  * second WebGL scene from scratch: same camera, no reload, no flash. */
-const PARKED = new Map();
+const PARKED = new Map<string, Home3DCard>();
 /* a connection blip shorter than this (HA suspending a hidden tab, a Wi-Fi hand-over) doesn't show the offline pill */
 const CONN_GRACE = 2500;
 /* how long a lost WebGL context may stay lost on a visible page before the card rebuilds itself from scratch */
 const CTX_GRACE = 3000;
-const cardIdent = (cfg) =>
+const cardIdent = (cfg: CardConfig) =>
   `${cfg.dashboard || decodeURIComponent(location.pathname.split("/")[1] || "lovelace")}|${cfg.card_id || ""}`;
 
-export class Home3DCard extends PlanMixin(
-  LiveMixin(PickingMixin(LightsMixin(ModelsMixin(SceneMixin(RoomsMixin(CameraMixin(StartupMixin(HTMLElement)))))))),
-) {
-  setConfig(config) {
+/* The card's methods live in its parts (one file per topic) and are copied onto the prototype below; the editor's
+ * parts are copied on when the editor module loads, and the core only calls them while editing. */
+export interface Home3DCard
+  extends StartupPart,
+    CameraPart,
+    RoomsPart,
+    ScenePart,
+    ModelsPart,
+    LightsPart,
+    PickingPart,
+    LivePart,
+    PlanPart,
+    EditorSession,
+    EditorSelection,
+    EditorPanels,
+    EditorInspector,
+    EditorPlan,
+    EditorSave,
+    EditorLibrary {}
+
+export class Home3DCard extends HTMLElement {
+  /* `declare` adds types only: no field is created, so nothing changes at runtime. */
+
+  // config and Home Assistant
+  declare _config: CardConfig; // the card config as Home Assistant gave it
+  declare _cfgJSON: string; // its stableJSON, to spot identical configs
+  declare _ident: string; // dashboard + card_id, the key in PARKED
+  declare _hass: Hass;
+  declare _hassRaf: number | null; // the frame that applies the latest hass
+  declare _watch: string[]; // entities the config mentions (watchedEntities)
+  declare _seen: {
+    config: unknown;
+    locale: unknown;
+    user: unknown;
+    at: number;
+    states: Map<string, HassEntity>;
+  } | null;
+  declare _seenCfg: CardConfig | null;
+  declare _inner: Home3DCard | null; // set when this element is only a shell around an adopted card
+
+  // lifecycle
+  declare _ready: boolean;
+  declare _loading: boolean;
+  declare _gen: number; // bumped by every teardown, so stale async work can tell
+  declare _kickT: ReturnType<typeof setTimeout> | null;
+  declare _idleT: ReturnType<typeof setTimeout>;
+  declare _backT: ReturnType<typeof setTimeout> | null;
+  declare _ro: ResizeObserver | null;
+  declare _keys: ((ev: KeyboardEvent) => void) | null;
+  declare _texListener: (() => void) | null;
+  declare _visListener: (() => void) | null;
+  declare _netListener: ((ev: Event) => void) | null;
+  declare _edReady: (() => void) | null;
+  declare _idleKick: () => void;
+
+  // connection and WebGL context
+  declare _offSince: number; // when the connection dropped (0 = connected)
+  declare _offT: ReturnType<typeof setTimeout> | null;
+  declare _probeT: ReturnType<typeof setTimeout> | null;
+  declare _ctxT: ReturnType<typeof setTimeout> | null;
+  declare _ctxLost: number; // when the WebGL context was lost (0 = fine)
+  declare _shownAt: number;
+  declare _hiddenAt: number;
+  declare _camKeep: { pos: number[]; zoom: number; target: number[] } | null; // camera to restore after a rebuild
+
+  // DOM
+  declare _wrap: HTMLElement;
+  declare _ov: HTMLElement; // overlay layer for chips and labels
+  declare _ed: HTMLElement; // editor UI layer
+  declare _edBtn: HTMLElement | null;
+  declare _conn: HTMLElement | null; // the "Reconnecting" pill
+  declare _toastT: ReturnType<typeof setTimeout>;
+
+  // Three.js
+  declare T: typeof THREE; // the Three.js module, loaded from the CDN in _init
+  declare _renderer: THREE.WebGLRenderer;
+  declare _scene: THREE.Scene;
+  declare _cam: THREE.OrthographicCamera;
+  declare _controls: OrbitControls;
+  declare _tc: TransformControls | null; // the editor's transform gizmo
+  declare _composer: EffectComposer | null;
+  declare _aoPass: GTAOPass | null;
+  declare _bloomPass: UnrealBloomPass | null;
+  declare _usePP: boolean; // render through the composer
+  declare _ppLoading: number | null;
+  declare _mods: Record<string, Promise<any>>; // dynamically imported modules by URL
+  declare _raf: number | null;
+  declare _helpers: (THREE.Object3D & { update(): void; dispose?(): void })[]; // gizmo helpers that follow the camera
+
+  // camera
+  declare _home: { pos: THREE.Vector3; target: THREE.Vector3; zoom: number };
+  declare _homeSph: THREE.Spherical;
+  declare _camK: { p: THREE.Vector3; q: THREE.Quaternion; t: THREE.Vector3; z: number | null } | null;
+  declare _camMv: boolean;
+  declare _moved: boolean; // the user moved the view, so resizes leave it alone
+  declare _fly: Record<string, any> | null; // a camera flight in progress
+  declare _lastPhi: number;
+  declare _lastTheta: number;
+  declare _vo: number[]; // view offset (safe area), eased towards _voT
+  declare _voT: number[];
+
+  // the world: everything built from the config, thrown away by _rebuild()
+  declare _world: THREE.Group | null;
+  declare _items: Map<string, THREE.Group>; // item key → its pivot group
+  declare _cur: THREE.Object3D | null; // the group being built into
+  declare _outer: THREE.Group | null;
+  declare _xf: ((x: number, y: number) => Pt) | null; // plan transform of the item being built
+  declare _noCast: boolean;
+  declare _mats: Record<string, THREE.Material> | null; // cached materials
+  declare _surfTexs: Record<string, THREE.Texture> | null;
+  declare _bpTex: Map<string, THREE.Texture> | null; // blueprint textures by src
+  declare _glowTex: THREE.Texture | null;
+  declare _tmpCol: THREE.Color;
+  declare _fixtures: { x: number; y: number; mesh: AnyMesh }[]; // glowing parts of objects and overlays, for lights to claim
+  declare _screens: Screen[];
+  declare _floorMeshes: THREE.Mesh[];
+  declare _bulbs: AnyMesh[] | null; // the `bulbs` overlay (older string lights)
+  declare _niche: AnyMesh | null; // the plant wall's lit panel
+  declare _doorLeaves: DoorLeaf[];
+  declare _doorAnim: object | null; // the running door animation
+  declare _stage: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | null; // the drop shadow under the house
+  declare _stageSpot: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | null; // the spotlit backdrop under the house
+  declare _targets: THREE.Object3D[]; // tap targets
+  declare _modelErr: Record<string, string>;
+  declare _dl: Record<string, boolean>;
+
+  // lights and looks
+  declare _amb: THREE.AmbientLight;
+  declare _hemi: THREE.HemisphereLight;
+  declare _fill: THREE.DirectionalLight;
+  declare _sun: THREE.DirectionalLight;
+  declare _sunKey: string | null;
+  declare _sunPreview: number | null; // the editor's time-of-day preview (hours)
+  declare _lightGroups: LightGroup[];
+  declare _skyLights: { light: THREE.SpotLight; w: number }[]; // daylight through windows
+  declare _lkSig: string | null; // the look last applied
+  declare _bgKey: string | undefined;
+
+  // overlays: chips, doors, weather, labels
+  declare _chips: { cfg: Chip; node: OverlayNode }[];
+  declare _doors: { cfg: DoorConfig; node: OverlayNode }[];
+  declare _weather: OverlayNode | null;
+  declare _anchors: Anchor[];
+  declare _roomLabels: Anchor[];
+
+  // rooms
+  declare _focus: { room: Room; polys: Pt[][] } | null; // the framed room and its floor outlines
+  declare _fitRoom: Room | null;
+  declare _rcRoom: string; // the room whose controls show
+  declare _rcMin: boolean;
+  declare _rcCache: Map<string, { sig: string; els: HTMLElement[] }> | null; // built room cards, by room
+  declare _faded: Set<THREE.Mesh> | null; // meshes made see-through
+  declare _fadeSig: string | null;
+  declare _fadeGen: number;
+  declare _fadeMats: Map<string, THREE.Material> | null;
+
+  // floor plan layer
+  declare _plan: boolean; // floor plan mode
+  declare _wallG: THREE.Group | null;
+  declare _joints: Joint[];
+  declare _jointMeshes: THREE.Mesh[] | null;
+  declare _midMeshes: THREE.Mesh[] | null;
+  declare _roomHG: THREE.Group | null;
+  declare _vertMeshes: THREE.Mesh[] | null;
+  declare _strHG: THREE.Group | null;
+  declare _sptMeshes: THREE.Mesh[] | null;
+  declare _smidMeshes: THREE.Mesh[] | null;
+
+  // editing (set by the editor)
+  declare _edit: EditState | null;
+  declare _work: CardConfig | null; // the config being edited
+  declare _coarse: boolean; // touch-first device
+  declare _drag: Record<string, any> | null;
+  declare _tool: string;
+  declare _draw: Record<string, any> | null;
+  declare _measure: any;
+  declare _vsel: any;
+  declare _pivot: THREE.Object3D;
+  declare _pivotC: Pt;
+  declare _tcDragging: boolean;
+  declare _tcUsed: boolean;
+  declare _inspMin: boolean;
+  declare _ltuneOpen: boolean;
+  declare _ltDrag: boolean;
+  declare _lookDrag: boolean;
+  declare _planHinted: boolean;
+  declare _planTopped: boolean;
+  declare _cycleHinted: boolean;
+  declare _prevDot: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | null;
+  declare _prevLine: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial> | null;
+  declare _prevMesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | null;
+  declare _entsRender: () => void;
+  declare _libEl: HTMLElement;
+  setConfig(config: CardConfig): void {
     if (this._inner) return this._inner.setConfig(config); // a shell around an adopted card
     // HA hands cards a fresh (but often identical) config whenever it re-renders — e.g. strategy dashboards are
     // regenerated on every entity/device/area registry change. Rebuilding the whole WebGL scene each time leaked
@@ -103,7 +379,7 @@ export class Home3DCard extends PlanMixin(
     try {
       this._tc?.detach();
       this._tc?.dispose();
-    } catch (e) {
+    } catch {
       /* ignore */
     }
     this._tc = null;
@@ -150,7 +426,7 @@ export class Home3DCard extends PlanMixin(
     return { columns: "full", rows: "auto" };
   }
 
-  set hass(hass) {
+  set hass(hass: Hass) {
     if (this._inner) {
       this._inner.hass = hass;
       return;
@@ -172,12 +448,12 @@ export class Home3DCard extends PlanMixin(
     this._connState(h);
     if (this._edit || this._hassChanged(h)) this._update();
     this._rcHass();
-    if (this._edBtn) this._edBtn.style.display = h.user?.is_admin && !this._edit && this._enterEdit ? "" : "none"; // Edit shows once the editor module has loaded
+    if (this._edBtn) this._edBtn.style.display = h.user?.is_admin && !this._edit && editorAvailable() ? "" : "none"; // the editor itself loads on the first press
   }
 
   /* → true when anything _update() reads differs from the last applied hass: a watched entity's state object (HA keeps
    * the object of an unchanged entity), the locale or location, or a minute has passed (the sun moves) */
-  _hassChanged(h) {
+  _hassChanged(h: Hass) {
     const seen = this._seen,
       now = Date.now();
     let changed =
@@ -232,7 +508,7 @@ export class Home3DCard extends PlanMixin(
     }
   }
 
-  _showOffline(on) {
+  _showOffline(on: boolean) {
     this._wrap?.classList.toggle("offline", on);
     this._conn?.classList.toggle("hide", !on);
   }
@@ -321,7 +597,7 @@ export class Home3DCard extends PlanMixin(
     return this._work || this._config;
   }
 
-  _fail(e) {
+  _fail(e: any) {
     console.error("ha-3dhome-card", e);
     const root = this.shadowRoot || this.attachShadow({ mode: "open" });
     root.innerHTML = `<ha-card><div style="padding:16px">3D map failed to load: ${esc((e && e.message) || e)}</div></ha-card>`;
@@ -367,7 +643,7 @@ export class Home3DCard extends PlanMixin(
     const empty =
       !this._edit &&
       ![sc.wall_segs, sc.walls, sc.front_walls, sc.floors, sc.boxes, sc.objects, cfg.lights].some((a) => a?.length);
-    let el = this._wrap?.querySelector(".empty");
+    let el = this._wrap?.querySelector<HTMLElement>(".empty");
     if (!empty) return el?.remove();
     if (!el) {
       el = document.createElement("div");
@@ -395,10 +671,10 @@ export class Home3DCard extends PlanMixin(
     this._sptMeshes = this._smidMeshes = null;
   }
 
-  _disposeTree(root) {
+  _disposeTree(root: THREE.Object3D) {
     const keep = new Set(Object.values(this._mats || {})),
       keepTex = new Set([...(this._bpTex?.values() || []), ...Object.values(this._surfTexs || {})]);
-    root.traverse((o) => {
+    root.traverse((o: any) => {
       if (o.isLight) o.shadow?.dispose?.();
       if (o.userData.shared) return;
       o.geometry?.dispose?.();
@@ -412,3 +688,18 @@ export class Home3DCard extends PlanMixin(
     root.clear();
   }
 }
+
+for (const part of [
+  StartupPart,
+  CameraPart,
+  RoomsPart,
+  ScenePart,
+  ModelsPart,
+  LightsPart,
+  PickingPart,
+  LivePart,
+  PlanPart,
+])
+  for (const k of Object.getOwnPropertyNames(part.prototype))
+    if (k !== "constructor")
+      Object.defineProperty(Home3DCard.prototype, k, Object.getOwnPropertyDescriptor(part.prototype, k)!);

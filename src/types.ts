@@ -48,6 +48,13 @@ export interface Hass {
 /** A Lovelace card config: only `type` is known. */
 export interface LovelaceCardConfig {
   type: string;
+  /* the fields this module reads; any card may carry more */
+  entity?: string;
+  entities?: (string | { entity?: string })[];
+  cards?: LovelaceCardConfig[];
+  name?: string;
+  title?: string;
+  card_id?: string;
   [k: string]: unknown;
 }
 
@@ -99,6 +106,7 @@ export interface Opening {
   flip?: boolean;
   entity?: string;
   open?: boolean;
+  daylight?: boolean; // false: no daylight through it; true: daylight through a door that isn't glass
 }
 
 export interface Blueprint {
@@ -247,7 +255,7 @@ export interface LightConfig {
   spacing?: number;
   sag?: number;
   rect?: number[];
-  size?: number | Pt3;
+  size?: number; // scales the fixture model
   [k: string]: unknown;
 }
 
@@ -262,25 +270,40 @@ export interface Hotspot {
   [k: string]: unknown;
 }
 
+/** A chip: an HTML pill on the map. Either a badge for one `entity`, or a composite of the other fields. */
 export interface Chip {
-  entity?: string;
   x: number;
   y: number;
   z?: number;
-  label?: string;
+  size?: number;
+  // badge
+  entity?: string;
   show_name?: boolean;
   show_state?: boolean;
-  icon?: string;
   tap?: string;
-  size?: number;
+  // composite (and badge)
+  label?: string;
+  icon?: string;
+  temperature?: string;
+  temp_digits?: number;
+  humidity?: string;
+  climate?: string;
+  occupancy?: string;
+  media?: string;
+  tap_entity?: string;
   [k: string]: unknown;
 }
 
+/** A door or window sensor dot: red when open, green when shut. */
 export interface DoorConfig {
   entity: string;
+  name?: string;
   x: number;
   y: number;
   z?: number;
+  size?: number;
+  icon_open?: string;
+  icon_closed?: string;
   [k: string]: unknown;
 }
 
@@ -352,3 +375,6 @@ export interface StrategyConfig extends CardConfig {
   icon?: string;
   extra_views?: Record<string, unknown>[];
 }
+
+/** One wall end: the wall's index in scene.wall_segs and which end. */
+export type WallEnd = [number, "a" | "b"];

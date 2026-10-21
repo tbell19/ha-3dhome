@@ -1,6 +1,6 @@
 {
   "name": "ha-3dhome",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "private": true,
   "description": "3D Home: a live 3D floor plan card and dashboard strategy for Home Assistant, with an editor built in",
   "type": "commonjs",
@@ -16,7 +16,7 @@
     "test:all": "sh tools/all-tests.sh",
     "format": "prettier --write src tools",
     "format:check": "prettier --check src tools",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p tsconfig.strict.json && tsc -p ."
   },
   "devDependencies": {
     "@types/three": "0.160.0",

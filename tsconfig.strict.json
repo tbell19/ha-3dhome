@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "strictNullChecks": true },
+  "include": ["src/types.ts", "src/core"]
+}

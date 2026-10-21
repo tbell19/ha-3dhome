@@ -1,6 +1,42 @@
 /* Sweet Home 3D libraries: catalog parsing, zip lookups and the per-device model cache.
  */
 import type JSZip from "jszip";
+import type * as THREE from "three";
+
+/** A downloaded furniture library: its catalogs (.sh3f zips) and the OBJ furniture they list. */
+export interface Library {
+  sh3fs: { name: string; zip: JSZip }[];
+  items: LibItem[];
+}
+/** One piece of furniture in a library catalog (sizes in cm). */
+export interface LibItem {
+  name: string;
+  cat: string;
+  icon?: string;
+  model: string;
+  w: number;
+  d: number;
+  h: number;
+  elev: number;
+  mr: string | null; // modelRotation: a 3×3 matrix as 9 numbers
+  creator: string;
+  sh3f: string;
+  lib: string;
+  lic: string;
+}
+/** A model's files as extracted from its library (cached per device in IndexedDB). */
+export interface ModelFiles {
+  obj: string;
+  mtl: string | null;
+  tex: Record<string, Blob>; // texture file name (lower case) → image
+}
+/** A loaded model, shared by every placed copy. */
+export interface ModelProto {
+  node: THREE.Group;
+  size: THREE.Vector3;
+  center: THREE.Vector3;
+  min: THREE.Vector3;
+}
 
 /** parse a Java .properties file (the furniture catalog) into key → value */
 export function parseProps(text: string) {
@@ -90,5 +126,5 @@ export const IDB = {
     }
   },
 };
-export const LIBCACHE = new Map<string, Promise<any>>(); // file -> Promise<{sh3fs, items}>
-export const MODELCACHE = new Map<string, Promise<any>>(); // key  -> Promise<{node, size, center, min}>
+export const LIBCACHE = new Map<string, Promise<Library>>(); // by library file
+export const MODELCACHE = new Map<string, Promise<ModelProto>>(); // by "lib|sh3f|model"

@@ -21,8 +21,8 @@ jobs:
           node -e '
             const fs = require("fs"), v = process.argv[1];
             const got = { "package.json": require("./package.json").version,
-              VERSION3D: fs.readFileSync("src/core/constants.js", "utf8").match(/VERSION3D = "([^"]+)"/)[1],
-              EDITOR_VERSION: fs.readFileSync("src/ha-3dhome-editor.js", "utf8").match(/EDITOR_VERSION = "([^"]+)"/)[1] };
+              VERSION3D: fs.readFileSync("src/core/constants.ts", "utf8").match(/VERSION3D = "([^"]+)"/)[1],
+              EDITOR_VERSION: fs.readFileSync("src/ha-3dhome-editor.ts", "utf8").match(/EDITOR_VERSION = "([^"]+)"/)[1] };
             const bad = Object.entries(got).filter(([, x]) => x !== v);
             if (bad.length) { console.error("tag v" + v + " but " + bad.map(([k, x]) => k + "=" + x).join(", ")); process.exit(1); }' "$v"
       - name: Committed dist/ is this build

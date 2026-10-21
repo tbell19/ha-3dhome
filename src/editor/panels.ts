@@ -1,5 +1,8 @@
 /* Editor side panels: render looks, per-room cards, and the entity list you drag onto the map.
  */
+import type { LovelaceCardConfig, Looks } from "../types";
+import type { GenericItem } from "../core/items";
+import type { Home3DCard } from "../card/card";
 import {
   inPoly,
   ACTIVE,
@@ -19,11 +22,11 @@ import {
 
 export class EditorPanels {
   /* Look panel: a strength slider per render look (light, ao, stage, bloom), applied live while dragging. One undo step per drag. */
-  _toggleLookPanel() {
-    const old = this._ed.querySelector(".lookp");
-    this._ed.querySelector('[data-a="look"]')?.classList.toggle("on", !old);
+  _toggleLookPanel(this: Home3DCard) {
+    const old = this._ed.querySelector<HTMLElement>(".lookp");
+    this._ed.querySelector<HTMLElement>('[data-a="look"]')?.classList.toggle("on", !old);
     if (old) return old.remove();
-    if (this._ed.querySelector(".rcp")) this._toggleRoomCardsPanel();
+    if (this._ed.querySelector<HTMLElement>(".rcp")) this._toggleRoomCardsPanel();
     const rows = [
       ["ambient", "Room fill", "Even daylight on every surface"],
       ["light", "Soft lighting", "Gradient sky light, soft shadows"],
@@ -41,9 +44,9 @@ export class EditorPanels {
           .map((r) => `<option value="${esc(r.name)}">${esc(r.label)}</option>`)
           .join("")}</select></div>`;
     this._ed.append(p);
-    p.querySelector("[data-x]").addEventListener("click", () => this._toggleLookPanel());
+    p.querySelector<HTMLElement>("[data-x]").addEventListener("click", () => this._toggleLookPanel());
     p.addEventListener("input", (ev) => {
-      const k = ev.target.dataset.k;
+      const k = (ev.target as HTMLElement).dataset.k as keyof Looks | "ambient" | undefined;
       if (!k) return;
       if (!this._lookDrag) {
         this._edit.undo.push(JSON.stringify(this._work));
@@ -51,8 +54,9 @@ export class EditorPanels {
         this._edit.dirty = true;
         this._lookDrag = true;
       }
-      const look = this._work.look === false ? { light: 0, ao: 0, stage: 0, bloom: 0 } : { ...(this._work.look || {}) },
-        v = +ev.target.value / 100;
+      const look: Partial<Record<keyof Looks, number | boolean>> =
+          this._work.look === false ? { light: 0, ao: 0, stage: 0, bloom: 0 } : { ...(this._work.look || {}) },
+        v = +(ev.target as HTMLInputElement).value / 100;
       if (k === "ambient") {
         if (v === AMBIENT) delete this._work.ambient;
         else this._work.ambient = v;
@@ -63,18 +67,18 @@ export class EditorPanels {
         if (Object.keys(look).length) this._work.look = look;
         else delete this._work.look;
       }
-      p.querySelector(`[data-o="${k}"]`).textContent = v ? Math.round(v * 100) + "%" : "Off";
+      p.querySelector<HTMLElement>(`[data-o="${k}"]`).textContent = v ? Math.round(v * 100) + "%" : "Off";
       this._update();
       this._requestRender();
     });
     p.addEventListener("change", (ev) => {
       this._lookDrag = false;
-      if (!ev.target.dataset.i) return;
+      if (!(ev.target as HTMLElement).dataset.i) return;
       this._edit.undo.push(JSON.stringify(this._work));
       this._edit.redo = [];
       this._edit.dirty = true;
-      const after = +p.querySelector('[data-i="after"]').value,
-        room = p.querySelector('[data-i="room"]').value;
+      const after = +p.querySelector<HTMLSelectElement>('[data-i="after"]').value,
+        room = p.querySelector<HTMLSelectElement>('[data-i="room"]').value;
       if (after > 0) this._work.idle_view = room ? { room, after } : { after };
       else delete this._work.idle_view;
       this._syncLookPanel();
@@ -82,13 +86,13 @@ export class EditorPanels {
     this._syncLookPanel();
   }
 
-  _syncLookPanel() {
-    const p = this._ed?.querySelector(".lookp");
+  _syncLookPanel(this: Home3DCard) {
+    const p = this._ed?.querySelector<HTMLElement>(".lookp");
     if (!p || this._lookDrag) return;
     const L = { ...lookOf(this._work), ambient: this._work.ambient ?? AMBIENT };
     const iv = this._work.idle_view,
-      after = p.querySelector('[data-i="after"]'),
-      room = p.querySelector('[data-i="room"]');
+      after = p.querySelector<HTMLSelectElement>('[data-i="after"]'),
+      room = p.querySelector<HTMLSelectElement>('[data-i="room"]');
     if (after) {
       const a = +iv?.after > 0 ? String(+iv.after) : "0";
       if (![...after.options].some((o) => o.value === a)) after.add(new Option(`${a} seconds`, a)); // a hand-set value
@@ -96,24 +100,24 @@ export class EditorPanels {
       room.value = iv?.room || "";
       room.disabled = a === "0";
     }
-    for (const i of p.querySelectorAll("input[data-k]")) {
-      const v = L[i.dataset.k];
-      i.value = Math.round(v * 100);
-      p.querySelector(`[data-o="${i.dataset.k}"]`).textContent = v ? Math.round(v * 100) + "%" : "Off";
+    for (const i of p.querySelectorAll<HTMLInputElement>("input[data-k]")) {
+      const v = L[i.dataset.k as keyof typeof L];
+      i.value = String(Math.round(v * 100));
+      p.querySelector<HTMLElement>(`[data-o="${i.dataset.k}"]`).textContent = v ? Math.round(v * 100) + "%" : "Off";
     }
   }
 
   /* Controls panel: the Lovelace cards each room shows top right (`room_cards`). Tiles for entities, the room's own devices in one go,
    * or any card as YAML (pasted from another dashboard's card code editor). One undo step per change; no 3D rebuild. */
-  _toggleRoomCardsPanel() {
-    const old = this._ed.querySelector(".rcp");
+  _toggleRoomCardsPanel(this: Home3DCard) {
+    const old = this._ed.querySelector<HTMLElement>(".rcp");
     if (old) {
       old.remove();
       this._syncBar();
       return;
     }
-    if (this._ed.querySelector(".ents")) this._toggleEntityPanel();
-    if (this._ed.querySelector(".lookp")) this._toggleLookPanel();
+    if (this._ed.querySelector<HTMLElement>(".ents")) this._toggleEntityPanel();
+    if (this._ed.querySelector<HTMLElement>(".lookp")) this._toggleLookPanel();
     const p = document.createElement("div");
     p.className = "rcp";
     p.innerHTML = `<header><span class="ttl">Room controls</span><button data-x title="Close">${ic("close")}</button></header>
@@ -128,14 +132,14 @@ export class EditorPanels {
           <div class="rcadd"><button data-apply class="primary">Apply</button><button data-codex>Close</button></div></div>
         <div class="hint">Preview</div><div class="rcprev"></div></div>`;
     this._ed.append(p);
-    const room = p.querySelector("[data-room]"),
-      ta = p.querySelector("textarea"),
-      code = p.querySelector(".rccode");
+    const room = p.querySelector<HTMLSelectElement>("[data-room]"),
+      ta = p.querySelector<HTMLTextAreaElement>("textarea"),
+      code = p.querySelector<HTMLElement>(".rccode");
     room.innerHTML = [["home", "Whole home"], ...this._rooms().map((r) => [r.name, r.label])]
       .map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`)
       .join("");
     room.value = this._rooms().some((r) => r.name === this._rcRoom) ? this._rcRoom : "home";
-    p.querySelector("datalist").innerHTML = Object.entries(this._hass?.states || {})
+    p.querySelector<HTMLElement>("datalist").innerHTML = Object.entries(this._hass?.states || {})
       .map(([id, st]) => `<option value="${esc(id)}">${esc(st.attributes?.friendly_name || "")}</option>`)
       .join("");
     room.addEventListener("change", () => {
@@ -145,9 +149,9 @@ export class EditorPanels {
       this._focusRoom(this._rooms().find((r) => r.name === room.value) || null);
     });
     const cur = () => this._work.room_cards?.[room.value] || [];
-    p.querySelector("[data-x]").addEventListener("click", () => this._toggleRoomCardsPanel());
-    p.querySelector(".rcl").addEventListener("click", (ev) => {
-      const b = ev.target.closest("button[data-i]");
+    p.querySelector<HTMLElement>("[data-x]").addEventListener("click", () => this._toggleRoomCardsPanel());
+    p.querySelector<HTMLElement>(".rcl").addEventListener("click", (ev) => {
+      const b = (ev.target as HTMLElement).closest<HTMLElement>("button[data-i]");
       if (!b) return;
       const i = +b.dataset.i,
         l = [...cur()];
@@ -159,7 +163,7 @@ export class EditorPanels {
       }
       this._rcSet(room.value, l);
     });
-    const ent = p.querySelector("[data-ent]"),
+    const ent = p.querySelector<HTMLInputElement>("[data-ent]"),
       addTile = () => {
         const e = ent.value.trim();
         if (!e) return;
@@ -167,11 +171,11 @@ export class EditorPanels {
         this._rcSet(room.value, [...cur(), { type: "tile", entity: e }]);
         ent.value = "";
       };
-    p.querySelector("[data-add]").addEventListener("click", addTile);
+    p.querySelector<HTMLElement>("[data-add]").addEventListener("click", addTile);
     ent.addEventListener("keydown", (ev) => {
       if (ev.key === "Enter") addTile();
     });
-    p.querySelector("[data-auto]").addEventListener("click", () => {
+    p.querySelector<HTMLElement>("[data-auto]").addEventListener("click", () => {
       const have = new Set(
           cur()
             .map((c) => c.entity)
@@ -187,7 +191,7 @@ export class EditorPanels {
       this._mod(YAML_URL)
         .then((m) => m.default || m)
         .catch(() => null);
-    p.querySelector("[data-code]").addEventListener("click", async () => {
+    p.querySelector<HTMLElement>("[data-code]").addEventListener("click", async () => {
       if (!code.classList.contains("hide")) return code.classList.add("hide");
       const l = cur(),
         Y = await yaml();
@@ -195,8 +199,8 @@ export class EditorPanels {
       code.classList.remove("hide");
       ta.focus();
     });
-    p.querySelector("[data-codex]").addEventListener("click", () => code.classList.add("hide"));
-    p.querySelector("[data-apply]").addEventListener("click", async () => {
+    p.querySelector<HTMLElement>("[data-codex]").addEventListener("click", () => code.classList.add("hide"));
+    p.querySelector<HTMLElement>("[data-apply]").addEventListener("click", async () => {
       const txt = ta.value.trim();
       let v;
       try {
@@ -207,7 +211,7 @@ export class EditorPanels {
           if (!Y) throw new Error("couldn't load the YAML reader, use JSON");
           v = Y.load(txt);
         }
-      } catch (e) {
+      } catch (e: any) {
         return this._toast("That code doesn't read right: " + (e.reason || e.message || e), 5000);
       }
       if (v && !Array.isArray(v) && Array.isArray(v.cards) && !v.type) v = v.cards; // a pasted view or stack body
@@ -220,7 +224,7 @@ export class EditorPanels {
     this._syncRoomCardsPanel(true);
   }
 
-  _rcSet(key, list) {
+  _rcSet(this: Home3DCard, key: string, list: LovelaceCardConfig[]) {
     const e = this._edit;
     e.undo.push(JSON.stringify(this._work));
     e.redo = [];
@@ -234,19 +238,19 @@ export class EditorPanels {
   }
 
   /* entities of the lights, hotspots, chips, doors and objects placed inside a room's outline */
-  _roomEntities(key) {
+  _roomEntities(this: Home3DCard, key: string) {
     const room = this._rooms().find((r) => r.name === key);
     if (!room) return [];
     const w = this._work,
       polys = (w.scene?.floors || [])
         .filter((f) => room.floors.includes(f.name) && f.pts?.length >= 3)
         .map((f) => f.pts);
-    const inside = (x, y) =>
+    const inside = (x: number, y: number) =>
       polys.length
         ? polys.some((pts) => inPoly(x, y, pts))
         : x >= room.rect[0] && x <= room.rect[1] && y >= room.rect[2] && y <= room.rect[3];
-    const out = [];
-    const add = (k, it) => {
+    const out: string[] = [];
+    const add = (k: string, it: GenericItem) => {
       if (!it?.entity || out.includes(it.entity)) return;
       const [x, y] = itemCenter(k, it);
       if (inside(x, y)) out.push(it.entity);
@@ -257,21 +261,21 @@ export class EditorPanels {
       ["c", "chips"],
       ["d", "doors"],
     ])
-      for (const it of w[n] || []) add(k, it);
+      for (const it of (w as Record<string, GenericItem[]>)[n] || []) add(k, it);
     for (const o of w.scene?.objects || []) add("o", o);
     return out;
   }
 
-  _syncRoomCardsPanel(force) {
-    const p = this._ed?.querySelector(".rcp");
+  _syncRoomCardsPanel(this: Home3DCard, force?: boolean) {
+    const p = this._ed?.querySelector<HTMLElement & { _sig?: string }>(".rcp"); // _sig: what the preview shows
     if (!p) return;
-    const key = p.querySelector("[data-room]").value,
+    const key = p.querySelector<HTMLSelectElement>("[data-room]").value,
       list = this._work.room_cards?.[key] || [],
       sig = key + JSON.stringify(list);
     if (!force && p._sig === sig) return;
     p._sig = sig;
     const st = this._hass?.states || {};
-    const name = (c) => {
+    const name = (c: LovelaceCardConfig) => {
       const e = c.entity || (typeof c.entities?.[0] === "string" ? c.entities[0] : c.entities?.[0]?.entity);
       const what = c.name || c.title || (e && (st[e]?.attributes?.friendly_name || e)) || "";
       return {
@@ -283,7 +287,7 @@ export class EditorPanels {
           (c.cards ? `${c.cards.length} cards` : ""),
       };
     };
-    p.querySelector(".rcl").innerHTML =
+    p.querySelector<HTMLElement>(".rcl").innerHTML =
       list
         .map((c, i) => {
           const n = name(c);
@@ -291,7 +295,7 @@ export class EditorPanels {
       <span><button data-i="${i}" data-op="up" title="Move up"${i ? "" : " disabled"}>${ic("arrow-up")}</button><button data-i="${i}" data-op="down" title="Move down"${i < list.length - 1 ? "" : " disabled"}>${ic("arrow-down")}</button><button data-i="${i}" data-op="del" title="Remove">${ic("close")}</button></span></div>`;
         })
         .join("") || `<div class="hint">No controls for this room yet.</div>`;
-    const prev = p.querySelector(".rcprev"),
+    const prev = p.querySelector<HTMLElement>(".rcprev"),
       gen = this._gen;
     prev.replaceChildren();
     this._makeCards(list).then((els) => {
@@ -299,16 +303,16 @@ export class EditorPanels {
     });
   }
 
-  _toggleEntityPanel(force) {
-    const old = this._ed.querySelector(".ents");
+  _toggleEntityPanel(this: Home3DCard, force?: boolean) {
+    const old = this._ed.querySelector<HTMLElement>(".ents");
     if (old && force !== true) {
       old.remove();
-      this._ed.querySelector('[data-a="add"]')?.classList.remove("on");
+      this._ed.querySelector<HTMLElement>('[data-a="add"]')?.classList.remove("on");
       return;
     }
     if (old) return;
-    if (this._ed.querySelector(".rcp")) this._toggleRoomCardsPanel();
-    this._ed.querySelector('[data-a="add"]')?.classList.add("on");
+    if (this._ed.querySelector<HTMLElement>(".rcp")) this._toggleRoomCardsPanel();
+    this._ed.querySelector<HTMLElement>('[data-a="add"]')?.classList.add("on");
     const p = document.createElement("div");
     p.className = "ents";
     const doms = [
@@ -331,8 +335,8 @@ export class EditorPanels {
       <div class="hint">${this._coarse ? "Tap an entity to add it in the middle of the view, then drag it into place." : "Drag an entity onto the floor plan (or click to drop it in the middle of the view)."}</div><div class="list"></div>`;
     this._ed.append(p);
     let dom = "";
-    const q = p.querySelector("input"),
-      list = p.querySelector(".list");
+    const q = p.querySelector<HTMLInputElement>("input"),
+      list = p.querySelector<HTMLElement>(".list");
     const main = new Set(doms.map((d) => d[0]).filter((d) => d && d !== "*"));
     const render = () => {
       const s = q.value.trim().toLowerCase(),
@@ -361,16 +365,16 @@ export class EditorPanels {
           .join("") || `<div class="hint">No matching entities.</div>`;
     };
     q.addEventListener("input", render);
-    p.querySelector(".doms").addEventListener("click", (ev) => {
-      const b = ev.target.closest("button");
+    p.querySelector<HTMLElement>(".doms").addEventListener("click", (ev) => {
+      const b = (ev.target as HTMLElement).closest<HTMLElement>("button");
       if (!b) return;
       dom = b.dataset.d;
-      p.querySelectorAll(".doms button").forEach((x) => x.classList.toggle("on", x === b));
+      p.querySelectorAll<HTMLElement>(".doms button").forEach((x) => x.classList.toggle("on", x === b));
       render();
     });
-    p.querySelector("[data-x]").addEventListener("click", () => this._toggleEntityPanel());
-    p.querySelector(".quick").addEventListener("click", (ev) => {
-      const k = ev.target.closest("button")?.dataset.q;
+    p.querySelector<HTMLElement>("[data-x]").addEventListener("click", () => this._toggleEntityPanel());
+    p.querySelector<HTMLElement>(".quick").addEventListener("click", (ev) => {
+      const k = (ev.target as HTMLElement).closest<HTMLElement>("button")?.dataset.q;
       if (!k) return;
       if (k === "model") return this._openLibrary();
       const [x, y] = this._target();
@@ -383,14 +387,14 @@ export class EditorPanels {
     // Mouse and pen drag an entity onto the map. A finger scrolls the list instead, and a tap adds the entity mid-view.
     let touched = false;
     list.addEventListener("pointerdown", (ev) => {
-      const row = ev.target.closest(".erow");
+      const row = (ev.target as HTMLElement).closest<HTMLElement>(".erow");
       touched = ev.pointerType === "touch";
       if (!row || ev.button > 0 || touched) return;
       ev.preventDefault();
       this._dragEntity(row.dataset.e, ev, row);
     });
     list.addEventListener("click", (ev) => {
-      const row = ev.target.closest(".erow");
+      const row = (ev.target as HTMLElement).closest<HTMLElement>(".erow");
       if (!row || !touched) return;
       const [x, y] = this._target();
       this._placeEntity(row.dataset.e, x, y);
@@ -401,14 +405,14 @@ export class EditorPanels {
   }
 
   /* pointer-driven drag from the panel onto the canvas (works with mouse and touch) */
-  _dragEntity(id, ev0, row) {
+  _dragEntity(this: Home3DCard, id: string, ev0: PointerEvent, row: HTMLElement) {
     const st = this._hass?.states[id],
       wrapR = () => this._wrap.getBoundingClientRect(),
       canvas = this._renderer.domElement;
-    let ghost = null;
-    const over = (ev) => {
+    let ghost: HTMLElement | null = null;
+    const over = (ev: PointerEvent) => {
       const r = canvas.getBoundingClientRect(),
-        panel = this._ed.querySelector(".ents")?.getBoundingClientRect();
+        panel = this._ed.querySelector<HTMLElement>(".ents")?.getBoundingClientRect();
       const inCanvas = ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
       const inPanel =
         panel &&
@@ -418,7 +422,7 @@ export class EditorPanels {
         ev.clientY <= panel.bottom;
       return inCanvas && !inPanel;
     };
-    const move = (ev) => {
+    const move = (ev: PointerEvent) => {
       if (!ghost && Math.hypot(ev.clientX - ev0.clientX, ev.clientY - ev0.clientY) < 6) return;
       if (!ghost) {
         ghost = document.createElement("div");
@@ -431,7 +435,7 @@ export class EditorPanels {
       ghost.style.top = ev.clientY - w.top + "px";
       ghost.classList.toggle("off", !over(ev));
     };
-    const up = (ev) => {
+    const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
@@ -459,7 +463,7 @@ export class EditorPanels {
   }
 
   /* pick a sensible representation for an entity: light glow, door marker, climate chip, or a live badge */
-  _entityItem(id, x, y, as) {
+  _entityItem(this: Home3DCard, id: string, x: number, y: number, as?: string): [string, GenericItem] {
     const st = this._hass?.states[id],
       d = id.split(".")[0],
       dc = st?.attributes?.device_class;
@@ -479,14 +483,14 @@ export class EditorPanels {
     return ["c", { entity: id, x, y, z: 30 }];
   }
 
-  _placeEntity(id, x, y) {
+  _placeEntity(this: Home3DCard, id: string, x: number, y: number) {
     const [k, item] = this._entityItem(id, x, y);
     this._mutate(() => [this._push(k, item)]);
     this._toast(`Added ${this._hass?.states[id]?.attributes.friendly_name || id}. Drag it into place.`);
     this._entsRender?.();
   }
 
-  _convertEntity(key, as) {
+  _convertEntity(this: Home3DCard, key: string, as: string) {
     const it = this._get(key),
       id = it.entity || it.climate;
     if (!id) return;

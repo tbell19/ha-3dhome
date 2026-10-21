@@ -1,5 +1,8 @@
 /* The floor plan editor: drawing walls, rooms and openings, snapping, handles, blueprints and scale.
  */
+import type { Pt, SceneItem, WallEnd, WallSeg, Opening } from "../types";
+import type { GenericItem } from "../core/items";
+import type { Home3DCard } from "../card/card";
 import {
   CX,
   CY,
@@ -17,8 +20,16 @@ import {
   segDir,
 } from "./shared.js";
 
+/** What _snapPoint snaps against: `from` is the previous point (angle snapping), `exclude` the wall ends being dragged,
+ * `room` the room corner being dragged. */
+interface SnapOptions {
+  from?: Pt | null;
+  exclude?: WallEnd[];
+  room?: { key?: string; k?: number } | null; // {} snaps to every room corner
+}
+
 export class EditorPlan {
-  _jointMat(sel) {
+  _jointMat(this: Home3DCard, sel: boolean) {
     const k = sel ? "__jointSel" : "__joint";
     return (this._mats[k] ||= new this.T.MeshBasicMaterial({
       color: sel ? 0xf2c76b : 0xffffff,
@@ -27,14 +38,14 @@ export class EditorPlan {
     }));
   }
 
-  _paintJoints() {
+  _paintJoints(this: Home3DCard) {
     if (!this._jointMeshes?.length || !this._edit) return;
     for (const m of this._jointMeshes)
-      m.material = this._jointMat(m.userData.joint.m.some(([i]) => this._edit.sel.has("w:" + i)));
+      m.material = this._jointMat(m.userData.joint.m.some(([i]: WallEnd) => this._edit.sel.has("w:" + i)));
   }
 
   /* rebuild only the plan layer (walls, openings, blueprint, joints) — used while dragging a corner */
-  _rebuildPlan() {
+  _rebuildPlan(this: Home3DCard) {
     if (!this._wallG) return this._rebuild();
     this._world.remove(this._wallG);
     this._disposeTree(this._wallG);
@@ -45,7 +56,7 @@ export class EditorPlan {
     this._requestRender();
   }
 
-  _applyPlanVis() {
+  _applyPlanVis(this: Home3DCard) {
     const hide = !!this._plan && !this._edit?.showFurn;
     for (const [k, g] of this._items) {
       if (PLAN.has(k[0])) continue;
@@ -55,7 +66,7 @@ export class EditorPlan {
     }
   }
 
-  _migrateWalls() {
+  _migrateWalls(this: Home3DCard) {
     const sc = (this._work.scene ||= {});
     if (!sc.walls?.length && !sc.front_walls?.length) return;
     const { segs, opens } = legacyWalls(sc);
@@ -65,7 +76,7 @@ export class EditorPlan {
     delete sc.front_walls;
   }
 
-  _setPlanMode(on) {
+  _setPlanMode(this: Home3DCard, on: boolean) {
     if (!this._edit || !!this._plan === on) return;
     this._plan = on;
     this._tool = "select";
@@ -95,7 +106,7 @@ export class EditorPlan {
     }
   }
 
-  _setTool(t) {
+  _setTool(this: Home3DCard, t: string) {
     this._tool = t;
     this._draw = t === "wall" ? { start: null, first: null } : t === "room" ? { pts: [] } : null;
     this._measure =
@@ -112,15 +123,19 @@ export class EditorPlan {
   }
 
   /* ----- snapping ----- */
-  _snapPoint(p, { from = null, exclude = [], room = null } = {}) {
+  _snapPoint(
+    this: Home3DCard,
+    p: Pt,
+    { from = null, exclude = [], room = null }: SnapOptions = {},
+  ): { p: Pt; kind: string } {
     const segs = this._work?.scene?.wall_segs || [],
       thr = 10 * this._upp();
-    const ex = (i, e) => exclude.some(([j, f]) => j === i && f === e);
-    let best = null,
+    const ex = (i: number, e: string) => exclude.some(([j, f]) => j === i && f === e);
+    let best: Pt | null = null,
       bd = thr;
     if (room)
       (this._work.scene?.floors || []).forEach((f, i) =>
-        (f.pts || []).forEach((q, k) => {
+        (f.pts || []).forEach((q: Pt, k: number) => {
           if (room.key === "r:" + i && room.k === k) return;
           const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
           if (d < bd) {
@@ -130,7 +145,7 @@ export class EditorPlan {
         }),
       );
     segs.forEach((s, i) => {
-      for (const e of ["a", "b"]) {
+      for (const e of ["a", "b"] as const) {
         if (ex(i, e)) continue;
         const d = Math.hypot(s[e][0] - p[0], s[e][1] - p[1]);
         if (d < bd) {
@@ -167,8 +182,9 @@ export class EditorPlan {
     return { p: [Math.round(p[0]), Math.round(p[1])], kind: "grid" };
   }
 
-  _nearestWall(p, thr) {
-    let best = null,
+  /** the index of the wall within thr of p, or null */
+  _nearestWall(this: Home3DCard, p: Pt, thr: number): number | null {
+    let best: number | null = null,
       bd = thr;
     (this._work.scene?.wall_segs || []).forEach((s, i) => {
       const [ux, uy, L] = segDir(s),
@@ -185,7 +201,7 @@ export class EditorPlan {
   }
 
   /* centre an opening on the wall it sits on and turn it to match */
-  _fitOpening(o) {
+  _fitOpening(this: Home3DCard, o: SceneItem) {
     if (!o) return;
     const i = this._nearestWall([o.x, o.y], 10);
     if (i == null) return;
@@ -204,7 +220,7 @@ export class EditorPlan {
   }
 
   /* ----- drawing / placing tools ----- */
-  _toolHover(ev, p) {
+  _toolHover(this: Home3DCard, ev: PointerEvent, p: Pt | null) {
     if (!p) return;
     const thr = 14 * this._upp() + 4;
     if (this._tool === "wall") {
@@ -249,7 +265,7 @@ export class EditorPlan {
     }
   }
 
-  _toolClick(p, key, ev) {
+  _toolClick(this: Home3DCard, p: Pt, key: string | null, ev: PointerEvent) {
     const sc = (this._work.scene ||= {});
     if (this._tool === "wall") {
       const d = this._draw,
@@ -308,7 +324,7 @@ export class EditorPlan {
         LIN = sc.lintel ?? 8,
         wh = s.h ?? H,
         wt = s.t ?? sc.wall_thickness ?? 4;
-      const o =
+      const o: GenericItem =
         kind === "door"
           ? { kind, style: "panel", w: R1(80 / sxy), h: R1(Math.max(4, Math.min(wh, H - LIN))), z: 0 }
           : { kind, w: R1(100 / sxy), z: R1(Math.min(90 / sz, wh * 0.4)), h: 0 };
@@ -332,7 +348,7 @@ export class EditorPlan {
     }
   }
 
-  _ensurePreview() {
+  _ensurePreview(this: Home3DCard) {
     if (this._prevMesh) return;
     const T = this.T;
     this._prevMesh = new T.Mesh(
@@ -348,7 +364,7 @@ export class EditorPlan {
     this._scene.add(this._prevMesh, this._prevDot);
   }
 
-  _showPreview(a, b, kind) {
+  _showPreview(this: Home3DCard, a: Pt, b: Pt, kind: string) {
     this._ensurePreview();
     const sc = this._cfg().scene || {},
       m = this._prevMesh,
@@ -364,7 +380,7 @@ export class EditorPlan {
     this._requestRender();
   }
 
-  _showMarker(p, kind) {
+  _showMarker(this: Home3DCard, p: Pt, kind: string) {
     this._ensurePreview();
     const d = this._prevDot;
     d.material.color.set(kind === "joint" ? 0x6fd39a : kind === "wall" ? 0x4ea3ff : 0xffffff);
@@ -374,7 +390,7 @@ export class EditorPlan {
     this._requestRender();
   }
 
-  _showRoomPreview(pts) {
+  _showRoomPreview(this: Home3DCard, pts: Pt[]) {
     const T = this.T;
     if (!this._prevLine) {
       this._prevLine = new T.Line(
@@ -386,13 +402,13 @@ export class EditorPlan {
     }
     this._prevLine.geometry.dispose();
     this._prevLine.geometry = new T.BufferGeometry().setFromPoints(
-      pts.map((q) => new T.Vector3(q[0] - CX, 1.5, q[1] - CY)),
+      pts.map((q: Pt) => new T.Vector3(q[0] - CX, 1.5, q[1] - CY)),
     );
     this._prevLine.visible = true;
     this._requestRender();
   }
 
-  _hidePreview(keepLine) {
+  _hidePreview(this: Home3DCard, keepLine?: boolean) {
     if (this._prevLine && !keepLine) this._prevLine.visible = false;
     if (this._prevDot) this._prevDot.visible = false;
     if (this._prevMesh && !keepLine) this._prevMesh.visible = false;
@@ -400,7 +416,7 @@ export class EditorPlan {
     this._requestRender();
   }
 
-  _disposePreview() {
+  _disposePreview(this: Home3DCard) {
     for (const m of [this._prevMesh, this._prevDot, this._prevLine])
       if (m) {
         this._scene?.remove(m);
@@ -411,9 +427,9 @@ export class EditorPlan {
     this._hideTip();
   }
 
-  _showTip(ev, text) {
+  _showTip(this: Home3DCard, ev: MouseEvent, text: string) {
     if (!this._ed) return;
-    let t = this._ed.querySelector(".tip");
+    let t = this._ed.querySelector<HTMLElement>(".tip");
     if (!t) {
       t = document.createElement("div");
       t.className = "tip";
@@ -426,13 +442,13 @@ export class EditorPlan {
     t.style.display = "";
   }
 
-  _hideTip() {
-    const t = this._ed?.querySelector(".tip");
+  _hideTip(this: Home3DCard) {
+    const t = this._ed?.querySelector<HTMLElement>(".tip");
     if (t) t.style.display = "none";
   }
 
   /* ----- rooms (scene.floors) ----- */
-  _finishRoom() {
+  _finishRoom(this: Home3DCard) {
     const pts = this._draw?.pts || [];
     if (pts.length < 3) return;
     const floors = (this._work.scene.floors ||= []);
@@ -451,7 +467,7 @@ export class EditorPlan {
     });
     this._toast("Room added — name it in the panel");
     setTimeout(() => {
-      const i = this._ed.querySelector('.insp input[data-p="name"]');
+      const i = this._ed.querySelector<HTMLInputElement>('.insp input[data-p="name"]');
       i?.focus();
       i?.select();
     }, 50);
@@ -459,7 +475,7 @@ export class EditorPlan {
 
   /* a selected string light: a dot on every point (drag to move it; the ends stretch the string) and a smaller dot
    * mid-span (drag to bend it there) */
-  _buildStringHandles() {
+  _buildStringHandles(this: Home3DCard) {
     const T = this.T;
     if (this._strHG) {
       this._strHG.parent?.remove(this._strHG);
@@ -473,7 +489,7 @@ export class EditorPlan {
     if (!L?.points?.length || this._plan || this._edit.sel.size !== 1) return;
     this._strHG = new T.Group();
     this._world.add(this._strHG);
-    const mat = (k, c, o = 1) =>
+    const mat = (k: string, c: number, o = 1) =>
       (this._mats["__h" + k] ||= new T.MeshBasicMaterial({
         color: c,
         depthTest: false,
@@ -483,7 +499,7 @@ export class EditorPlan {
     const geo = new T.SphereGeometry(1, 12, 8),
       z = L.z ?? 17,
       n = L.points.length;
-    L.points.forEach((q, k) => {
+    L.points.forEach((q: Pt, k: number) => {
       const v = new T.Mesh(geo, mat("spt", 0xffd166));
       v.position.set(q[0] - CX, z, q[1] - CY);
       v.renderOrder = 15;
@@ -503,7 +519,7 @@ export class EditorPlan {
     this._scaleHandles();
   }
 
-  _buildRoomHandles() {
+  _buildRoomHandles(this: Home3DCard) {
     const T = this.T,
       G = this._wallG;
     if (this._roomHG) {
@@ -519,7 +535,7 @@ export class EditorPlan {
     if (!f?.pts?.length) return;
     this._roomHG = new T.Group();
     G.add(this._roomHG);
-    const mat = (k, c, o = 1) =>
+    const mat = (k: string, c: number, o = 1) =>
       (this._mats["__h" + k] ||= new T.MeshBasicMaterial({
         color: c,
         depthTest: false,
@@ -529,14 +545,14 @@ export class EditorPlan {
     const geo = new T.SphereGeometry(1, 12, 8),
       y = 1.5,
       n = f.pts.length;
-    const pts = f.pts.map((q) => new T.Vector3(q[0] - CX, y, q[1] - CY));
+    const pts = f.pts.map((q: Pt) => new T.Vector3(q[0] - CX, y, q[1] - CY));
     const line = new T.Line(
       new T.BufferGeometry().setFromPoints([...pts, pts[0]]),
       (this._mats.__hline ||= new T.LineBasicMaterial({ color: 0x6fd39a, depthTest: false, transparent: true })),
     );
     line.renderOrder = 13;
     this._roomHG.add(line);
-    f.pts.forEach((q, k) => {
+    f.pts.forEach((q: Pt, k: number) => {
       const act = this._vsel?.key === key && this._vsel.k === k;
       const v = new T.Mesh(geo, act ? mat("act", 0xf2c76b) : mat("vert", 0x6fd39a));
       v.position.copy(pts[k]);
@@ -554,16 +570,16 @@ export class EditorPlan {
     this._scaleHandles();
   }
 
-  _toReal(units, vertical) {
+  _toReal(this: Home3DCard, units: number, vertical?: boolean) {
     return R1((units * this._modelScale()[vertical ? 1 : 0]) / (this._imperial() ? 2.54 : 1));
   }
 
-  _fromReal(v, vertical) {
+  _fromReal(this: Home3DCard, v: number, vertical?: boolean) {
     return (v * (this._imperial() ? 2.54 : 1)) / this._modelScale()[vertical ? 1 : 0];
   }
 
   /* ----- blueprint ----- */
-  _pickBlueprintFile(replaceKey) {
+  _pickBlueprintFile(this: Home3DCard, replaceKey?: string) {
     const inp = document.createElement("input");
     inp.type = "file";
     inp.accept = "image/*";
@@ -572,10 +588,10 @@ export class EditorPlan {
   }
 
   /* upload into Home Assistant's image store (served at /api/image/serve/…); if that's unavailable, keep a small copy inline */
-  async _blueprintSrc(file) {
+  async _blueprintSrc(this: Home3DCard, file: File) {
     const bmp = await createImageBitmap(file),
       aspect = bmp.width / bmp.height;
-    const draw = (max) => {
+    const draw = (max: number) => {
       const k = Math.min(1, max / Math.max(bmp.width, bmp.height)),
         cv = document.createElement("canvas");
       cv.width = Math.round(bmp.width * k);
@@ -587,7 +603,7 @@ export class EditorPlan {
       return cv;
     };
     try {
-      const blob = await new Promise((r) => draw(2400).toBlob(r, "image/jpeg", 0.85));
+      const blob = await new Promise<Blob | null>((r) => draw(2400).toBlob(r, "image/jpeg", 0.85));
       const fd = new FormData();
       fd.append("file", blob, "blueprint.jpg");
       const res = await this._hass.fetchWithAuth("/api/image/upload", { method: "POST", body: fd });
@@ -595,18 +611,18 @@ export class EditorPlan {
         const j = await res.json();
         if (j.id) return { src: `/api/image/serve/${j.id}/original`, aspect };
       }
-    } catch (e) {
+    } catch (e: any) {
       /* fall through to inline */
     }
     return { src: draw(1400).toDataURL("image/jpeg", 0.7), aspect, inline: true };
   }
 
-  async _addBlueprint(file, replaceKey) {
+  async _addBlueprint(this: Home3DCard, file: File, replaceKey?: string) {
     this._toast("Adding blueprint…", 8000);
     let r;
     try {
       r = await this._blueprintSrc(file);
-    } catch (e) {
+    } catch (e: any) {
       return this._toast("Couldn't read that image: " + (e.message || e), 5000);
     }
     if (!this._edit) return;
@@ -635,7 +651,7 @@ export class EditorPlan {
     );
   }
 
-  _setBlueprintUrl(key, url) {
+  _setBlueprintUrl(this: Home3DCard, key: string, url: string) {
     url = url.trim();
     if (!url) return;
     const img = new Image();
@@ -652,7 +668,7 @@ export class EditorPlan {
     img.src = url;
   }
 
-  _applyScale(realCm) {
+  _applyScale(this: Home3DCard, realCm: number) {
     const m = this._measure;
     if (!m || m.pts.length < 2 || !(realCm > 0)) return;
     const [a, b] = m.pts,
@@ -675,25 +691,25 @@ export class EditorPlan {
   }
 
   /* ----- floor plan inspector ----- */
-  _renderPlanInspector(box) {
+  _renderPlanInspector(this: Home3DCard, box: HTMLElement) {
     const e = this._edit,
       n = e.sel.size,
       sc = this._work.scene || {},
       U = this._imperial() ? "in" : "cm";
     const tw = `<span class="tw">${ic("chevron-down")}</span>`;
-    const num = (lab, name, val, step = 1) =>
+    const num = (lab: string, name: string, val: unknown, step = 1) =>
       `<label>${lab}<input data-p="${name}" type="number" step="${step}" value="${esc(val)}"></label>`;
-    const btn = (name, text) => `<button data-pb="${name}">${text}</button>`;
+    const btn = (name: string, text: string) => `<button data-pb="${name}">${text}</button>`;
     const bind = () => {
       box
-        .querySelectorAll("input[data-p], select[data-p]")
+        .querySelectorAll<HTMLInputElement>("input[data-p], select[data-p]")
         .forEach((inp) =>
           inp.addEventListener("change", () =>
             this._planField(e.primary, inp.dataset.p, inp.type === "checkbox" ? inp.checked : inp.value),
           ),
         );
       box
-        .querySelectorAll("button[data-pb]")
+        .querySelectorAll<HTMLElement>("button[data-pb]")
         .forEach((b) => b.addEventListener("click", () => this._planField(e.primary, b.dataset.pb)));
       this._bindInspToggle(box);
     };
@@ -707,12 +723,12 @@ export class EditorPlan {
           <div class="grid" style="grid-template-columns:2fr 1fr"><label>Length<input data-m="len" type="number" step="0.1" placeholder="${imp ? "12.5" : "350"}"></label>
           <label>Unit<select data-m="unit">${(imp ? ["ft", "in", "m", "cm"] : ["cm", "m", "ft", "in"]).map((u) => `<option>${u}</option>`).join("")}</select></label></div>
           <div class="sub">${imp ? "12′ 6″ is 12.5 ft." : ""}</div><div class="row"><button data-m="apply" class="primary">Apply</button>${btn("mredo", "Measure again")}${btn("mcancel", "Cancel")}</div>`;
-      box.querySelector('[data-m="apply"]')?.addEventListener("click", () => {
-        const v = Number(box.querySelector('[data-m="len"]').value),
-          u = box.querySelector('[data-m="unit"]').value;
+      box.querySelector<HTMLElement>('[data-m="apply"]')?.addEventListener("click", () => {
+        const v = Number(box.querySelector<HTMLInputElement>('[data-m="len"]').value),
+          u = box.querySelector<HTMLSelectElement>('[data-m="unit"]').value;
         this._applyScale(v * { cm: 1, m: 100, in: 2.54, ft: 30.48 }[u]);
       });
-      box.querySelector('[data-m="len"]')?.focus();
+      box.querySelector<HTMLElement>('[data-m="len"]')?.focus();
       bind();
       return;
     }
@@ -743,7 +759,7 @@ export class EditorPlan {
       it = this._get(key);
     let body = "",
       sub = n > 1 ? `${n} items selected — drag moves all` : "";
-    const texSel = (v, use) =>
+    const texSel = (v: string | undefined, use: string) =>
       `<label>Texture<select data-p="texture">${[
         ["none", "Plain"],
         ...Object.entries(SURFACES)
@@ -753,7 +769,7 @@ export class EditorPlan {
         .map(([t, l]) => `<option value="${t}"${(SURFACES[v] ? v : "none") === t ? " selected" : ""}>${l}</option>`)
         .join("")}</select></label>`;
     if (k === "w") {
-      const [ux, uy, L] = segDir(it),
+      const [ux, uy, L] = segDir(it as WallSeg),
         ang = R1(((((Math.atan2(uy, ux) * 180) / Math.PI) % 360) + 360) % 360);
       sub ||= `${this._fmtLen(L)} long`;
       body = `<div class="grid">${num(`Length (${U})`, "len", this._toReal(L))}${num(`Thick (${U})`, "t", this._toReal(it.t ?? sc.wall_thickness ?? 4))}${num(`Height (${U})`, "h", this._toReal(it.h ?? sc.wall_height ?? 46, true))}${num("Angle °", "ang", ang, 15)}
@@ -772,7 +788,7 @@ export class EditorPlan {
         <div class="row">${btn("fit", ic("arrow-expand-horizontal") + "Fit to wall")}${btn("rotl", ic("rotate-left") + "90°")}${btn("rotr", ic("rotate-right") + "90°")}</div>`;
       if (it.kind === "door") {
         const st = DOOR_STYLES[it.style] ? it.style : "none",
-          sel = (p, opts, v) =>
+          sel = (p: string, opts: [string, string][], v: string) =>
             `<select data-p="${p}">${opts.map(([o, l]) => `<option value="${o}"${v === o ? " selected" : ""}>${l}</option>`).join("")}</select>`;
         const ents = Object.keys(this._hass?.states || {})
           .filter((id) => /^(binary_sensor|cover|input_boolean)\./.test(id))
@@ -785,12 +801,12 @@ export class EditorPlan {
         if (st !== "none") {
           body += `<label>Colour<input data-p="color" type="color" value="${esc(it.color || DOOR_STYLES[st][1])}"></label>`;
           // hinge: which jamb a swinging door hangs from, or which way a sliding one moves (the sliding pane starts on the other side)
-          const hinge = {
+          const hinge = (<Record<string, string[]>>{
             panel: ["Hinge", "Left", "Right"],
             glass: ["Hinge", "Left", "Right"],
             barn: ["Slides", "Left", "Right"],
             sliding: ["Slides", "Right", "Left"],
-          }[st];
+          })[st];
           if (hinge)
             body += `<label>${hinge[0]}${sel(
               "hinge",
@@ -801,7 +817,7 @@ export class EditorPlan {
               it.hinge || "left",
             )}</label>`;
           if (st !== "garage")
-            body += `<label>${{ barn: "Hangs on", sliding: "Front pane" }[st] || "Swings"}${sel(
+            body += `<label>${(<Record<string, string>>{ barn: "Hangs on", sliding: "Front pane" })[st] || "Swings"}${sel(
               "flip",
               [
                 ["", "This side"],
@@ -811,12 +827,12 @@ export class EditorPlan {
             )}</label>`;
           body += `</div><label style="margin-top:8px">Sensor (open / shut)<input data-p="entity" type="text" list="doorents" value="${esc(it.entity || "")}" placeholder="binary_sensor.front_door"></label>
             <datalist id="doorents">${ents.map((id) => `<option value="${id}">`).join("")}</datalist>
-            ${it.entity ? `<div class="sub" style="margin-top:4px">${esc(this._hass?.states[it.entity]?.attributes?.friendly_name || "Unknown entity")} · now ${this._doorTarget(it) ? "open" : "shut"}</div>` : `<label class="chk"><input data-p="open" type="checkbox"${it.open ? " checked" : ""}> Show it open</label>`}`;
+            ${it.entity ? `<div class="sub" style="margin-top:4px">${esc(this._hass?.states[it.entity]?.attributes?.friendly_name || "Unknown entity")} · now ${this._doorTarget(it as Opening) ? "open" : "shut"}</div>` : `<label class="chk"><input data-p="open" type="checkbox"${it.open ? " checked" : ""}> Show it open</label>`}`;
         } else body += `</div>`;
       }
     } else if (k === "r") {
-      const xs = it.pts.map((q) => q[0]),
-        ys = it.pts.map((q) => q[1]);
+      const xs = it.pts.map((q: Pt) => q[0]),
+        ys = it.pts.map((q: Pt) => q[1]);
       sub ||= `${this._fmtArea(polyArea(it.pts))} · ${this._fmtLen(Math.max(...xs) - Math.min(...xs))} × ${this._fmtLen(Math.max(...ys) - Math.min(...ys))}`;
       const vs = this._vsel?.key === key;
       body = `<div class="grid" style="grid-template-columns:2fr 1fr"><label>Name<input data-p="name" type="text" value="${esc(it.name || "")}"></label><label>Colour<input data-p="fill" type="color" value="${esc(it.fill || "#b3a58f")}"></label></div>
@@ -837,12 +853,12 @@ export class EditorPlan {
     box.innerHTML = `<h4>${esc(this._label(key))}${tw}</h4><div class="sub">${esc(sub)}</div>${body}
       <details style="margin-top:8px"><summary style="cursor:pointer;opacity:.8">Advanced (JSON)</summary>
         <textarea data-json>${esc(JSON.stringify(k === "p" && String(it.src).startsWith("data:") ? { ...it, src: "(inline image)" } : it, null, 1))}</textarea><div class="row"><button data-b="json">Apply JSON</button></div></details>`;
-    box.querySelector('[data-b="json"]').addEventListener("click", () => {
+    box.querySelector<HTMLElement>('[data-b="json"]').addEventListener("click", () => {
       if (k === "p" && String(it.src).startsWith("data:")) {
         try {
-          const v = JSON.parse(box.querySelector("textarea[data-json]").value);
+          const v = JSON.parse(box.querySelector<HTMLTextAreaElement>("textarea[data-json]").value);
           if (v.src === "(inline image)") v.src = it.src;
-          box.querySelector("textarea[data-json]").value = JSON.stringify(v);
+          box.querySelector<HTMLTextAreaElement>("textarea[data-json]").value = JSON.stringify(v);
         } catch (er) {
           /* reported below */
         }
@@ -852,7 +868,7 @@ export class EditorPlan {
     bind();
   }
 
-  _planField(key, name, raw) {
+  _planField(this: Home3DCard, key: string, name: string, raw?: any) {
     if (name === "bpadd") return this._pickBlueprintFile();
     if (name === "bpsel") return this._select(["p:0"]);
     if (name === "bpreplace") return this._pickBlueprintFile(key);
@@ -891,7 +907,7 @@ export class EditorPlan {
         return keys;
       }
       if (k === "w") {
-        const [ux, uy, L] = segDir(it),
+        const [ux, uy, L] = segDir(it as WallSeg),
           mid = [(it.a[0] + it.b[0]) / 2, (it.a[1] + it.b[1]) / 2];
         if (name === "len") {
           const nl = Math.max(1, this._fromReal(v));
@@ -956,7 +972,7 @@ export class EditorPlan {
         else if (name === "rot") {
           it.rot = R1(((v % 360) + 360) % 360);
           if (!it.rot) delete it.rot;
-        } else if (name === "fit") this._fitOpening(it);
+        } else if (name === "fit") this._fitOpening(it as SceneItem);
       } else if (k === "r") {
         if (name === "name") {
           const v2 = String(raw).trim().toLowerCase().replace(/\s+/g, "_");

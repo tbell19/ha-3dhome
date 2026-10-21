@@ -1,5 +1,8 @@
 /* The inspector for the selected item: its fields, light tuning, the sun, position/size/rotation and fixtures.
  */
+import type { BoxEntry } from "../types";
+import type { GenericItem } from "../core/items";
+import type { Home3DCard, LightGroup } from "../card/card";
 import {
   CX,
   CY,
@@ -22,10 +25,13 @@ import {
   hm,
 } from "./shared.js";
 
+/** One light setting slider: [field, label, min, max, step, default, format for display, description]. */
+type TuneRow = [string, string, number, number, number, number, (v: number) => string, string];
+
 export class EditorInspector {
   /* ----- inspector ----- */
-  _renderInspector() {
-    const box = this._ed.querySelector(".insp");
+  _renderInspector(this: Home3DCard) {
+    const box = this._ed.querySelector<HTMLElement>(".insp");
     if (!box) return;
     if (this._plan) return this._renderPlanInspector(box);
     const e = this._edit,
@@ -43,7 +49,7 @@ export class EditorInspector {
     const key = e.primary,
       k = key[0],
       it = this._get(key);
-    const f = (lab, name, val, type = "number", step = 1) =>
+    const f = (lab: string, name: string, val: unknown, type = "number", step = 1) =>
       `<label>${lab}<input data-f="${name}" type="${type}" step="${step}" value="${esc(val ?? "")}"></label>`;
     let fields = "";
     const xf = this._transformHTML(key, k, it, n);
@@ -69,7 +75,7 @@ export class EditorInspector {
       }
     }
     if (k === "b") {
-      const b = bArr(it),
+      const b = bArr(it as BoxEntry),
         pal = this._work.scene?.palette || {};
       const cur = typeof b[5] === "string" ? (pal[b[5]] || ["#888888"])[0] : b[5][0];
       extra += `<div class="grid"><label>Colour<input data-f="color" type="color" value="${esc(cur)}"></label></div>`;
@@ -112,29 +118,33 @@ export class EditorInspector {
       <details style="margin-top:8px"><summary style="cursor:pointer;opacity:.8">Advanced (JSON)</summary>
         <textarea data-json>${esc(JSON.stringify(it, null, 1))}</textarea><div class="row"><button data-b="json">Apply JSON</button></div></details>`;
     box
-      .querySelectorAll("input[data-f]")
+      .querySelectorAll<HTMLInputElement>("input[data-f]")
       .forEach((inp) => inp.addEventListener("change", () => this._field(key, inp.dataset.f, inp.value)));
     box
-      .querySelectorAll("button[data-b]")
+      .querySelectorAll<HTMLElement>("button[data-b]")
       .forEach((b) => b.addEventListener("click", () => this._field(key, b.dataset.b)));
-    box.querySelector("[data-lock]")?.addEventListener("click", () => {
+    box.querySelector<HTMLElement>("[data-lock]")?.addEventListener("click", () => {
       this._edit.lock = !this._edit.lock;
       this._renderInspector();
     });
-    box.querySelector("select[data-as]")?.addEventListener("change", (ev) => this._convertEntity(key, ev.target.value));
-    box.querySelector("select[data-fx]")?.addEventListener("change", (ev) => this._setFixture(key, ev.target.value));
+    box
+      .querySelector<HTMLElement>("select[data-as]")
+      ?.addEventListener("change", (ev) => this._convertEntity(key, (ev.target as HTMLSelectElement).value));
+    box
+      .querySelector<HTMLElement>("select[data-fx]")
+      ?.addEventListener("change", (ev) => this._setFixture(key, (ev.target as HTMLSelectElement).value));
     if (k === "l") this._bindLightTune(box, key);
     this._bindInspToggle(box);
   }
 
   /* ----- per-light tuning: what this light looks like at the bulb's full brightness and colour. The live state from
    * Home Assistant still scales it; these set the top end (see _update / _tuneLight in the core). ----- */
-  _lightTuneRows(it) {
+  _lightTuneRows(this: Home3DCard, it: GenericItem): TuneRow[] {
     const aimed = it.gx != null && Math.hypot(it.gx - it.x, it.gy - it.y) > 12,
       spot = aimed || (!aimed && it.fixture === "can" && !it.points),
       glow = !it.points && it.kind !== "niche";
-    const pct = (v) => Math.round(v * 100) + "%";
-    return [
+    const pct = (v: number) => Math.round(v * 100) + "%";
+    const rows: TuneRow[] = [
       ["intensity", "Brightness", 0, 4, 0.05, 1, pct, "At the bulb's full brightness"],
       ["saturation", "Colour", 0, 2, 0.05, 1, pct, "How strongly the bulb's colour shows"],
       ["r", "Reach", 5, 200, 1, 40, (v) => this._fmtLen(v * (spot ? 3.2 : 2.6)), "How far the light travels"],
@@ -148,17 +158,17 @@ export class EditorInspector {
         (v) => v.toFixed(1),
         "Low lights evenly to the edge, high fades fast",
       ],
-      ...(spot
-        ? [
-            ["angle", "Beam width", 10, 85, 1, aimed ? 43 : 52, (v) => Math.round(v) + "°", ""],
-            ["soft", "Beam edge", 0, 1, 0.05, 0.8, (v) => (v < 0.15 ? "Sharp" : pct(v) + " soft"), ""],
-          ]
-        : []),
-      ...(glow ? [["halo", "Glow size", 0, 30, 1, 9, (v) => String(v), "The halo drawn around the bulb"]] : []),
     ];
+    if (spot)
+      rows.push(
+        ["angle", "Beam width", 10, 85, 1, aimed ? 43 : 52, (v) => Math.round(v) + "°", ""],
+        ["soft", "Beam edge", 0, 1, 0.05, 0.8, (v) => (v < 0.15 ? "Sharp" : pct(v) + " soft"), ""],
+      );
+    if (glow) rows.push(["halo", "Glow size", 0, 30, 1, 9, (v) => String(v), "The halo drawn around the bulb"]);
+    return rows;
   }
 
-  _lightTuneHTML(key, it) {
+  _lightTuneHTML(this: Home3DCard, key: string, it: GenericItem) {
     const rows = this._lightTuneRows(it),
       set = rows.some(([n]) => it[n] != null);
     return `<details class="ltune"${this._ltuneOpen ? " open" : ""}><summary>Light settings</summary>
@@ -180,20 +190,20 @@ export class EditorInspector {
       ${set ? `<div class="row"><button data-lreset>Reset light settings</button></div>` : ""}</details>`;
   }
 
-  _bindLightTune(box, key) {
-    const det = box.querySelector(".ltune");
+  _bindLightTune(this: Home3DCard, box: HTMLElement, key: string) {
+    const det = box.querySelector<HTMLDetailsElement>(".ltune");
     if (!det) return;
     det.addEventListener("toggle", () => {
       this._ltuneOpen = det.open;
     });
     const rows = Object.fromEntries(this._lightTuneRows(this._get(key)).map((r) => [r[0], r]));
     // co-located bulbs (a two-bulb fan) render as one light, so a setting applies to all of them
-    const members = () => {
+    const members = (): [LightGroup | null, GenericItem[]] => {
       const rec = this._lightGroups?.find((g) => g.keys.includes(key));
       return rec ? [rec, rec.keys.map((kk) => this._get(kk))] : [null, [this._get(key)]];
     };
     det.addEventListener("input", (ev) => {
-      const n = ev.target.dataset.lt;
+      const n = (ev.target as HTMLElement).dataset.lt;
       if (!n) return;
       if (!this._ltDrag) {
         this._edit.undo.push(JSON.stringify(this._work));
@@ -201,13 +211,13 @@ export class EditorInspector {
         this._edit.dirty = true;
         this._ltDrag = true;
       }
-      const v = +ev.target.value,
+      const v = +(ev.target as HTMLInputElement).value,
         [, , , , , d, fmt] = rows[n],
         [rec, its] = members();
       for (const it of its)
         if (v === d) delete it[n];
         else it[n] = v;
-      det.querySelector(`[data-lo="${n}"]`).textContent = fmt(v);
+      det.querySelector<HTMLElement>(`[data-lo="${n}"]`).textContent = fmt(v);
       if (rec) {
         rec.L = this._get(rec.keys[0]);
         this._tuneLight(rec);
@@ -221,7 +231,7 @@ export class EditorInspector {
         this._commit();
       }
     });
-    det.querySelector("[data-lreset]")?.addEventListener("click", () =>
+    det.querySelector<HTMLElement>("[data-lreset]")?.addEventListener("click", () =>
       this._mutate(() => {
         for (const it of members()[1]) for (const n of Object.keys(rows)) delete it[n];
         return [...this._edit.sel];
@@ -230,7 +240,7 @@ export class EditorInspector {
   }
 
   /* ----- north + sun preview (no selection) ----- */
-  _sunHTML(preview) {
+  _sunHTML(this: Home3DCard, preview?: boolean) {
     const north = Number(this._work.scene?.north) || 0,
       c = this._hass?.config || {},
       hr = this._sunPreview;
@@ -246,8 +256,8 @@ export class EditorInspector {
       }</div>`;
   }
 
-  _bindSun(box) {
-    const setNorth = (v) => {
+  _bindSun(this: Home3DCard, box: HTMLElement) {
+    const setNorth = (v: number) => {
       if (!isFinite(v)) return;
       v = R1(((v % 360) + 360) % 360);
       this._mutate(() => {
@@ -257,25 +267,27 @@ export class EditorInspector {
         return [...this._edit.sel];
       });
     };
-    box.querySelector('[data-sun="north"]')?.addEventListener("change", (ev) => setNorth(Number(ev.target.value)));
     box
-      .querySelector('[data-sun="nl"]')
+      .querySelector<HTMLElement>('[data-sun="north"]')
+      ?.addEventListener("change", (ev) => setNorth(Number((ev.target as HTMLInputElement).value)));
+    box
+      .querySelector<HTMLElement>('[data-sun="nl"]')
       ?.addEventListener("click", () => setNorth((Number(this._work.scene?.north) || 0) - 15));
     box
-      .querySelector('[data-sun="nr"]')
+      .querySelector<HTMLElement>('[data-sun="nr"]')
       ?.addEventListener("click", () => setNorth((Number(this._work.scene?.north) || 0) + 15));
-    const hour = box.querySelector('[data-sun="hour"]');
+    const hour = box.querySelector<HTMLInputElement>('[data-sun="hour"]');
     hour?.addEventListener("input", () => {
       this._sunPreview = Number(hour.value);
       const v = this._sunPreview;
-      box.querySelector('[data-sun="t"]').textContent = hm(v);
+      box.querySelector<HTMLElement>('[data-sun="t"]').textContent = hm(v);
       this._update();
       this._requestRender();
     });
     hour?.addEventListener("change", () => {
-      if (!box.querySelector('[data-sun="live"]')) this._renderInspector();
+      if (!box.querySelector<HTMLElement>('[data-sun="live"]')) this._renderInspector();
     });
-    box.querySelector('[data-sun="live"]')?.addEventListener("click", () => {
+    box.querySelector<HTMLElement>('[data-sun="live"]')?.addEventListener("click", () => {
       this._sunPreview = null;
       this._update();
       this._requestRender();
@@ -283,17 +295,16 @@ export class EditorInspector {
     });
   }
 
-  _bindInspToggle(box) {
+  _bindInspToggle(this: Home3DCard, box: HTMLElement) {
     box.classList.toggle("min", !!this._inspMin);
-    box.querySelector("h4").onclick = () => {
+    box.querySelector<HTMLElement>("h4").onclick = () => {
       this._inspMin = !this._inspMin;
       box.classList.toggle("min", this._inspMin);
     };
   }
 
-  _field(key, name, raw) {
-    const k = key[0],
-      num = Number(raw);
+  _field(this: Home3DCard, key: string, name: string, raw?: any) {
+    const num = Number(raw);
     if (name === "level") {
       // take out any tilt, keep the turn
       const sel = [...this._edit.sel];
@@ -318,8 +329,8 @@ export class EditorInspector {
     if (name === "json") {
       let v;
       try {
-        v = JSON.parse(this._ed.querySelector("textarea[data-json]").value);
-      } catch (e) {
+        v = JSON.parse(this._ed.querySelector<HTMLTextAreaElement>("textarea[data-json]").value);
+      } catch (e: any) {
         return this._toast("Invalid JSON: " + e.message);
       }
       return this._mutate(() => {
@@ -349,7 +360,7 @@ export class EditorInspector {
       else if (name === "straighten" && it.points?.length > 2) it.points = [it.points[0], it.points.at(-1)];
       else if (name === "entity") it.entity = raw.trim();
       else if (name === "color") {
-        const b = bArr(it);
+        const b = bArr(it as BoxEntry);
         const T = this.T,
           col = new T.Color(raw);
         b[5] = [
@@ -371,7 +382,7 @@ export class EditorInspector {
 
   /* ----- transform fields: position, rotation and size of the selection. Inputs are in cm or inches (model_scale, the
    * same scale Set scale fits the blueprint to); the plan stores plan units. ----- */
-  _selPos() {
+  _selPos(this: Home3DCard) {
     const keys = [...this._edit.sel];
     if (keys.length === 1) {
       const k = keys[0][0],
@@ -383,7 +394,7 @@ export class EditorInspector {
   }
 
   /* which way an item faces: `rot` for furniture, the run of a string light, or an aimed light's beam; null if it has no direction */
-  _itemAngle(k, it) {
+  _itemAngle(this: Home3DCard, k: string, it: GenericItem) {
     if (ROTATABLE.has(k)) return Array.isArray(it) ? 0 : it.rot || 0;
     const p =
       it.points?.length > 1
@@ -398,11 +409,11 @@ export class EditorInspector {
   }
 
   /* [width, depth, height] of one item along its own axes, in plan units (0 where that axis can't change) */
-  _dims(key) {
+  _dims(this: Home3DCard, key: string) {
     const k = key[0],
       it = this._get(key);
     if (k === "b") {
-      const b = bArr(it);
+      const b = bArr(it as BoxEntry);
       return [b[1] - b[0], b[3] - b[2], b[4]];
     }
     if (it.type === "model") return [it.w, it.d, it.h];
@@ -429,7 +440,7 @@ export class EditorInspector {
   }
 
   /* the selection's overall size, lined up with the plan */
-  _selDims() {
+  _selDims(this: Home3DCard) {
     const T = this.T,
       box = new T.Box3();
     for (const key of this._edit.sel) {
@@ -450,13 +461,13 @@ export class EditorInspector {
 
   /* The Transform rows, laid out like Unity / Godot: X across, Y up, Z front to back (the gizmo's red, green and blue).
    * Position and Size are in cm or inches; Rotation in degrees (Y turns, X and Z tilt); Scale in % (applied, then back to 100). */
-  _transformHTML(key, k, it, n) {
+  _transformHTML(this: Home3DCard, key: string, k: string, it: GenericItem, n: number) {
     const U = this._imperial() ? "in" : "cm",
       pos = this._selPos(),
       rotatable = ROTATABLE.has(k);
-    const inp = (ax, name, val, step = 1, off) =>
+    const inp = (ax: string, name: string, val: unknown, step = 1, off?: boolean) =>
       `<label class="ax-${ax}"><i>${ax.toUpperCase()}</i><input data-f="${name}" type="number" step="${step}" value="${esc(val ?? "")}"${off ? " disabled" : ""}></label>`;
-    const row = (lab, cells) => `<div class="xf"><b>${lab}</b>${cells}</div>`;
+    const row = (lab: string, cells: string) => `<div class="xf"><b>${lab}</b>${cells}</div>`;
     let h = row(
       `Position <span style="opacity:.6;font-weight:400">${U}</span>`,
       inp("x", "px", this._toReal(pos[0])) +
@@ -491,7 +502,7 @@ export class EditorInspector {
     return h;
   }
 
-  _transformField(name, v) {
+  _transformField(this: Home3DCard, name: string, v: number) {
     const T = this.T,
       sel = [...this._edit.sel],
       key = this._edit.primary,
@@ -534,7 +545,10 @@ export class EditorInspector {
           r = this._fromReal(v, i === 2) / cur;
         }
         if (r > 0 && Math.abs(r - 1) > 1e-4)
-          this._scaleSel(sel, ...(uni ? [r, r, r] : [1, 1, 1].map((x, j) => (j === i ? r : x))));
+          this._scaleSel(
+            sel,
+            ...((uni ? [r, r, r] : [1, 1, 1].map((x, j) => (j === i ? r : x))) as [number, number, number]),
+          );
       }
       return sel;
     });
@@ -542,7 +556,7 @@ export class EditorInspector {
 
   /* resize the selection about its centre. One item stretches along its own axes; several scale evenly together, so the
    * gaps between them grow too and anything stacked (a lamp on a table) stays on top. */
-  _scaleSel(keys, sx, sy, sz) {
+  _scaleSel(this: Home3DCard, keys: string[], sx: number, sy: number, sz: number) {
     const [px, py] = this._pivotC,
       multi = keys.length > 1;
     const z0 = multi ? Math.min(...keys.map((key) => itemBase(key[0], this._get(key)))) : undefined;
@@ -560,7 +574,7 @@ export class EditorInspector {
 
   /* pick a fixture model for a light. String lights run along `points`; everything else sits at x/y. Heights move to a
    * sensible spot for the new fixture (ceiling, table, floor lamp), which the Height field can then fine-tune. */
-  _setFixture(key, fx) {
+  _setFixture(this: Home3DCard, key: string, fx: string) {
     this._mutate(() => {
       const L = this._get(key),
         H = this._work.scene?.wall_height ?? 46,

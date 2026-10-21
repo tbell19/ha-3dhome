@@ -1,13 +1,16 @@
 /* Entering and leaving edit mode, item lookup, the editor toolbar and keyboard shortcuts.
  */
-import { KINDS, TC_URL, ic, jclone, roomTitle, segDir } from "./shared.js";
+import type { Scene, WallSeg } from "../types";
+import type { GenericItem } from "../core/items";
+import type { EditState, Home3DCard } from "../card/card";
+import { KINDS, TC_URL, ic, jclone, roomTitle, segDir } from "./shared";
 
 export class EditorSession {
-  _list(k, create) {
+  _list(this: Home3DCard, k: string, create?: boolean): GenericItem[] {
     const w = this._work;
     if ("bovwnpr".includes(k)) {
       w.scene ||= {};
-      const n = {
+      const n = (<Record<string, keyof Scene>>{
         b: "boxes",
         o: "objects",
         v: "overlays",
@@ -15,49 +18,51 @@ export class EditorSession {
         n: "openings",
         p: "blueprints",
         r: "floors",
-      }[k];
-      if (create) w.scene[n] ||= [];
-      return w.scene[n] || [];
+      })[k];
+      const lists = w.scene as Record<string, GenericItem[]>;
+      if (create) lists[n] ||= [];
+      return lists[n] || [];
     }
-    const n = { l: "lights", h: "hotspots", c: "chips", d: "doors" }[k];
-    if (create) w[n] ||= [];
-    return w[n] || [];
+    const n = (<Record<string, string>>{ l: "lights", h: "hotspots", c: "chips", d: "doors" })[k];
+    const lists = w as Record<string, GenericItem[]>;
+    if (create) lists[n] ||= [];
+    return lists[n] || [];
   }
 
-  _get(key) {
+  _get(this: Home3DCard, key: string): GenericItem {
     const [k, i] = key.split(":");
     return this._list(k)[+i];
   }
 
-  _setBoxObj(key) {
+  _setBoxObj(this: Home3DCard, key: string): GenericItem {
     const [k, i] = key.split(":");
     const l = this._list(k);
     if (k === "b" && Array.isArray(l[+i])) l[+i] = { b: l[+i] };
     return l[+i];
   }
 
-  _allKeys() {
-    const out = [];
+  _allKeys(this: Home3DCard) {
+    const out: string[] = [];
     for (const k of "bovlhcdwnpr") this._list(k).forEach((_, i) => out.push(k + ":" + i));
     return out;
   }
 
-  _label(key) {
+  _label(this: Home3DCard, key: string) {
     const [k] = key.split(":"),
       it = this._get(key);
     if (!it) return key;
     if (k === "b") return "Box" + (it.group ? ` · ${it.group}` : "");
     if (k === "o" || k === "v")
       return (it.type === "model" ? it.name || "Model" : it.type) + (it.group ? ` · ${it.group}` : "");
-    if (k === "w") return `Wall · ${this._fmtLen(segDir(it)[2])}`;
-    if (k === "n") return { door: "Door", window: "Window" }[it.kind] || "Cut-out";
+    if (k === "w") return `Wall · ${this._fmtLen(segDir(it as WallSeg)[2])}`;
+    if (k === "n") return (<Record<string, string>>{ door: "Door", window: "Window" })[it.kind] || "Cut-out";
     if (k === "p") return "Blueprint";
     if (k === "r") return `Room · ${roomTitle(it.name || "unnamed")}`;
     const ent = it.entity ? this._hass?.states[it.entity]?.attributes?.friendly_name || it.entity : "";
     return `${KINDS[k][0].toUpperCase() + KINDS[k].slice(1)}${ent ? " · " + ent : it.label ? " · " + it.label : ""}`;
   }
 
-  async _enterEdit() {
+  async _enterEdit(this: Home3DCard) {
     if (this._edit) return;
     const { TransformControls } = await this._mod(TC_URL);
     this._work = jclone({
@@ -93,7 +98,7 @@ export class EditorSession {
     const tc = (this._tc = new TransformControls(this._cam, this._renderer.domElement));
     tc.setSize(0.9);
     tc.addEventListener("change", () => this._requestRender());
-    tc.addEventListener("dragging-changed", (e) => {
+    tc.addEventListener("dragging-changed", (e: { value?: boolean }) => {
       this._controls.enabled = !e.value;
       this._tcDragging = e.value;
       if (e.value) this._tcUsed = true;
@@ -110,7 +115,7 @@ export class EditorSession {
     this._select([]);
   }
 
-  _exitEdit(discard) {
+  _exitEdit(this: Home3DCard, discard?: boolean) {
     if (!this._edit) return;
     if (discard && this._edit.dirty && !confirm("Discard your unsaved layout changes?")) return;
     window.removeEventListener("keydown", this._keys);
@@ -141,35 +146,35 @@ export class EditorSession {
     this._showRoomCards(this._rcRoom || "home");
   }
 
-  _applySnap() {
+  _applySnap(this: Home3DCard) {
     const s = this._edit.snap;
     this._tc.setTranslationSnap(s ? 2 : null);
     this._tc.setRotationSnap(s ? Math.PI / 12 : null);
     this._tc.setScaleSnap(s ? 0.05 : null);
   }
 
-  _toast(msg, ms = 2600) {
-    let t = this._ed.querySelector(".toast");
+  _toast(this: Home3DCard, msg: string, ms = 2600) {
+    let t = this._ed.querySelector<HTMLElement>(".toast");
     if (!t) {
       t = document.createElement("div");
       t.className = "toast";
       this._ed.append(t);
     }
     t.textContent = msg;
-    t.style.opacity = 1;
+    t.style.opacity = "1";
     clearTimeout(this._toastT);
-    this._toastT = setTimeout(() => (t.style.opacity = 0), ms);
+    this._toastT = setTimeout(() => (t.style.opacity = "0"), ms);
   }
 
   /* The toolbar: a top row (mode switch, undo/redo, Cancel, Save) and a row of tools for what is selected. Item tools
    * (`.selo`) show only with a selection and scene tools (`.idle`) only without one; the rest sit in the Draw and More
    * menus. On a phone the rows stack and only `.ico` buttons drop their label. */
-  _renderEditorUI() {
+  _renderEditorUI(this: Home3DCard) {
     const ed = this._ed,
       plan = !!this._plan;
-    const b = (a, icon, label, title, cls = "") =>
+    const b = (a: string, icon: string, label: string, title: string, cls = "") =>
       `<button data-a="${a}"${cls ? ` class="${cls}"` : ""}${title ? ` title="${title}"` : ""}>${ic(icon)}<span class="lbl">${label}</span></button>`;
-    const menu = (m, icon, label, title, cls = "") =>
+    const menu = (m: string, icon: string, label: string, title: string, cls = "") =>
       `<button data-m="${m}"${cls ? ` class="${cls}"` : ""} title="${title}">${ic(icon)}<span class="lbl">${label}</span>${ic("menu-down")}</button>`;
     const modes = `<span class="seg modes">${b("m-furn", "sofa-outline", "Furniture", "Edit furniture and devices")}${b("m-plan", "floor-plan", "Floor plan", "Edit walls, doors, windows and the blueprint")}</span>`;
     const acts = `<span class="acts">${b("undo", "undo", "Undo", "Undo (Ctrl+Z)", "ico")}${b("redo", "redo", "Redo", "Redo (Ctrl+Shift+Z)", "ico")}
@@ -197,10 +202,10 @@ export class EditorSession {
     ed.innerHTML = `<div class="tb">
       <div class="bar"><div class="top">${modes}${acts}</div><div class="tools">${tools}</div></div>${pops}</div>
       <div class="insp"></div>`;
-    ed.querySelector(".tb").addEventListener("click", (ev) => {
-      const mb = ev.target.closest("[data-m]");
+    ed.querySelector<HTMLElement>(".tb").addEventListener("click", (ev) => {
+      const mb = (ev.target as HTMLElement).closest<HTMLElement>("[data-m]");
       if (mb) return this._togglePop(mb.dataset.m, mb);
-      const bt = ev.target.closest("[data-a]");
+      const bt = (ev.target as HTMLElement).closest<HTMLElement>("[data-a]");
       if (!bt) return;
       const a = bt.dataset.a;
       this._togglePop(null);
@@ -248,13 +253,15 @@ export class EditorSession {
       else if (a === "cancel") this._exitEdit(true);
       else if (a === "save") this._save();
     });
-    if (!this._wrap._popWired) {
+    const wrap = this._wrap as HTMLElement & { _popWired?: boolean };
+    if (!wrap._popWired) {
       // a press anywhere outside an open menu closes it
-      this._wrap._popWired = true;
-      this._wrap.addEventListener(
+      wrap._popWired = true;
+      wrap.addEventListener(
         "pointerdown",
         (ev) => {
-          if (!ev.composedPath().some((n) => n.classList?.contains("pop") || n.dataset?.m)) this._togglePop?.(null);
+          const path = ev.composedPath() as HTMLElement[];
+          if (!path.some((n) => n.classList?.contains("pop") || n.dataset?.m)) this._togglePop?.(null);
         },
         { capture: true },
       );
@@ -263,30 +270,30 @@ export class EditorSession {
   }
 
   /* Opens the Draw or More menu under its button (or closes it when it's already open); null closes any open menu. */
-  _togglePop(name, btn) {
+  _togglePop(this: Home3DCard, name: string | null, btn?: HTMLElement) {
     const ed = this._ed;
     if (!ed) return;
-    for (const p of ed.querySelectorAll(".pop")) {
+    for (const p of ed.querySelectorAll<HTMLElement>(".pop")) {
       const open = p.dataset.pop === name && p.classList.contains("hide");
       p.classList.toggle("hide", !open);
-      ed.querySelector(`[data-m="${p.dataset.pop}"]`)?.classList.toggle("open", open);
+      ed.querySelector<HTMLElement>(`[data-m="${p.dataset.pop}"]`)?.classList.toggle("open", open);
       if (!open || !btn) continue;
       const wr = this._wrap.getBoundingClientRect(),
         br = btn.getBoundingClientRect(),
-        bar = ed.querySelector(".bar").getBoundingClientRect();
+        bar = ed.querySelector<HTMLElement>(".bar").getBoundingClientRect();
       p.style.top = bar.bottom - wr.top + 6 + "px";
       p.style.left = Math.max(8, Math.min(br.left - wr.left, wr.width - p.offsetWidth - 8)) + "px";
     }
   }
 
-  _syncBar() {
+  _syncBar(this: Home3DCard) {
     const ed = this._ed,
-      bar = ed?.querySelector(".bar");
+      bar = ed?.querySelector<HTMLElement>(".bar");
     if (!bar) return;
     const e = this._edit,
-      q = (a) => ed.querySelector(`.tb [data-a="${a}"]`),
-      on = (a, v) => q(a)?.classList.toggle("on", !!v),
-      dis = (a, v) => {
+      q = (a: string) => ed.querySelector<HTMLButtonElement>(`.tb [data-a="${a}"]`),
+      on = (a: string, v: unknown) => q(a)?.classList.toggle("on", !!v),
+      dis = (a: string, v: unknown) => {
         const b = q(a);
         if (b) b.disabled = !!v;
       };
@@ -305,26 +312,26 @@ export class EditorSession {
         e.space === "local"
           ? `${ic("compass-outline")}<span class="lbl">Own axes</span>`
           : `${ic("earth")}<span class="lbl">Global axes</span>`;
-    const tools = {
+    const tools: Record<string, [string, string]> = {
       wall: ["wall", "Walls"],
       door: ["door", "Door"],
       window: ["window-closed-variant", "Window"],
       room: ["vector-polygon", "Room"],
     };
     for (const t in tools) on("t-" + t, this._tool === t);
-    const dm = ed.querySelector('[data-m="draw"]');
+    const dm = ed.querySelector<HTMLElement>('[data-m="draw"]');
     if (dm) {
       const [icon, label] = tools[this._tool] || ["pencil-ruler", "Draw"];
       dm.classList.toggle("on", !!tools[this._tool]);
       dm.innerHTML = `${ic(icon)}<span class="lbl">${label}</span>${ic("menu-down")}`;
     }
-    for (const b of bar.querySelectorAll(".selo")) b.classList.toggle("hide", !n);
-    for (const b of bar.querySelectorAll(".idle")) b.classList.toggle("hide", !!n);
+    for (const b of bar.querySelectorAll<HTMLElement>(".selo")) b.classList.toggle("hide", !n);
+    for (const b of bar.querySelectorAll<HTMLElement>(".idle")) b.classList.toggle("hide", !!n);
     on("furnvis", e.showFurn);
     on("snap", e.snap);
     this._syncLookPanel();
     this._syncRoomCardsPanel();
-    on("controls", ed.querySelector(".rcp"));
+    on("controls", ed.querySelector<HTMLElement>(".rcp"));
     on("bp", e.primary?.[0] === "p" && n);
     dis("dup", !n);
     dis("ungroup", !n);
@@ -335,8 +342,8 @@ export class EditorSession {
     this._wrap.classList.toggle("tool", !!this._plan && this._tool !== "select");
   }
 
-  _onKey(ev) {
-    const t = ev.composedPath()[0];
+  _onKey(this: Home3DCard, ev: KeyboardEvent) {
+    const t = ev.composedPath()[0] as HTMLElement;
     if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
     if (!this.isConnected) return;
     const mod = ev.ctrlKey || ev.metaKey;
@@ -359,13 +366,18 @@ export class EditorSession {
         this._setTool("select");
         return;
       }
-      const tk = { w: "wall", d: "door", v: "select" }[ev.key.toLowerCase()];
+      const tk = (<Record<string, string>>{ w: "wall", d: "door", v: "select" })[ev.key.toLowerCase()];
       if (tk) {
         this._setTool(tk);
         return;
       }
     }
-    const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
+    const arrows: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, 1],
+      ArrowDown: [0, -1],
+    };
     if (arrows[ev.key] && sel.length) {
       ev.preventDefault();
       const [dx, dy] = this._screenDir(...arrows[ev.key]),
@@ -377,7 +389,14 @@ export class EditorSession {
       return;
     }
     // [ and ] turn the selection 15° (Shift: 90°); Q / E do the same on the floor plan, where E isn't the rotate tool
-    const turn = { "[": -1, "{": -1, "]": 1, "}": 1, ...(this._plan ? { q: -1, Q: -1, e: 1, E: 1 } : {}) }[ev.key];
+    const turns: Record<string, number> = {
+      "[": -1,
+      "{": -1,
+      "]": 1,
+      "}": 1,
+      ...(this._plan ? { q: -1, Q: -1, e: 1, E: 1 } : {}),
+    };
+    const turn = turns[ev.key];
     if (turn && !mod && sel.length) {
       this._mutate(() => {
         this._applyRotate(sel, (ev.shiftKey ? 90 : 15) * turn, this._pivotC);
@@ -386,14 +405,15 @@ export class EditorSession {
       return;
     }
     // Unity / Godot gizmo keys in furniture mode: W move, E rotate, R scale, X local / global axes
-    const gk = !this._plan && !mod && { w: "translate", e: "rotate", r: "scale" }[ev.key.toLowerCase()];
+    const gizmoKeys: Record<string, EditState["mode"]> = { w: "translate", e: "rotate", r: "scale" };
+    const gk = !this._plan && !mod && gizmoKeys[ev.key.toLowerCase()];
     if (gk) {
       this._setMode(gk);
       this._syncBar();
       return;
     }
     if (!this._plan && !mod && ev.key.toLowerCase() === "x") {
-      this._ed.querySelector('[data-a="space"]')?.click();
+      this._ed.querySelector<HTMLElement>('[data-a="space"]')?.click();
       return;
     }
     if (ev.key === "Delete" || ev.key === "Backspace") {
@@ -408,7 +428,8 @@ export class EditorSession {
       ev.preventDefault();
       this._duplicate();
     } else if (ev.key === "Escape") this._select([]);
-    else if (ev.key === "r" && !mod) this._ed.querySelector('[data-a="rotate"]')?.click();
-    else if ((ev.key === "g" || ev.key === "t") && !mod) this._ed.querySelector('[data-a="translate"]')?.click();
+    else if (ev.key === "r" && !mod) this._ed.querySelector<HTMLElement>('[data-a="rotate"]')?.click();
+    else if ((ev.key === "g" || ev.key === "t") && !mod)
+      this._ed.querySelector<HTMLElement>('[data-a="translate"]')?.click();
   }
 }

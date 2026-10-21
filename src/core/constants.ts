@@ -2,7 +2,7 @@
  */
 import type { CardConfig, Looks } from "../types";
 
-export const VERSION3D = "5.1.0";
+export const VERSION3D = "5.2.0";
 export const STRATEGY_NAME = "ha-3dhome";
 export const OLD_NAMES = { card: "iso-home-3d-card", strategy: "iso-home" }; // the project was called ha-iso-home before v5; both still work
 export const CDN = "https://cdn.jsdelivr.net/npm/";

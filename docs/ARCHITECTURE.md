@@ -1,29 +1,42 @@
 # Architecture
 
-The source is small ES modules under `src/`, bundled by esbuild into the two shipped files: `dist/ha-3dhome.js` (viewer and strategy) and `dist/ha-3dhome-editor.js` (everything behind ✎ Edit, which the core loads from its own folder). This doc walks through them top to bottom.
+The source is small TypeScript modules under `src/`, bundled by esbuild into the two shipped files: `dist/ha-3dhome.js` (viewer and strategy) and `dist/ha-3dhome-editor.js` (everything behind ✎ Edit, which the core fetches from its own folder the first time Edit is pressed). This doc walks through them top to bottom.
 
 ## Module layout
 
 | Path | What it does |
 |---|---|
-| `src/ha-3dhome.js` | Core entry: defines `<ha-3dhome-card>` and the strategy elements (plus the old aliases), publishes `window.__ha3dhome`, loads the editor |
-| `src/core/constants.js` | Version, names, CDN URLs (pinned `three@0.160.0`, `jszip@3.10.1`), plan centre `CX=296, CY=391`, the Sweet Home 3D library list `LIBS`, render-look defaults |
-| `src/core/util.js` | Rounding, cloning, escaping, `rotPt`, `inPoly`, `polyArea`, `stableJSON` |
-| `src/core/items.js` | Item kinds and pure item maths: `itemCenter`, `shiftItem`, `itemZ`, `scaleItem`, `mapPts` |
-| `src/core/plan-geometry.js` | `segDir`, `wallExtensions`, `wallPieces`, `planJoints`, `legacyWalls` |
-| `src/core/surfaces.js`, `fixtures.js`, `sun.js`, `entities.js`, `sh3d.js` | Textures, fixtures and string lights, sun position, entity icons and states, `parseProps`/`zipFind`/the `IDB` cache |
-| `src/core/strategy.js` | `class Home3DStrategy`: `generate(config)` → `{views:[panel view with the card]}` |
-| `src/card/card.js` | `class Home3DCard`: lifecycle (config, hass, connection, attach/detach, teardown) and `_rebuild()`. It extends one mixin per topic: |
-| `src/card/startup.js` … `plan.js` | `_init` (startup), camera, rooms, scene build, models, lights, picking, live update and looks, the plan layer |
-| `src/ha-3dhome-editor.js` | Editor entry: checks the version, then copies the methods of each `src/editor/` part onto the card prototype |
-| `src/editor/*.js` | `session` (enter/exit, toolbar, keys), `selection` (gizmo, drags, undo), `panels`, `inspector`, `plan` (floor plan editor), `save`, `library` |
+| `src/ha-3dhome.ts` | Core entry: defines `<ha-3dhome-card>` and the strategy elements (plus the old aliases), publishes `window.__ha3dhome`, tells `editor-loader` where the editor lives |
+| `src/types.ts` | The config schema as types: `CardConfig`, `Scene`, `WallSeg`, `Opening`, `SceneItem`, `LightConfig`, `Chip`, `Hass`… |
+| `src/global.d.ts` | What the code adds to `window` (`__ha3dhome`, `customCards`, `customStrategies`) |
+| `src/core/constants.ts` | Version, names, CDN URLs (pinned `three@0.160.0`, `jszip@3.10.1`), plan centre `CX=296, CY=391`, the Sweet Home 3D library list `LIBS`, render-look defaults |
+| `src/core/util.ts` | Rounding, cloning, escaping, `rotPt`, `inPoly`, `polyArea`, `stableJSON` |
+| `src/core/items.ts` | Item kinds and pure item maths: `itemCenter`, `shiftItem`, `itemZ`, `scaleItem`, `mapPts` |
+| `src/core/plan-geometry.ts` | `segDir`, `wallExtensions`, `wallPieces`, `planJoints`, `legacyWalls` |
+| `src/core/surfaces.ts`, `fixtures.ts`, `sun.ts`, `entities.ts`, `sh3d.ts` | Textures, fixtures and string lights, sun position, entity icons and states, `parseProps`/`zipFind`/the `IDB` cache |
+| `src/core/strategy.ts` | `class Home3DStrategy`: `generate(config)` → `{views:[panel view with the card]}` |
+| `src/card/card.ts` | `class Home3DCard`: every field (typed, with a comment), lifecycle (config, hass, connection, attach/detach, teardown) and `_rebuild()` |
+| `src/card/startup.ts` … `plan.ts` | One part per topic: startup (`_init` and its steps), camera, rooms, scene build, models, lights, picking (pointer input), live update and looks, the plan layer |
+| `src/card/styles.ts` | The shadow DOM's stylesheet and markup |
+| `src/card/editor-loader.ts` | `loadEditor()`: fetches the editor module on the first Edit press |
+| `src/editor-api.ts` | The core helpers the editor uses, published as `window.__ha3dhome` |
+| `src/ha-3dhome-editor.ts` | Editor entry: checks the version, then copies the methods of each `src/editor/` part onto the card prototype |
+| `src/editor/*.ts` | `session` (enter/exit, toolbar, keys), `selection` (gizmo, drags, undo), `panels`, `inspector`, `plan` (floor plan editor), `save`, `library`; `shared.ts` reads the core helpers |
+
+### How the parts make one class
+
+Each part is a class whose methods take `this: Home3DCard`, for example `class CameraPart { _resize(this: Home3DCard) {…} }`. `card.ts` copies the card parts' methods onto `Home3DCard.prototype`; the editor entry does the same for the editor parts once it loads. For the types, `card.ts` merges every part into the card's interface (`interface Home3DCard extends CameraPart, …, EditorSession, … {}`), so any part can call any other part's method and the type checker knows its signature. Fields are declared once, in `card.ts`, with `declare` (types only, no runtime code).
+
+### Type checking
+
+`npm run typecheck` runs two passes. `tsconfig.strict.json` checks `src/types.ts` and `src/core/` with every strict option, including null checks. `tsconfig.json` checks everything else strictly except `strictNullChecks`: the card's fields start empty and fill in during `_init`, and the editor's fields exist only while editing, so null checks there would mean a `!` on nearly every line. Editor items are `GenericItem` (any item's fields) because one key can name a box, a light or a wall; a cast such as `it as WallSeg` marks where the kind is known.
 
 ## Lifecycle
 
 1. **`setConfig(config)`** stores the config and tears down any existing renderer. If `hass` is already set, it re-inits.
 2. **`set hass(hass)`**
-   - First call: `_init()`. This dynamically imports Three.js and OrbitControls, builds the shadow DOM, and creates the renderer, camera and controls. It then runs `_rebuild()` and `_bindPicking()` and starts a `ResizeObserver`.
-   - Every call: `_update()` applies entity states to lights, chips, doors, weather and screens.
+   - First call: `_init()`. This dynamically imports Three.js and OrbitControls, builds the shadow DOM (`styles.ts`), then `_createRenderer()`, `_createCamera()`, `_bindNav()` and `_bindPageListeners()`. It then runs `_rebuild()` and `_bindPicking()` and starts a `ResizeObserver`.
+   - Every call: `_update()` applies entity states: `_updateDaylight()`, `_updateLamps()`, screens, `_updateChips()`, `_updateDoorBadges()`, `_setDoors()` and `_updateWeather()`.
 3. **Rendering is on demand.** `_requestRender()` coalesces into one `requestAnimationFrame`, and keeps going only while OrbitControls damping is moving.
 
 ## Coordinate system

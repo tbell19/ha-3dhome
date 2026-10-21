@@ -1,4 +1,6 @@
 {
+  // Type checking only (esbuild bundles). The card and editor are checked without strictNullChecks, because their
+  // fields are set up in _init() and torn down again; tsconfig.strict.json checks the pure modules with everything on.
   "compilerOptions": {
     "target": "es2022",
     "module": "esnext",
@@ -6,9 +8,9 @@
     "lib": ["es2023", "dom", "dom.iterable"],
     "types": [],
     "strict": true,
+    "noUnusedLocals": true,
+    "strictNullChecks": false,
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": false,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "noFallthroughCasesInSwitch": true,

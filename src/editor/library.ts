@@ -1,11 +1,14 @@
 /* The Sweet Home 3D library browser: downloading libraries and placing models.
  */
-import { LIBS, LIB_DIR, R1, SF, esc, ic, zipFind } from "./shared.js";
+import type { GenericItem } from "../core/items";
+import type { Home3DCard } from "../card/card";
+import { LIBS, LIB_DIR, R1, SF, esc, ic, zipFind } from "./shared";
+import type { Library } from "../core/sh3d";
 
 export class EditorLibrary {
   /* ----- model library ----- */
-  _openLibrary() {
-    this._ed.querySelector(".lib")?.remove();
+  _openLibrary(this: Home3DCard) {
+    this._ed.querySelector<HTMLElement>(".lib")?.remove();
     const lib = document.createElement("div");
     lib.className = "lib";
     this._ed.append(lib);
@@ -13,7 +16,7 @@ export class EditorLibrary {
     this._libHome();
   }
 
-  _libHome() {
+  _libHome(this: Home3DCard) {
     const lib = this._libEl;
     lib.innerHTML = `<header><span class="ttl">Sweet Home 3D model libraries</span><button data-x title="Close">${ic("close")}</button></header>
       <div class="body"><div class="note">Libraries are downloaded once into <code>/config/www/sh3d/</code> by Home Assistant's Downloader integration,
@@ -23,18 +26,18 @@ export class EditorLibrary {
           <div class="meta">${l.n} models · ${l.size} · ${esc(l.lic)}</div></div><span class="st meta">checking…</span><button class="act" disabled>…</button></div>`,
         ).join("")}</div>
         <div class="note">Models © their authors — see sweethome3d.com/free-3d-models for credits. CC-BY models need attribution if you share renders.</div></div>`;
-    lib.querySelector("[data-x]").addEventListener("click", () => lib.remove());
-    for (const row of lib.querySelectorAll(".librow")) this._libRow(row);
+    lib.querySelector<HTMLElement>("[data-x]").addEventListener("click", () => lib.remove());
+    for (const row of lib.querySelectorAll<HTMLElement>(".librow")) this._libRow(row);
   }
 
-  async _libRow(row, wait) {
+  async _libRow(this: Home3DCard, row: HTMLElement, wait?: boolean) {
     const file = row.dataset.f,
-      st = row.querySelector(".st"),
-      btn = row.querySelector(".act");
+      st = row.querySelector<HTMLElement>(".st"),
+      btn = row.querySelector<HTMLButtonElement>(".act");
     let ok = false;
     try {
       ok = (await fetch(LIB_DIR + encodeURIComponent(file), { method: "HEAD", cache: "no-store" })).ok;
-    } catch (e) {
+    } catch (e: any) {
       /* offline */
     }
     if (this._dl?.[file] && !wait) {
@@ -50,10 +53,10 @@ export class EditorLibrary {
     btn.onclick = () => (ok ? this._libBrowse(file) : this._download(file, row));
   }
 
-  async _download(file, row) {
+  async _download(this: Home3DCard, file: string, row: HTMLElement) {
     const h = this._hass,
-      st = row.querySelector(".st"),
-      btn = row.querySelector(".act");
+      st = row.querySelector<HTMLElement>(".st"),
+      btn = row.querySelector<HTMLButtonElement>(".act");
     if (!h.services?.downloader?.download_file) {
       st.textContent = "Downloader integration isn't set up";
       return;
@@ -61,7 +64,7 @@ export class EditorLibrary {
     btn.disabled = true;
     st.textContent = "downloading…";
     (this._dl ||= {})[file] = true;
-    const done = async (ok, msg) => {
+    const done = async (ok: boolean, msg?: string) => {
       if (!this._dl?.[file]) return;
       delete this._dl[file];
       for (const u of unsubs) (await u)?.();
@@ -72,7 +75,7 @@ export class EditorLibrary {
         btn.textContent = "Retry";
       }
     };
-    const evMatch = (ev) => {
+    const evMatch = (ev: { data?: { filename?: string; url?: string } }) => {
       const d = ev.data || {};
       return String(d.filename || d.url || "").includes(file);
     };
@@ -90,33 +93,33 @@ export class EditorLibrary {
         filename: file,
         overwrite: true,
       });
-    } catch (e) {
+    } catch (e: any) {
       done(false, "couldn't start: " + (e.message || e));
     }
   }
 
-  async _libBrowse(file) {
+  async _libBrowse(this: Home3DCard, file: string) {
     const lib = this._libEl,
       meta = LIBS.find((l) => l.file === file);
     lib.innerHTML = `<header><button data-back>${ic("chevron-left")}Libraries</button><span class="ttl">${esc(meta?.title || file)}</span><button data-x title="Close">${ic("close")}</button></header>
       <div class="body"><div class="note">Opening library…</div></div>`;
-    lib.querySelector("[data-x]").addEventListener("click", () => lib.remove());
-    lib.querySelector("[data-back]").addEventListener("click", () => this._libHome());
+    lib.querySelector<HTMLElement>("[data-x]").addEventListener("click", () => lib.remove());
+    lib.querySelector<HTMLElement>("[data-back]").addEventListener("click", () => this._libHome());
     let data;
     try {
       data = await this._openLib(file);
-    } catch (e) {
-      lib.querySelector(".body").innerHTML =
+    } catch (e: any) {
+      lib.querySelector<HTMLElement>(".body").innerHTML =
         `<div class="note">Couldn't open this library: ${esc(e.message || e)}. If it was still downloading, wait and try again; otherwise re-download it.</div>`;
       return;
     }
     const cats = [...new Set(data.items.map((i) => i.cat))].sort();
-    const body = lib.querySelector(".body");
+    const body = lib.querySelector<HTMLElement>(".body");
     body.innerHTML = `<div class="tools"><input type="search" placeholder="Search ${data.items.length} models…"><select><option value="">All categories</option>
       ${cats.map((c) => `<option>${esc(c)}</option>`).join("")}</select></div><div class="items"></div>`;
-    const q = body.querySelector("input"),
-      sel = body.querySelector("select"),
-      grid = body.querySelector(".items");
+    const q = body.querySelector<HTMLInputElement>("input"),
+      sel = body.querySelector<HTMLSelectElement>("select"),
+      grid = body.querySelector<HTMLElement>(".items");
     const render = () => {
       const s = q.value.trim().toLowerCase(),
         c = sel.value;
@@ -134,11 +137,11 @@ export class EditorLibrary {
         <div class="meta" style="opacity:.6">${Math.round(it.w)}×${Math.round(it.d)}×${Math.round(it.h)} cm</div></div>`,
         )
         .join("");
-      grid.querySelectorAll(".it").forEach((el) => {
+      grid.querySelectorAll<HTMLElement>(".it").forEach((el) => {
         const it = list[+el.dataset.n];
         el.addEventListener("click", () => this._placeModel(it));
         this._icon(data, it).then((u) => {
-          if (u) el.querySelector("img").src = u;
+          if (u) el.querySelector<HTMLImageElement>("img").src = u;
         });
       });
     };
@@ -147,7 +150,7 @@ export class EditorLibrary {
     render();
   }
 
-  async _icon(data, it) {
+  async _icon(this: Home3DCard, data: Library, it: GenericItem) {
     if (it._url !== undefined) return it._url;
     const s = data.sh3fs.find((x) => x.name === it.sh3f) || data.sh3fs[0];
     const f = zipFind(s.zip, it.icon);
@@ -155,7 +158,7 @@ export class EditorLibrary {
     return it._url;
   }
 
-  _placeModel(it) {
+  _placeModel(this: Home3DCard, it: GenericItem) {
     this._libEl?.remove();
     const [sxy, sz] = this._modelScale(),
       [x, y] = this._target();

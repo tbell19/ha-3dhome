@@ -1,12 +1,14 @@
 /* Saving the edited config back into the dashboard.
  */
-import { STRATEGY_TYPES, CARD_TYPES, SAVED, strategyCard, stableJSON } from "./shared.js";
+import type { LovelaceCardConfig } from "../types";
+import type { Home3DCard } from "../card/card";
+import { STRATEGY_TYPES, CARD_TYPES, SAVED, strategyCard, stableJSON } from "./shared";
 
 export class EditorSave {
   /* ----- save ----- */
-  async _save() {
+  async _save(this: Home3DCard) {
     const h = this._hass,
-      btn = this._ed.querySelector('[data-a="save"]');
+      btn = this._ed.querySelector<HTMLButtonElement>('[data-a="save"]');
     if (this._offSince)
       return this._toast("Not connected to Home Assistant. Your changes are kept: save again once it's back", 5000);
     btn.disabled = true;
@@ -23,9 +25,9 @@ export class EditorSave {
         for (const k of SAVED) lc.strategy[k] = this._work[k];
         found = true;
       }
-      const match = (c) =>
+      const match = (c: LovelaceCardConfig) =>
         c && CARD_TYPES.includes(c.type) && (!this._config.card_id || c.card_id === this._config.card_id);
-      const walk = (arr) => {
+      const walk = (arr: unknown) => {
         if (!Array.isArray(arr) || found) return;
         for (let i = 0; i < arr.length && !found; i++) {
           const c = arr[i];
@@ -53,7 +55,7 @@ export class EditorSave {
       this._cfgJSON = stableJSON(this._config);
       this._toast("Saved to the dashboard");
       this._exitEdit(false);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       this._toast("Save failed: " + (e.message || e.code || e), 5000);
       btn.disabled = false;

@@ -1,10 +1,14 @@
 /* Selection, the transform gizmo and drags, undo, duplicate, delete and grouping.
  */
-import { CX, CY, PLAN, R1, ROTATABLE, itemCenter, jclone, mapPts, mean, rotPt, shiftItem } from "./shared.js";
+import type * as THREE from "three";
+import type { Pt, SceneItem } from "../types";
+import type { GenericItem } from "../core/items";
+import type { EditState, Home3DCard } from "../card/card";
+import { CX, CY, PLAN, R1, ROTATABLE, itemCenter, jclone, mapPts, mean, rotPt, shiftItem } from "./shared";
 
 export class EditorSelection {
   /* ----- selection ----- */
-  _expand(key, alone) {
+  _expand(this: Home3DCard, key: string, alone?: boolean) {
     const set = new Set([key]);
     if (alone) return set;
     const it = this._get(key),
@@ -19,15 +23,15 @@ export class EditorSelection {
   }
 
   /* lights / hotspots that ride along with a fixture (pendant, fan, track, lamps, plant wall, string bulbs) */
-  _attached(key) {
+  _attached(this: Home3DCard, key: string) {
     const [k] = key.split(":");
     if (k !== "o" && k !== "v") return [];
     const it = this._get(key);
-    let test = null;
-    const near = (cx, cy, rad) => (x, y) => Math.hypot(x - cx, y - cy) < rad;
+    let test: ((x: number, y: number) => boolean) | null = null;
+    const near = (cx: number, cy: number, rad: number) => (x: number, y: number) => Math.hypot(x - cx, y - cy) < rad;
     const rot = it.rot || 0,
       c = itemCenter(k, it);
-    const w = (x, y) => (rot ? rotPt(x, y, c[0], c[1], rot) : [x, y]);
+    const w = (x: number, y: number) => (rot ? rotPt(x, y, c[0], c[1], rot) : [x, y]);
     switch (it.type) {
       case "pendant":
       case "floorlamp":
@@ -42,8 +46,8 @@ export class EditorSelection {
         break;
       }
       case "track": {
-        const a = w(...it.a),
-          b = w(...it.b);
+        const a = w(it.a[0], it.a[1]),
+          b = w(it.b[0], it.b[1]);
         test = (x, y) => {
           const dx = b[0] - a[0],
             dy = b[1] - a[1],
@@ -58,14 +62,14 @@ export class EditorSelection {
         break;
       case "bulbs":
       case "railing": {
-        const out = [];
+        const out: string[] = [];
         this._list("l").forEach((L, i) => L.kind === "string" && out.push("l:" + i));
         return out;
       }
       default:
         return [];
     }
-    const out = [];
+    const out: string[] = [];
     this._list("l").forEach((L, i) => {
       const p = itemCenter("l", L);
       if (L.kind !== "string" && test(p[0], p[1])) out.push("l:" + i);
@@ -76,7 +80,7 @@ export class EditorSelection {
     return out;
   }
 
-  _clickSelect(key, additive, alone) {
+  _clickSelect(this: Home3DCard, key: string | null, additive?: boolean, alone?: boolean) {
     if (!key) {
       if (!additive) this._select([]);
       return;
@@ -90,7 +94,7 @@ export class EditorSelection {
     } else this._select([...set], key);
   }
 
-  _select(keys, primary) {
+  _select(this: Home3DCard, keys: string[], primary?: string) {
     const T = this.T,
       e = this._edit;
     e.sel = new Set(keys.filter((k) => this._get(k)));
@@ -114,19 +118,19 @@ export class EditorSelection {
     this._buildRoomHandles();
     this._buildStringHandles();
     if (e.sel.size) {
-      this._ed.querySelector(".lookp") && this._toggleLookPanel();
-      this._ed.querySelector(".rcp") && this._toggleRoomCardsPanel();
+      this._ed.querySelector<HTMLElement>(".lookp") && this._toggleLookPanel();
+      this._ed.querySelector<HTMLElement>(".rcp") && this._toggleRoomCardsPanel();
     }
     this._renderInspector();
     this._syncBar();
     this._requestRender();
   }
 
-  _groupsOfSel() {
+  _groupsOfSel(this: Home3DCard) {
     return [...new Set([...this._edit.sel].map((k) => this._items.get(k)).filter(Boolean))];
   }
 
-  _setMode(m) {
+  _setMode(this: Home3DCard, m: EditState["mode"]) {
     const e = this._edit;
     if (this._plan && m === "scale") m = "translate";
     e.mode = m;
@@ -138,7 +142,7 @@ export class EditorSelection {
   }
 
   /* rotation of a furniture item as a quaternion: turn (`rot`, clockwise from above) then tilt (`rx`, `rz`), i.e. Ry·Rx·Rz */
-  _itemQuat(k, it) {
+  _itemQuat(this: Home3DCard, k: string, it: GenericItem) {
     const T = this.T,
       r = Math.PI / 180;
     if (!ROTATABLE.has(k))
@@ -149,7 +153,7 @@ export class EditorSelection {
   }
 
   /* the point a lone item turns and tilts about (the middle of its bounding box), in Three.js coordinates */
-  _tiltPivot(key) {
+  _tiltPivot(this: Home3DCard, key: string) {
     const T = this.T,
       g = this._items.get(key),
       tc = g?.userData.tc;
@@ -162,7 +166,7 @@ export class EditorSelection {
 
   /* where the gizmo sits and which way it faces. One item: its own middle, and its own axes in Local (and always for
    * Scale, which works along the item's axes). Several: the middle of their bounding box, world axes. */
-  _placePivot() {
+  _placePivot(this: Home3DCard) {
     const e = this._edit,
       T = this.T,
       keys = [...e.sel],
@@ -205,7 +209,7 @@ export class EditorSelection {
         G = box.isEmpty() ? new T.Vector3() : box.getCenter(new T.Vector3());
       }
       pv.position.copy(G);
-      this._pivotC = one ? (itemCenter(k, it) || [G.x + CX, G.z + CY]).slice(0, 2) : [G.x + CX, G.z + CY];
+      this._pivotC = one ? ((itemCenter(k, it) || [G.x + CX, G.z + CY]).slice(0, 2) as Pt) : [G.x + CX, G.z + CY];
       if (one && (e.space === "local" || e.mode === "scale")) pv.quaternion.copy(this._itemQuat(k, it));
     }
     this._tc?.setSpace(e.space === "local" ? "local" : "world");
@@ -214,7 +218,7 @@ export class EditorSelection {
   }
 
   /* ----- drag (TransformControls gizmo, or dragging the item itself) ----- */
-  _dragStart(kind) {
+  _dragStart(this: Home3DCard, kind: string) {
     const p = this._pivot;
     this._drag = {
       kind,
@@ -231,7 +235,7 @@ export class EditorSelection {
     };
   }
 
-  _dragDelta() {
+  _dragDelta(this: Home3DCard) {
     const d = this._drag,
       p = this._pivot;
     return {
@@ -242,11 +246,11 @@ export class EditorSelection {
   }
 
   /* one factor for scaling several items together: whichever axis was pulled furthest */
-  _uniform(s) {
+  _uniform(this: Home3DCard, s: THREE.Vector3) {
     return [s.x, s.y, s.z].reduce((a, b) => (Math.abs(Math.log(b || 1)) > Math.abs(Math.log(a || 1)) ? b : a), 1);
   }
 
-  _dragPreview() {
+  _dragPreview(this: Home3DCard) {
     const d = this._drag;
     if (!d) return;
     const { move, dq, s } = this._dragDelta(),
@@ -264,7 +268,7 @@ export class EditorSelection {
     this._requestRender();
   }
 
-  _dragEnd() {
+  _dragEnd(this: Home3DCard) {
     const d = this._drag;
     if (!d) return;
     const { move, dq, s } = this._dragDelta(),
@@ -289,19 +293,19 @@ export class EditorSelection {
       this._scaleSel(keys, f, f, f);
     } else this._scaleSel(keys, s.x, s.z, s.y); // the gizmo's own axes: x across, z front to back, y up
     if (this._edit.snap && d.kind === "translate")
-      for (const k of this._edit.sel) if (k[0] === "n") this._fitOpening(this._get(k));
+      for (const k of this._edit.sel) if (k[0] === "n") this._fitOpening(this._get(k) as SceneItem);
     this._commit();
   }
 
   /* turn the selection by the quaternion dq about G (Three.js coordinates). A turn about the vertical alone goes through
    * _applyRotate, as before; a tilt also moves each item so it swings round G as one rigid group. */
-  _applyRotQ(keys, dq, G) {
+  _applyRotQ(this: Home3DCard, keys: string[], dq: THREE.Quaternion, G: THREE.Vector3) {
     const T = this.T,
       r = Math.PI / 180,
       up = new T.Vector3(0, 1, 0),
       e = new T.Euler().setFromQuaternion(dq, "YXZ");
     if (Math.abs(e.x) < 1e-5 && Math.abs(e.z) < 1e-5) return this._applyRotate(keys, -e.y / r, [G.x + CX, G.z + CY]);
-    const ang = (v, half) => {
+    const ang = (v: number, half?: boolean) => {
       v = R1((((v / r) % 360) + 360) % 360);
       if (v >= 359.95) v = 0;
       return half && v > 180 ? R1(v - 360) : v;
@@ -347,7 +351,7 @@ export class EditorSelection {
     }
   }
 
-  _applyMove(keys, dx, dy, dz = 0) {
+  _applyMove(this: Home3DCard, keys: string[], dx: number, dy: number, dz = 0) {
     for (const key of keys) {
       const k = key[0],
         it = this._get(key);
@@ -364,7 +368,7 @@ export class EditorSelection {
     }
   }
 
-  _applyRotate(keys, deg, pivot) {
+  _applyRotate(this: Home3DCard, keys: string[], deg: number, pivot: Pt) {
     const [px, py] = pivot;
     for (const key of keys) {
       const k = key[0];
@@ -382,14 +386,15 @@ export class EditorSelection {
     }
   }
 
-  _mutate(fn) {
+  /** change the config being edited: `fn` makes the change and may return the keys to select afterwards */
+  _mutate(this: Home3DCard, fn: () => string[] | void) {
     this._edit.undo.push(JSON.stringify(this._work));
     this._edit.redo = [];
-    const keys = fn();
+    const keys = fn() || undefined;
     this._commit(keys);
   }
 
-  _commit(keys) {
+  _commit(this: Home3DCard, keys?: string[]) {
     this._edit.dirty = true;
     const sel = keys || [...this._edit.sel],
       primary = this._edit.primary;
@@ -397,7 +402,7 @@ export class EditorSelection {
     this._select(sel, primary);
   }
 
-  _undo(redo) {
+  _undo(this: Home3DCard, redo?: boolean) {
     const e = this._edit,
       from = redo ? e.redo : e.undo,
       to = redo ? e.undo : e.redo;
@@ -410,22 +415,22 @@ export class EditorSelection {
   }
 
   /* ----- commands ----- */
-  _target() {
+  _target(this: Home3DCard) {
     const t = this._controls.target;
     return [R1(t.x + CX), R1(t.z + CY)];
   }
 
-  _push(k, item) {
+  _push(this: Home3DCard, k: string, item: GenericItem) {
     const l = this._list(k, true);
     l.push(item);
     return k + ":" + (l.length - 1);
   }
 
-  _duplicate() {
+  _duplicate(this: Home3DCard) {
     if (!this._edit.sel.size) return;
     this._mutate(() => {
-      const rename = {},
-        out = [];
+      const rename: Record<string, string> = {},
+        out: string[] = [];
       for (const key of this._edit.sel) {
         const k = key[0],
           it = jclone(this._get(key));
@@ -440,10 +445,10 @@ export class EditorSelection {
     });
   }
 
-  _delete() {
+  _delete(this: Home3DCard) {
     if (!this._edit.sel.size) return;
     this._mutate(() => {
-      const by = {};
+      const by: Record<string, number[]> = {};
       for (const key of this._edit.sel) {
         const [k, i] = key.split(":");
         (by[k] ||= []).push(+i);
@@ -456,7 +461,7 @@ export class EditorSelection {
     });
   }
 
-  _group(on) {
+  _group(this: Home3DCard, on?: boolean) {
     const keys = [...this._edit.sel];
     if (!keys.length) return;
     this._mutate(() => {
@@ -474,11 +479,12 @@ export class EditorSelection {
   }
 
   /* ----- add panel: any HA entity, drag onto the map ----- */
-  _placedEntities() {
+  _placedEntities(this: Home3DCard) {
     const w = this._work,
-      out = new Set();
+      out = new Set<string>();
     for (const n of ["lights", "hotspots", "chips", "doors"])
-      for (const it of w[n] || []) [it.entity, it.climate, it.temperature, it.humidity].forEach((e) => e && out.add(e));
+      for (const it of (w as Record<string, GenericItem[]>)[n] || [])
+        [it.entity, it.climate, it.temperature, it.humidity].forEach((e) => e && out.add(e));
     for (const o of w.scene?.objects || []) if (o.entity) out.add(o.entity);
     return out;
   }

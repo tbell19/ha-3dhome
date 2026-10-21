@@ -1,6 +1,6 @@
 /* Bundles and minifies the two modules into dist/ (what HACS and the releases ship):
- *   src/ha-3dhome.js        -> dist/ha-3dhome.js          (core: viewer, strategy, plan rendering; loads the editor)
- *   src/ha-3dhome-editor.js -> dist/ha-3dhome-editor.js   (everything behind ✎ Edit)
+ *   src/ha-3dhome.ts        -> dist/ha-3dhome.js          (core: viewer, strategy, plan rendering; loads the editor on Edit)
+ *   src/ha-3dhome-editor.ts -> dist/ha-3dhome-editor.js   (everything behind ✎ Edit)
  *   npm run build
  */
 const fs = require("fs"),

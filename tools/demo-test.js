@@ -76,8 +76,8 @@ const check = (name, ok, detail = "") => {
       await p.evaluate(`${card}._world?.children.length > 10 && !!${card}.shadowRoot.querySelector('canvas')`),
     );
     check(
-      "editor loads by itself next to the core",
-      await p.evaluate(`typeof ${card}._enterEdit === 'function' && ${card}._edBtn.style.display !== 'none'`),
+      "Edit shows, but the editor waits until it is pressed",
+      await p.evaluate(`typeof ${card}._enterEdit !== 'function' && ${card}._edBtn.style.display !== 'none'`),
     );
     const before = await p.evaluate(`${card}._hass.states['light.foyer'].state`);
     await p.evaluate(`${card}._hass.callService('homeassistant','toggle',{entity_id:'light.foyer'})`);

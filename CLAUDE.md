@@ -4,13 +4,14 @@ Read this first. It is the hand-off between sessions: what lives where, how to c
 
 ## What this is
 
-3D Home (`ha-3dhome`, formerly ha-iso-home) is a Home Assistant dashboard plugin, published through HACS. The source is split into small ES modules that esbuild bundles back into two files (`npm run build`, `tools/bundle.js`):
+3D Home (`ha-3dhome`, formerly ha-iso-home) is a Home Assistant dashboard plugin, published through HACS. The source is small TypeScript modules that esbuild bundles into two JavaScript files (`npm run build`, `tools/bundle.js`). Module map and how the parts fit: docs/ARCHITECTURE.md.
 
-- `src/ha-3dhome.js` (core entry → `dist/ha-3dhome.js`): registers the card and the strategy, publishes shared helpers on `window.__ha3dhome` and imports the editor from its own folder (HACS registers only one file).
-  - `src/core/`: constants and pure helpers (items, plan geometry, surfaces, fixtures, sun, entities, Sweet Home 3D parsing) plus the strategy.
-  - `src/card/`: the card. `card.js` holds the element's lifecycle and extends one mixin per topic (`startup`, `camera`, `rooms`, `scene`, `models`, `lights`, `picking`, `live`, `plan`).
-- `src/ha-3dhome-editor.js` (editor entry → `dist/ha-3dhome-editor.js`): waits for the core, checks the version, then copies the methods of each part in `src/editor/` onto the card prototype. The parts read the core's helpers through `src/editor/shared.js`. The ✎ Edit button only appears once it has loaded.
-- Tests bundle `src/` on the fly (`tools/bundle.js`), so there's no build step before `npm test`; `--dist` tests the committed build.
+- `src/ha-3dhome.ts` (core entry → `dist/ha-3dhome.js`): registers the card and the strategy, publishes shared helpers on `window.__ha3dhome` (`src/editor-api.ts`) and tells `src/card/editor-loader.ts` where the editor lives (next to itself; HACS registers only one file).
+  - `src/types.ts`: the config schema as types. `src/core/`: constants and pure helpers (items, plan geometry, surfaces, fixtures, sun, entities, Sweet Home 3D parsing) plus the strategy.
+  - `src/card/`: the card. `card.ts` declares every field and holds the lifecycle; one part class per topic (`startup`, `camera`, `rooms`, `scene`, `models`, `lights`, `picking`, `live`, `plan`) is copied onto its prototype. Part methods take `this: Home3DCard`, and an interface merge in `card.ts` types them all as one class. `styles.ts` is the shadow DOM's CSS and markup.
+- `src/ha-3dhome-editor.ts` (editor entry → `dist/ha-3dhome-editor.js`): loaded the first time ✎ Edit is pressed (`_openEditor` → `loadEditor()`). It checks the version, then copies the methods of each part in `src/editor/` onto the card prototype. The parts read the core's helpers through `src/editor/shared.ts`.
+- Tests bundle `src/` on the fly (`tools/bundle.js`), so there's no build step before `npm test`; `--dist` tests the committed build. The tests inline the editor, so it's there before Edit is pressed; `npm run test:demo` covers loading it on demand from real files.
+- **Types:** `npm run typecheck`. `src/types.ts` and `src/core/` are fully strict (`tsconfig.strict.json`); the card and editor are strict except null checks (`tsconfig.json`), because their fields fill in during `_init` and while editing. Unused locals fail the check. Add a field to `card.ts` with `declare` and a comment, never as a class field (that would be runtime code).
 
 They define:
 
@@ -24,8 +25,8 @@ This repo is public. Never commit anyone's real home layout, entity ids, Home As
 
 HACS installs GitHub releases, so a version tag is what ships and `main` is the working branch. Full steps: docs/RELEASING.md.
 
-1. Edit `src/`, then bump `VERSION3D` (`src/core/constants.js`), `EDITOR_VERSION` (`src/ha-3dhome-editor.js`) and `version` in package.json together. The editor refuses to attach to a core of another version.
-2. Run `npm test`, `npm run test:mobile`, `npm run test:plan` (and `-- --mobile`) and `npm run test:demo`; all must pass. Also run `npm run test:leaks` if you touched lifecycle, rebuild or disposal code (add `-- --look` when you touched the render looks). Then `npm run build` and commit `dist/`.
+1. Edit `src/`, then bump `VERSION3D` (`src/core/constants.ts`), `EDITOR_VERSION` (`src/ha-3dhome-editor.ts`) and `version` in package.json together. The editor refuses to attach to a core of another version.
+2. Run `npm run typecheck`, `npm test`, `npm run test:mobile`, `npm run test:plan` (and `-- --mobile`) and `npm run test:demo`; all must pass. Also run `npm run test:leaks` if you touched lifecycle, rebuild or disposal code (add `-- --look` when you touched the render looks). Then `npm run build` and commit `dist/`. `npm run test:all` runs the type check and every suite with one line each; `npm run format` applies Prettier.
 3. Only the maintainer decides when to tag a release. Don't push tags or submit to the HACS default list unless asked.
 
 ## Floor plan data (v4.7)

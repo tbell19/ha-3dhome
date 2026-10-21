@@ -1,6 +1,8 @@
 /* What the editor modules share: the core's helpers (published on window.__ha3dhome) and editor constants.
  */
-const H = window.__ha3dhome; // checked by ha-3dhome-editor.js before this module loads
+import type { EditorApi } from "../editor-api";
+
+const H = window.__ha3dhome as EditorApi; // checked by ha-3dhome-editor.ts before this module loads
 export const {
   strategyCard,
   stableJSON,
@@ -50,7 +52,7 @@ export const {
 
 export const YAML_URL = "https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/+esm";
 export const SAVED = ["scene", "lights", "hotspots", "chips", "doors", "look", "ambient", "idle_view", "room_cards"]; // what Save writes back (a missing one is removed)
-export const IDLE_AFTER = [
+export const IDLE_AFTER: [number, string][] = [
   [0, "Never"],
   [30, "After 30 seconds"],
   [60, "After 1 minute"],
@@ -61,7 +63,8 @@ export const IDLE_AFTER = [
   [1800, "After 30 minutes"],
   [3600, "After 1 hour"],
 ];
-export const hm = (hours) => {
+/** hours → "HH:MM" */
+export const hm = (hours: number) => {
   const m = Math.round(hours * 60) % 1440;
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 };
