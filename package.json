@@ -25,6 +25,7 @@
     "esbuild": "0.24.0",
     "jszip": "3.10.1",
     "playwright": "^1.47.0",
+    "preact": "10.24.3",
     "prettier": "3.3.3",
     "terser": "^5.31.0",
     "three": "0.160.0",

@@ -532,7 +532,7 @@ window.card=__card;</script></body></html>`;
     await ev(`card._editor._toggleLookPanel()`);
     await wait(200);
     await ev(
-      `(()=>{const q=(k)=>card.shadowRoot.querySelector('.lookp [data-i="'+k+'"]'), r=q('room'); r.value=r.options[1].value; q('after').value='120'; q('after').dispatchEvent(new Event('change',{bubbles:true}))})()`,
+      `(()=>{const q=(k)=>card.shadowRoot.querySelector('.lookp [data-i="'+k+'"]'); q('after').value='120'; q('after').dispatchEvent(new Event('change',{bubbles:true})); const r=q('room'); r.value=r.options[1].value; r.dispatchEvent(new Event('change',{bubbles:true}))})()`,
     );
     check(
       "the Look panel sets the idle view (room + timeout)",

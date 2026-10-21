@@ -3,6 +3,7 @@
 import type { LovelaceCardConfig, Looks } from "../types";
 import type { GenericItem } from "../core/items";
 import type { Editor } from "./editor";
+import { renderLookPanel, clearLookPanel, type LookName } from "./look-panel";
 import {
   inPoly,
   ACTIVE,
@@ -17,97 +18,72 @@ import {
   lookOf,
   AMBIENT,
   YAML_URL,
-  IDLE_AFTER,
 } from "./shared.js";
 
 export class EditorPanels {
-  /* Look panel: a strength slider per render look (light, ao, stage, bloom), applied live while dragging. One undo step per drag. */
+  /* Look panel (look-panel.tsx): a strength slider per render look, applied live while dragging. One undo step per drag. */
   _toggleLookPanel(this: Editor) {
     const old = this.card._ed.querySelector<HTMLElement>(".lookp");
     this.card._ed.querySelector<HTMLElement>('[data-a="look"]')?.classList.toggle("on", !old);
-    if (old) return old.remove();
+    if (old) {
+      clearLookPanel(old);
+      return old.remove();
+    }
     if (this.card._ed.querySelector<HTMLElement>(".rcp")) this._toggleRoomCardsPanel();
-    const rows = [
-      ["ambient", "Room fill", "Even daylight on every surface"],
-      ["light", "Soft lighting", "Gradient sky light, soft shadows"],
-      ["ao", "Corner shading", "Darkens corners and creases"],
-      ["stage", "Drop shadow", "Lifts the home off the background"],
-      ["bloom", "Lamp glow", "Glow around lit lamps, at night"],
-    ];
-    const p = document.createElement("div");
-    p.className = "lookp";
-    p.innerHTML = `<header><span class="ttl">Look</span><button data-x title="Close">${ic("close")}</button></header>
-      ${rows.map(([k, n, d]) => `<label><span class="n">${n}</span><output data-o="${k}"></output><input type="range" min="0" max="100" step="5" data-k="${k}"><span class="d">${d}</span></label>`).join("")}
-      <div class="idle"><span class="n">When left alone</span><span class="d">Go back to a view after nobody has touched the map for a while</span>
-        <select data-i="after" aria-label="Idle time">${IDLE_AFTER.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>
-        <select data-i="room" aria-label="View to return to"><option value="">Whole home</option>${this.card
-          ._rooms()
-          .map((r) => `<option value="${esc(r.name)}">${esc(r.label)}</option>`)
-          .join("")}</select></div>`;
-    this.card._ed.append(p);
-    p.querySelector<HTMLElement>("[data-x]").addEventListener("click", () => this._toggleLookPanel());
-    p.addEventListener("input", (ev) => {
-      const k = (ev.target as HTMLElement).dataset.k as keyof Looks | "ambient" | undefined;
-      if (!k) return;
-      if (!this._lookDrag) {
-        this.card._edit.undo.push(JSON.stringify(this.card._work));
-        this.card._edit.redo = [];
-        this.card._edit.dirty = true;
-        this._lookDrag = true;
-      }
+    const host = document.createElement("div");
+    host.className = "lookp";
+    this.card._ed.append(host);
+    renderLookPanel(host, this);
+  }
+
+  /** Redraws the Look panel, if it is open, from card._work (after undo, redo or a save). */
+  _syncLookPanel(this: Editor) {
+    const host = this.card._ed?.querySelector<HTMLElement>(".lookp");
+    if (host) renderLookPanel(host, this);
+  }
+
+  /** Sets one look's strength (0 to 1) while its slider moves. Only values that differ from the default are stored. */
+  setLook(this: Editor, name: LookName, strength: number) {
+    const work = this.card._work;
+    if (!this._lookDrag) {
+      this._pushUndo();
+      this._lookDrag = true;
+    }
+    if (name === "ambient") {
+      if (strength === AMBIENT) delete work.ambient;
+      else work.ambient = strength;
+    } else {
       const look: Partial<Record<keyof Looks, number | boolean>> =
-          this.card._work.look === false
-            ? { light: 0, ao: 0, stage: 0, bloom: 0 }
-            : { ...(this.card._work.look || {}) },
-        v = +(ev.target as HTMLInputElement).value / 100;
-      if (k === "ambient") {
-        if (v === AMBIENT) delete this.card._work.ambient;
-        else this.card._work.ambient = v;
-      } // top-level, default AMBIENT
-      else {
-        if (v === lookOf({})[k]) delete look[k];
-        else look[k] = v; // stored only when it differs from the default
-        if (Object.keys(look).length) this.card._work.look = look;
-        else delete this.card._work.look;
-      }
-      p.querySelector<HTMLElement>(`[data-o="${k}"]`).textContent = v ? Math.round(v * 100) + "%" : "Off";
-      this.card._update();
-      this.card._requestRender();
-    });
-    p.addEventListener("change", (ev) => {
-      this._lookDrag = false;
-      if (!(ev.target as HTMLElement).dataset.i) return;
-      this.card._edit.undo.push(JSON.stringify(this.card._work));
-      this.card._edit.redo = [];
-      this.card._edit.dirty = true;
-      const after = +p.querySelector<HTMLSelectElement>('[data-i="after"]').value,
-        room = p.querySelector<HTMLSelectElement>('[data-i="room"]').value;
-      if (after > 0) this.card._work.idle_view = room ? { room, after } : { after };
-      else delete this.card._work.idle_view;
-      this._syncLookPanel();
-    });
+        work.look === false ? { light: 0, ao: 0, stage: 0, bloom: 0 } : { ...(work.look || {}) };
+      if (strength === lookOf({})[name]) delete look[name];
+      else look[name] = strength;
+      if (Object.keys(look).length) work.look = look;
+      else delete work.look;
+    }
+    this._syncLookPanel();
+    this.card._update();
+    this.card._requestRender();
+  }
+
+  /** The slider was let go: the next move starts a new undo step. */
+  finishLookDrag(this: Editor) {
+    this._lookDrag = false;
+  }
+
+  /** Where the map goes after `seconds` without a touch: a room, or the whole home when `room` is empty. 0 turns it off. */
+  setIdleView(this: Editor, seconds: number, room: string) {
+    this._pushUndo();
+    if (seconds > 0) this.card._work.idle_view = room ? { room, after: seconds } : { after: seconds };
+    else delete this.card._work.idle_view;
     this._syncLookPanel();
   }
 
-  _syncLookPanel(this: Editor) {
-    const p = this.card._ed?.querySelector<HTMLElement>(".lookp");
-    if (!p || this._lookDrag) return;
-    const L = { ...lookOf(this.card._work), ambient: this.card._work.ambient ?? AMBIENT };
-    const iv = this.card._work.idle_view,
-      after = p.querySelector<HTMLSelectElement>('[data-i="after"]'),
-      room = p.querySelector<HTMLSelectElement>('[data-i="room"]');
-    if (after) {
-      const a = +iv?.after > 0 ? String(+iv.after) : "0";
-      if (![...after.options].some((o) => o.value === a)) after.add(new Option(`${a} seconds`, a)); // a hand-set value
-      after.value = a;
-      room.value = iv?.room || "";
-      room.disabled = a === "0";
-    }
-    for (const i of p.querySelectorAll<HTMLInputElement>("input[data-k]")) {
-      const v = L[i.dataset.k as keyof typeof L];
-      i.value = String(Math.round(v * 100));
-      p.querySelector<HTMLElement>(`[data-o="${i.dataset.k}"]`).textContent = v ? Math.round(v * 100) + "%" : "Off";
-    }
+  /** One undo step for a panel change. */
+  _pushUndo(this: Editor) {
+    const edit = this.card._edit;
+    edit.undo.push(JSON.stringify(this.card._work));
+    edit.redo = [];
+    edit.dirty = true;
   }
 
   /* Controls panel: the Lovelace cards each room shows top right (`room_cards`). Tiles for entities, the room's own devices in one go,

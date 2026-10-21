@@ -14,7 +14,9 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "noFallthroughCasesInSwitch": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "jsx": "react-jsx", // editor panels are TSX components rendered by Preact
+    "jsxImportSource": "preact"
   },
   "include": ["src"]
 }
