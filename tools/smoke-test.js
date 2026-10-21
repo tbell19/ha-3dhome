@@ -108,6 +108,7 @@ window.card=__card;</script></body></html>`;
   await wait(6000);
   check("strategy generates one panel view", await ev(`gen.views.length===1 && gen.views[0].type==='panel' && gen.views[0].cards[0].fill===true`));
   check("old names still work (iso-home-3d-card, custom:iso-home)", await ev(`(async()=>!!customElements.get('iso-home-3d-card') && (await customElements.get('ll-strategy-dashboard-iso-home').generate({})).views[0].cards[0].type==='custom:ha-3dhome-card')()`));
+  check("listed in Add dashboard (window.customStrategies)", await ev(`window.customStrategies.filter(s=>s.type==='ha-3dhome'&&s.strategyType==='dashboard'&&s.name).length===1`));
   check("card renders without page errors", errors.length === 0, errors.join(" | "));
   check("room menu built from floors", (await ev(`card.shadowRoot.querySelectorAll('.rooms button').length`)) >= 8);
   check("edit button visible for admins", await ev(`getComputedStyle(card.shadowRoot.querySelector('.edbtn')).display!=='none'`));
@@ -306,6 +307,16 @@ window.card=__card;</script></body></html>`;
     check("second finger cancels the drag and pinches the camera", JSON.stringify(await boxCenter(SOFA)) === JSON.stringify(b1) && (await ev(`card._cam.zoom`)) > 1.1);
     await p.screenshot({ path: path.join(OUT, "mobile-edit.png") });
   }
+
+  // a dashboard made from Settings → Dashboards → Add has no layout yet: it should render and say how to start
+  check("full map shows no empty hint", await ev(`!card.shadowRoot.querySelector('.empty')`));
+  await ev(`(async()=>{card.remove();const g=await customElements.get('ll-strategy-dashboard-ha-3dhome').generate({type:'custom:ha-3dhome'});
+    const c=document.createElement('ha-3dhome-card');c.setConfig({...g.views[0].cards[0],dashboard:'new'});document.getElementById('host').append(c);c.hass=card._hass;window.card2=c})()`);
+  await wait(3000);
+  check("new empty dashboard renders with a how-to-start hint", errors.length === 0 && await ev(`!!card2._ready && /Edit/.test(card2.shadowRoot.querySelector('.empty')?.textContent||'')`), errors.join(" | "));
+  await p.screenshot({ path: path.join(OUT, `${MOBILE ? "mobile" : "desktop"}-empty.png`) });
+  await ev(`card2._enterEdit()`); await wait(800);
+  check("the hint goes away in the editor", errors.length === 0 && await ev(`!!card2._edit && !card2.shadowRoot.querySelector('.empty')`), errors.join(" | "));
 
   await browser.close();
   const failed = results.filter((r) => !r.ok).length;

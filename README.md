@@ -31,7 +31,9 @@ Copy `ha-3dhome.js` and `ha-3dhome-editor.js` from the [latest release](https://
 
 ### Your first map
 
-Create a new dashboard, open its raw configuration editor and paste [examples/sample-home.json](examples/sample-home.json), the demo home. Then open the map, press **✎ Edit** and use floor plan mode to trace your own walls (an uploaded photo of your floor plan works as a tracing image), swap the sample entity ids for yours and **Save**. The layout lives in the dashboard config.
+**Start from scratch (Home Assistant 2026.5 or later):** go to Settings → Dashboards → **Add dashboard** and pick **3D Home** under *Community dashboards*. The new dashboard opens on an empty map; press **✎ Edit**, then **Floor plan**, to draw your walls and rooms (an uploaded photo of your floor plan works as a tracing image), then add your lights and sensors from the Add panel and **Save**.
+
+**Start from the demo home:** create a new dashboard, open its raw configuration editor and paste [examples/sample-home.json](examples/sample-home.json). Then open the map, press **✎ Edit** and use floor plan mode to trace your own walls (an uploaded photo of your floor plan works as a tracing image), swap the sample entity ids for yours and **Save**. The layout lives in the dashboard config.
 
 Optional: add the **Downloader** integration with download directory `www`, so the editor can fetch the Sweet Home 3D furniture libraries.
 

@@ -842,6 +842,10 @@ class Home3DCard extends HTMLElement {
         .nav button ha-icon { --mdc-icon-size: 18px; } .nav .edbtn ha-icon { --mdc-icon-size: 15px; }
         .ents .erow .ok { display: inline-flex; align-items: center; gap: 2px; } .ents .erow .ok ha-icon { --mdc-icon-size: 14px; }
         .insp h4 .tw ha-icon { --mdc-icon-size: 16px; transition: transform .15s; } .insp.min h4 .tw ha-icon { transform: rotate(-90deg); }
+        .empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(360px, calc(100% - 32px)); box-sizing: border-box; z-index: 2;
+          display: grid; gap: 6px; padding: 16px 18px; border-radius: 14px; text-align: center; pointer-events: none; color: #f2ebe0;
+          background: rgba(20,18,16,.78); border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(6px); font: 13px/1.45 var(--ha-font-family-body, system-ui); }
+        .empty b { font-size: 15px; } .empty span { opacity: .8; } .empty ha-icon { --mdc-icon-size: 14px; margin: 0 2px 0 4px; }
         .hide { display: none !important; }
       </style>
       <ha-card><div class="wrap"><div class="ov"></div><div class="ed"></div>
@@ -1284,7 +1288,19 @@ class Home3DCard extends HTMLElement {
     this._loadModels();
     if (this._focus) this._focus.polys = this._roomPolys(this._focus.room);   // room outlines may have changed
     this._fadeGen = (this._fadeGen || 0) + 1;
+    this._showEmpty();
     if (this._ready) this._update();
+  }
+  /* a new dashboard (Settings → Dashboards → Add → 3D Home) starts with nothing in it: say how to begin */
+  _showEmpty() {
+    const cfg = this._cfg(), sc = cfg.scene || {};
+    const empty = !this._edit && ![sc.wall_segs, sc.walls, sc.front_walls, sc.floors, sc.boxes, sc.objects, cfg.lights].some((a) => a?.length);
+    let el = this._wrap?.querySelector(".empty");
+    if (!empty) return el?.remove();
+    if (!el) { el = document.createElement("div"); el.className = "empty"; this._wrap?.append(el); }
+    el.innerHTML = `<b>Your 3D home is empty</b><span>${this._hass?.user?.is_admin
+      ? `Press ${ic("pencil-outline")}Edit, then Floor plan, to draw your walls and rooms. Save puts them in this dashboard.`
+      : "Ask an administrator to draw the floor plan with the Edit button."}</span>`;
   }
 
   /* free GPU memory of the current world: geometries, per-item materials + their textures, light shadow maps.
@@ -2725,6 +2741,11 @@ class Home3DStrategy extends HTMLElement {
 }
 for (const name of [STRATEGY_NAME, OLD_NAMES.strategy]) for (const tag of ["ll-strategy-dashboard-" + name, "ll-strategy-" + name])
   if (!customElements.get(tag)) customElements.define(tag, class extends Home3DStrategy {});
+// HA 2026.5+ lists registered dashboard strategies under Settings → Dashboards → Add dashboard → Community dashboards
+window.customStrategies = window.customStrategies || [];
+if (!window.customStrategies.some((s) => s.type === STRATEGY_NAME && s.strategyType === "dashboard"))
+  window.customStrategies.push({ type: STRATEGY_NAME, strategyType: "dashboard", name: "3D Home",
+    description: "A live 3D map of your home, with an editor built in", documentationURL: "https://github.com/tbell19/ha-3dhome" });
 window.customCards = window.customCards || [];
 if (!window.customCards.find((c) => c.type === "ha-3dhome-card"))
   window.customCards.push({ type: "ha-3dhome-card", name: "3D Home", description: `Live 3D floor plan with editor (${VERSION3D})` });

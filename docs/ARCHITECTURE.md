@@ -186,3 +186,5 @@ It then calls `lovelace/config/save`.
 ```
 
 `fill: true` makes the card fill the viewport height (`100vh − header`).
+
+The core also pushes `{type: "ha-3dhome", strategyType: "dashboard", name, description, documentationURL}` onto `window.customStrategies`. Home Assistant 2026.5 and later read that list for the *Community dashboards* section of Settings → Dashboards → Add dashboard, as long as the resource is loaded (HACS does that). A dashboard made there holds only `{strategy: {type: "custom:ha-3dhome"}}`; with no walls, floors, boxes, objects or lights the card shows an empty-map hint (`_showEmpty()`, called from `_rebuild()`, hidden while editing). Save fills the strategy in as usual.
