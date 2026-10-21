@@ -6,11 +6,12 @@ A live **3D map of your home** for Home Assistant, with an editor built into the
 
 ![The demo home at night](docs/images/demo-night.png)
 
-Lights glow in their real colour and brightness. Door sensors, climate and presence show up as chips anchored in 3D. Media players can appear as TVs that show the album art or show artwork. Tapping a light toggles it; holding opens its details. Admins can switch into **edit mode** to draw walls, move furniture and entities, drop in any Home Assistant entity, or place furniture models from the free Sweet Home 3D libraries. Edits save straight back into the dashboard.
+Lights glow in their real colour and brightness. Door sensors, climate and presence show up as chips anchored in 3D. Media players can appear as TVs that show the album art or show artwork. Tapping a light toggles it; holding opens its details. Admins can switch into **edit mode** to draw walls, move furniture and entities, drop in any Home Assistant entity, or place furniture models from the free Sweet Home 3D libraries.
 
 It provides:
 
-- **`custom:ha-3dhome-card`**, a Lovelace card;
+- **a 3D Home page in the sidebar**, next to Map and Energy, added by the `ha_3dhome` integration. The map is saved by the integration, and a save shows up straight away on every other screen that has it open;
+- **`custom:ha-3dhome-card`**, a Lovelace card, to put the map on any dashboard;
 - **`custom:ha-3dhome`**, a dashboard strategy that wraps the card in a full-screen dashboard.
 
 > **Status:** not released yet. The first release will be announced here; until then, HACS has nothing to install.
@@ -19,23 +20,33 @@ It provides:
 
 ### HACS (recommended)
 
-1. In HACS, open the ⋮ menu → **Custom repositories**, add `https://github.com/tbell19/ha-3dhome` with type **Dashboard**.
-2. Find **3D Home** and download it. HACS registers the card as a dashboard resource; the editor loads by itself from next to it.
-3. Hard refresh the browser (in the Companion app: Settings → Companion app → Debugging → Reset frontend cache).
+1. In HACS, open the ⋮ menu → **Custom repositories**, add `https://github.com/tbell19/ha-3dhome` with type **Integration**.
+2. Find **3D Home**, download it and restart Home Assistant.
+3. Go to Settings → Devices & services → **Add integration** → **3D Home**. Choose the sidebar title and icon, who may open it and its address (`/3d-home` by default).
 
-Updates show up in HACS when a new release is published. Turn on **Show beta versions** for the repository to get pre-releases.
+A **3D Home** page now shows in the sidebar. You can add more than one (a holiday home, say); each keeps its own map. Change a page's title, icon or access later under the integration's **Configure**.
+
+The integration also loads the card on every page, so `custom:ha-3dhome-card` and the `custom:ha-3dhome` dashboard work without adding a dashboard resource. If you installed 3D Home earlier as a HACS **Dashboard**, remove that download and its resource.
+
+Updates show up in HACS when a new release is published (restart afterwards). Turn on **Show beta versions** for the repository to get pre-releases.
 
 ### Manual
 
-Copy `ha-3dhome.js` and `ha-3dhome-editor.js` from the [latest release](https://github.com/tbell19/ha-3dhome/releases/latest) into `/config/www/ha-3dhome/`, then add `/local/ha-3dhome/ha-3dhome.js` as a dashboard resource of type **JavaScript module** (Settings → Dashboards → ⋮ → Resources). Keep both files from the same release.
+Copy the `ha_3dhome` folder from `ha_3dhome.zip` in the [latest release](https://github.com/tbell19/ha-3dhome/releases/latest) into `/config/custom_components/`, restart Home Assistant and add the integration as above.
+
+**Just the card, without the integration:** copy `ha-3dhome.js` and `ha-3dhome-editor.js` from the release into `/config/www/ha-3dhome/`, then add `/local/ha-3dhome/ha-3dhome.js` as a dashboard resource of type **JavaScript module** (Settings → Dashboards → ⋮ → Resources). Keep both files from the same release. There is no sidebar page this way.
 
 ### Your first map
 
-**Start from scratch (Home Assistant 2026.5 or later):** go to Settings → Dashboards → **Add dashboard** and pick **3D Home** under *Community dashboards*. The new dashboard opens on an empty map; press **✎ Edit**, then **Floor plan**, to draw your walls and rooms (an uploaded photo of your floor plan works as a tracing image), then add your lights and sensors from the Add panel and **Save**.
+**On the 3D Home page:** it opens on an empty map. Press **✎ Edit**, then **Floor plan**, to draw your walls and rooms (an uploaded photo of your floor plan works as a tracing image), then add your lights and sensors from the Add panel and **Save**.
 
-**Start from the demo home:** create a new dashboard, open its raw configuration editor and paste [examples/sample-home.json](examples/sample-home.json). Then open the map, press **✎ Edit** and use floor plan mode to trace your own walls (an uploaded photo of your floor plan works as a tracing image), swap the sample entity ids for yours and **Save**. The layout lives in the dashboard config.
+**Already have a map on a dashboard?** An empty 3D Home page looks through your dashboards and offers to copy the map from any that have one. The dashboard itself is left as it is; delete it in Settings → Dashboards once you don't need it.
 
-**Coming from ha-iso-home:** dashboards that use the old names (`custom:iso-home-3d-card`, `custom:iso-home`) keep working, and 3D Home takes those names over once the old card's resource is removed. While both are installed the old names stay with the old card, so nothing switches code halfway.
+**On a dashboard instead:** go to Settings → Dashboards → **Add dashboard** and pick **3D Home** under *Community dashboards* (Home Assistant 2026.5 or later), or add the **3D Home** card to any dashboard. Save then writes the map into that dashboard.
+
+**Start from the demo home:** create a new dashboard, open its raw configuration editor and paste [examples/sample-home.json](examples/sample-home.json), then copy it into the 3D Home page as above, or keep editing it there. Use floor plan mode to trace your own walls and swap the sample entity ids for yours.
+
+**Coming from ha-iso-home:** dashboards that use the old names (`custom:iso-home-3d-card`, `custom:iso-home`) keep working, and 3D Home takes those names over once the old card's resource is removed. While both are installed the old names stay with the old card, so nothing switches code halfway. The 3D Home page can copy their maps too.
 
 Optional: add the **Downloader** integration with download directory `www`, so the editor can fetch the Sweet Home 3D furniture libraries.
 
@@ -62,7 +73,7 @@ Optional: add the **Downloader** integration with download directory `www`, so t
   - Click a wall to cut in a door or window. These are negative boxes that cut any wall they pass through.
   - Trace over an uploaded **blueprint image** after setting its scale from a known length.
   - Lengths show in feet and inches or metric.
-- **Saving:** Save writes the layout back into the dashboard (strategy config or card config).
+- **Saving:** on the 3D Home page, Save stores the map in the integration and every other open screen picks it up. If someone saved from another device while you were editing, Save says so instead of overwriting their work. On a dashboard, Save writes the layout back into the dashboard (strategy config or card config).
 
 ## Development
 
@@ -70,8 +81,10 @@ Optional: add the **Downloader** integration with download directory `www`, so t
 npm install                 # three, jszip, terser, playwright (uses the system Chromium if present)
 npm test                    # desktop smoke test  -> tools/out/*.png
 npm run test:mobile         # phone viewport + touch gestures
-npm run build               # dist/*.min.js + size report
+npm run build               # custom_components/ha_3dhome/frontend/*.js + size report
 npm run test:plan           # floor plan editor: wall migration, drawing, doors/windows, joints, blueprint + scale
+npm run test:panel          # the sidebar page: import, saving, saves from other devices, edit clashes
+npm run test:py             # the integration (pip install -r requirements_test.txt first)
 npm run test:leaks          # GPU/heap/WebGL-context growth over 3000 updates, edits, plan rebuilds, config churn
 npm run demo                # serve the standalone demo (site/) at http://localhost:8080
 npm run test:demo           # check the demo works with no Home Assistant

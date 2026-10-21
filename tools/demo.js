@@ -9,8 +9,8 @@ const fs = require("fs"),
 const ROOT = path.join(__dirname, "..");
 const FILES = {
   // published path -> source
-  "card/ha-3dhome.js": "dist/ha-3dhome.js",
-  "card/ha-3dhome-editor.js": "dist/ha-3dhome-editor.js",
+  "card/ha-3dhome.js": "custom_components/ha_3dhome/frontend/ha-3dhome.js",
+  "card/ha-3dhome-editor.js": "custom_components/ha_3dhome/frontend/ha-3dhome-editor.js",
   "sample-home.json": "examples/sample-home.json",
 };
 for (const f of fs.readdirSync(path.join(ROOT, "site"))) FILES[f] = "site/" + f;

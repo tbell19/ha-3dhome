@@ -1,4 +1,5 @@
-# HACS and hassfest-style checks. HACS only accepts public repositories, so this is skipped while the repo is private.
+# HACS and hassfest checks for the integration, and its Python tests. HACS only accepts public repositories, so its check is skipped while the
+# repo is private. The brands check waits until 3D Home has an icon in home-assistant/brands.
 name: Validate
 on:
   push: { branches: [main] }
@@ -10,4 +11,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: hacs/action@main
-        with: { category: plugin }
+        with: { category: integration, ignore: brands }
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -r requirements_test.txt && python -m pytest -q

@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "strictNullChecks": true },
-  "include": ["src/types.ts", "src/core"]
+  "include": ["src/types.ts", "src/core", "src/panel"]
 }

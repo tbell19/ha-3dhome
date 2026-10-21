@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a 3D Home panel",
+        "description": "3D Home adds a page to the sidebar with a live 3D map of your home. Draw the floor plan with the Edit button once it is open.",
+        "data": {
+          "title": "Sidebar title",
+          "icon": "Sidebar icon",
+          "require_admin": "Only administrators can open it",
+          "url_path": "Address"
+        },
+        "data_description": {
+          "url_path": "The page opens at /<address>, for example /3d-home."
+        }
+      }
+    },
+    "error": {
+      "invalid_url_path": "Use lowercase letters, digits, - and _ only.",
+      "url_path_taken": "Another page already uses this address."
+    },
+    "abort": {
+      "already_configured": "A 3D Home panel already uses this address."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "3D Home panel",
+        "data": {
+          "title": "Sidebar title",
+          "icon": "Sidebar icon",
+          "require_admin": "Only administrators can open it"
+        }
+      }
+    }
+  }
+}

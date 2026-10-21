@@ -1,12 +1,17 @@
 # Architecture
 
-The source is small TypeScript modules under `src/`, bundled by esbuild into the two shipped files: `dist/ha-3dhome.js` (viewer and strategy) and `dist/ha-3dhome-editor.js` (everything behind ✎ Edit, which the core fetches from its own folder the first time Edit is pressed). This doc walks through them top to bottom.
+3D Home has two halves:
+
+- **The frontend:** small TypeScript modules under `src/`, bundled by esbuild into two files in `custom_components/ha_3dhome/frontend/`: `ha-3dhome.js` (viewer, panel and strategy) and `ha-3dhome-editor.js` (everything behind ✎ Edit, which the core fetches from its own folder the first time Edit is pressed).
+- **The integration** (`custom_components/ha_3dhome/`, Python): it serves those files, adds the sidebar page and keeps each page's map in Home Assistant's storage. See [The panel and the integration](#the-panel-and-the-integration).
+
+This doc walks through them top to bottom.
 
 ## Module layout
 
 | Path | What it does |
 |---|---|
-| `src/ha-3dhome.ts` | Core entry: defines `<ha-3dhome-card>` and the strategy elements (plus the old aliases), publishes `window.__ha3dhome`, tells `editor-loader` where the editor lives |
+| `src/ha-3dhome.ts` | Core entry: defines `<ha-3dhome-card>`, `<ha-3dhome-panel>` and the strategy elements (plus the old aliases), publishes `window.__ha3dhome`, tells `editor-loader` where the editor lives |
 | `src/types.ts` | The config schema as types: `CardConfig`, `Scene`, `WallSeg`, `Opening`, `SceneItem`, `LightConfig`, `Chip`, `Hass`… |
 | `src/global.d.ts` | What the code adds to `window` (`__ha3dhome`, `customCards`, `customStrategies`) |
 | `src/core/constants.ts` | Version, names, CDN URLs (pinned `three@0.160.0`, `jszip@3.10.1`), plan centre `CX=296, CY=391`, the Sweet Home 3D library list `LIBS`, render-look defaults |
@@ -15,25 +20,42 @@ The source is small TypeScript modules under `src/`, bundled by esbuild into the
 | `src/core/plan-geometry.ts` | `segDir`, `wallExtensions`, `wallPieces`, `planJoints`, `legacyWalls` |
 | `src/core/surfaces.ts`, `fixtures.ts`, `sun.ts`, `entities.ts`, `sh3d.ts` | Textures, fixtures and string lights, sun position, entity icons and states, `parseProps`/`zipFind`/the `IDB` cache |
 | `src/core/strategy.ts` | `class Home3DStrategy`: `generate(config)` → `{views:[panel view with the card]}` |
+| `src/core/lovelace.ts` | Finding 3D Home in dashboard configs: `findCard` (Save into a dashboard), `homeConfigIn` and `dashboardsWithHome` (the panel's import) |
+| `src/panel/panel.ts` | `class Home3DPanel` (`<ha-3dhome-panel>`): the sidebar page. Follows its stored config, hands the card a `LayoutStore`, offers to import a dashboard's map |
 | `src/card/card.ts` | `class Home3DCard`: every field (typed, with a comment), lifecycle (config, hass, connection, attach/detach, teardown) and `_rebuild()` |
 | `src/card/startup.ts` … `plan.ts` | One part per topic: startup (`_init` and its steps), camera, rooms, scene build, models, lights, picking (pointer input), live update and looks, the plan layer |
 | `src/card/styles.ts` | The shadow DOM's stylesheet and markup |
-| `src/card/editor-loader.ts` | `loadEditor()`: fetches the editor module on the first Edit press |
+| `src/card/editor-loader.ts` | `loadEditor()`: fetches the editor module on the first Edit press; `provideEditor()`: the editor module registers itself |
+| `src/editor-contract.ts` | Types only: `EditorHost` (what the editor may use of the card), `CardEditor` (what the card calls on the editor), `EditorModule` |
 | `src/editor-api.ts` | The core helpers the editor uses, published as `window.__ha3dhome` |
-| `src/ha-3dhome-editor.ts` | Editor entry: checks the version, then copies the methods of each `src/editor/` part onto the card prototype |
-| `src/editor/*.ts` | `session` (enter/exit, toolbar, keys), `selection` (gizmo, drags, undo), `panels`, `inspector`, `plan` (floor plan editor), `save`, `library`; `shared.ts` reads the core helpers |
+| `src/ha-3dhome-editor.ts` | Editor entry: checks the version, then registers the `Editor` with the core |
+| `src/editor/editor.ts` | `class Editor`: the editor object, its own fields, and its parts copied onto its prototype |
+| `src/editor/*.ts` | The editor's parts: `session` (enter/exit, toolbar, keys), `selection` (gizmo, drags, undo), `panels`, `inspector`, `plan` (floor plan editor), `save` (layout stores), `library`; `shared.ts` reads the core helpers |
+| `custom_components/ha_3dhome/` | The integration: `__init__.py` (serving the files, the panel), `config_flow.py`, `store.py` (a page's config and revision), `websocket.py` (follow and save) |
 
 ### How the parts make one class
 
-Each part is a class whose methods take `this: Home3DCard`, for example `class CameraPart { _resize(this: Home3DCard) {…} }`. `card.ts` copies the card parts' methods onto `Home3DCard.prototype`; the editor entry does the same for the editor parts once it loads. For the types, `card.ts` merges every part into the card's interface (`interface Home3DCard extends CameraPart, …, EditorSession, … {}`), so any part can call any other part's method and the type checker knows its signature. Fields are declared once, in `card.ts`, with `declare` (types only, no runtime code).
+Each part is a class whose methods take `this: Home3DCard`, for example `class CameraPart { _resize(this: Home3DCard) {…} }`. `card.ts` copies the card parts' methods onto `Home3DCard.prototype`. For the types, `card.ts` merges every part into the card's interface (`interface Home3DCard extends CameraPart, … {}`), so any part can call any other part's method and the type checker knows its signature. Fields are declared once, in `card.ts`, with `declare` (types only, no runtime code).
+
+### The editor is its own object
+
+The editor is not part of the card. It is an `Editor` (`src/editor/editor.ts`), built from its own parts the same way (methods take `this: Editor`), holding the state only the editor uses (drawing previews, panel state, the touch flag). The card makes one the first time Edit is pressed (`_openEditor` → `loadEditor()` → `create(card)`) and keeps it in `card._editor` until `_teardown()`.
+
+Everything that crosses between them is written down in `src/editor-contract.ts`:
+
+- **`EditorHost`** lists the card fields and methods the editor may use. The editor reaches them as `this.card.…`, so a line that touches the card is plain to see, and a new crossing has to be added to the list.
+- **`CardEditor`** is what the card calls on the editor: `enter()`, `item(key)`, the drag hooks the card's pointer handling drives (`clickSelect`, `dragStart`, `dragPreview`, `dragEnd`), the floor plan tool hooks (`toolHover`, `toolClick`, `snapPoint`, `rebuildPlan`, …) and the drawing previews. The card calls them only while editing, as `this._editor.…`.
+- **`EditorModule`** is what the editor module hands the core when it loads (`window.__ha3dhome.provideEditor({version, create})`). The core checks the version there.
+
+Editing state the card itself reads stays on the card: `_edit` (selection, undo stacks, modes), `_work` (the config being edited), `_plan`, `_tool`, `_drag` and the gizmo.
 
 ### Type checking
 
-`npm run typecheck` runs two passes. `tsconfig.strict.json` checks `src/types.ts` and `src/core/` with every strict option, including null checks. `tsconfig.json` checks everything else strictly except `strictNullChecks`: the card's fields start empty and fill in during `_init`, and the editor's fields exist only while editing, so null checks there would mean a `!` on nearly every line. Editor items are `GenericItem` (any item's fields) because one key can name a box, a light or a wall; a cast such as `it as WallSeg` marks where the kind is known.
+`npm run typecheck` runs two passes. `tsconfig.strict.json` checks `src/types.ts`, `src/core/` and `src/panel/` with every strict option, including null checks. `tsconfig.json` checks everything else strictly except `strictNullChecks`: the card's fields start empty and fill in during `_init`, and the editor's fields exist only while editing, so null checks there would mean a `!` on nearly every line. Editor items are `GenericItem` (any item's fields) because one key can name a box, a light or a wall; a cast such as `it as WallSeg` marks where the kind is known.
 
 ## Lifecycle
 
-1. **`setConfig(config)`** stores the config and tears down any existing renderer. If `hass` is already set, it re-inits.
+1. **`setConfig(config)`** ignores a config identical to the current one. When only the layout changed (a save, here or on another device) it rebuilds the world in the running scene (`_applyLayout()`). Otherwise it tears down any existing renderer and, if `hass` is already set, re-inits.
 2. **`set hass(hass)`**
    - First call: `_init()`. This dynamically imports Three.js and OrbitControls, builds the shadow DOM (`styles.ts`), then `_createRenderer()`, `_createCamera()`, `_bindNav()` and `_bindPageListeners()`. It then runs `_rebuild()` and `_bindPicking()` and starts a `ResizeObserver`.
    - Every call: `_update()` applies entity states: `_updateDaylight()`, `_updateLamps()`, screens, `_updateChips()`, `_updateDoorBadges()`, `_setDoors()` and `_updateWeather()`.
@@ -148,11 +170,9 @@ All handlers sit on the canvas. **`pointerdown` uses `{capture:true}`** so it ru
 
 **Undo/redo:** stacks of JSON snapshots of `_work`.
 
-**Save:** `_save()` calls `lovelace/config` for the current dashboard:
-- if `config.strategy.type === "custom:ha-3dhome"`, it writes the five layout keys into the strategy;
-- otherwise it finds the card (by `card_id` if set, else the first `custom:ha-3dhome-card`) in views, sections or nested cards.
-
-It then calls `lovelace/config/save`.
+**Save:** `_save()` hands the layout (`LAYOUT_KEYS`: scene, lights, hotspots, chips, doors, look, ambient, idle view, room cards) to the card's `LayoutStore` and takes the config it returns as the card's own:
+- **On the panel**, the store is the panel's: `ha_3dhome/config/save` (see below).
+- **On a dashboard** (`dashboardStore()` in `src/editor/save.ts`), it calls `lovelace/config` for the current dashboard. If `config.strategy.type` is `custom:ha-3dhome` it writes the layout into the strategy; otherwise `findCard()` finds the card (by `card_id` if set, else the first `custom:ha-3dhome-card`) in views, sections or nested cards. It then calls `lovelace/config/save`.
 
 ## Add-entity panel
 
@@ -210,3 +230,25 @@ It then calls `lovelace/config/save`.
 The core also pushes `{type: "ha-3dhome", strategyType: "dashboard", name, description, documentationURL}` onto `window.customStrategies`. Home Assistant 2026.5 and later read that list for the *Community dashboards* section of Settings → Dashboards → Add dashboard, as long as the resource is loaded (HACS does that). A dashboard made there holds only `{strategy: {type: "custom:ha-3dhome"}}`; with no walls, floors, boxes, objects or lights the card shows an empty-map hint (`_showEmpty()`, called from `_rebuild()`, hidden while editing). Save fills the strategy in as usual.
 
 The old names (`iso-home-3d-card`, `ll-strategy-dashboard-iso-home`) are defined by `claimOldNames()` a moment after load. It asks Home Assistant for the resource list and leaves the names alone when the old ha-iso-home card is registered too, so load order can't decide which code an old dashboard runs.
+
+## The panel and the integration
+
+A Lovelace card lives inside a dashboard, and a strategy dashboard is regenerated whenever its config or the entity, device or area registries change. Saving the map rewrote the dashboard, Home Assistant replaced the card element, and the card had to park its scene so the new element could adopt it (`PARKED`). A panel sits below all that: Home Assistant creates the element for the sidebar page and hands it `hass`, `narrow`, `route` and `panel`, and nothing regenerates it.
+
+**The integration** (`custom_components/ha_3dhome/`):
+
+- `async_setup` serves `frontend/` at `/ha_3dhome` (cached, with `?v=<version>` in the URL so an update fetches new files), adds `ha-3dhome.js` to every page with `frontend.add_extra_js_url` (so the card and strategy work on dashboards without a resource), and registers the websocket commands.
+- Each config entry is one sidebar page: `panel_custom.async_register_panel` with the element `ha-3dhome-panel` and `config: {entry_id}`. The config flow asks for the title, icon, access and address; the options flow changes the first three.
+- `store.py` keeps one file per page in `.storage` (`ha_3dhome.<entry_id>`): the card config (the layout plus card options such as `weather` or `room_menu`) and a revision number.
+- `websocket.py`:
+  - `ha_3dhome/config/subscribe {entry_id}` sends `{config, rev}` now and after every save, to every device following it;
+  - `ha_3dhome/config/save {entry_id, config, rev}` (admins) saves when `rev` is still the stored revision and fails with `conflict` otherwise, so two devices editing at once can't overwrite each other.
+
+**The panel element** (`src/panel/panel.ts`):
+
+- It creates one `<ha-3dhome-card>` filling the page (`fill: true`, `--header-height: 0`), forwards `hass` to it, and sets `card.layoutStore` so Save goes to the integration.
+- It subscribes to its config while it is attached. A pushed config the card isn't showing yet goes to `card.setConfig()`. The card compares it with its current config (`sameOptions`): when only the layout differs it calls `_applyLayout()`, which rebuilds the world in the running scene (same renderer, camera kept); a change of card options restarts the card as before.
+- A config pushed while someone edits is held until the editor closes (the card fires `ha-3dhome-editing`), and that edit's Save is refused by the revision check with a message saying why.
+- The stored config leaves out what the panel sets itself (`type`, `fill`, `dashboard`, `card_id`).
+- On narrow screens Home Assistant hides the sidebar, so the panel shows Home Assistant's own `ha-menu-button` over the map's top-left corner (the card moves its weather badge aside through `--ha-3dhome-inset-left`).
+- An empty page opened by an admin looks for maps on dashboards (`dashboardsWithHome()`: every dashboard's config, strategy or card) and offers to copy one in. The dashboard is left unchanged.

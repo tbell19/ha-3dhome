@@ -3,7 +3,7 @@
  * plus `lights`, `hotspots`, `chips`, `doors`, `weather`.
  * Edit mode (admins): move / rotate / duplicate / delete / group furniture and entities, add Sweet Home 3D
  * models (libraries downloaded into /config/www/sh3d via the Downloader integration), then Save writes the
- * card config back into the dashboard.
+ * card config back into the dashboard, or into the integration's storage on the 3D Home panel (<ha-3dhome-panel>).
  */
 import type { Hass } from "./types";
 import { VERSION3D, STRATEGY_NAME, OLD_NAMES } from "./core/constants";
@@ -11,6 +11,7 @@ import { Home3DStrategy } from "./core/strategy";
 import { Home3DCard } from "./card/card";
 import { editorApi } from "./editor-api";
 import { setEditorUrl } from "./card/editor-loader";
+import { Home3DPanel } from "./panel/panel";
 
 if (!customElements.get("ha-3dhome-card")) {
   // published before define() so the editor, which awaits whenDefined(), always finds it, and only by the core that owns the element
@@ -22,6 +23,8 @@ if (!customElements.get("ha-3dhome-card")) {
   const here = new URL(import.meta.url);
   if (here.pathname.endsWith(".js")) setEditorUrl(new URL("ha-3dhome-editor.js", here).href + here.search);
 }
+// the sidebar page the ha_3dhome integration adds
+if (!customElements.get("ha-3dhome-panel")) customElements.define("ha-3dhome-panel", Home3DPanel);
 for (const tag of ["ll-strategy-dashboard-" + STRATEGY_NAME, "ll-strategy-" + STRATEGY_NAME])
   if (!customElements.get(tag)) customElements.define(tag, class extends Home3DStrategy {});
 /* The old names (iso-home-3d-card, custom:iso-home) are aliases for dashboards made before v5. If the old ha-iso-home card

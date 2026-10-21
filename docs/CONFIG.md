@@ -1,6 +1,6 @@
 # Configuration reference
 
-The same keys work on the card (`type: custom:ha-3dhome-card`) and inside the strategy (`strategy: {type: custom:ha-3dhome, …}`). All positions are **plan units** (see ARCHITECTURE.md → Coordinate system).
+The same keys work on the card (`type: custom:ha-3dhome-card`), inside the strategy (`strategy: {type: custom:ha-3dhome, …}`) and on the 3D Home sidebar page, which keeps them in the integration's storage instead of a dashboard (the page sets `type`, `fill` and `dashboard` itself). All positions are **plan units** (see ARCHITECTURE.md → Coordinate system).
 
 ## Strategy-only options
 

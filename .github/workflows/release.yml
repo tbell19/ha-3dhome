@@ -22,21 +22,29 @@ jobs:
             const fs = require("fs"), v = process.argv[1];
             const got = { "package.json": require("./package.json").version,
               VERSION3D: fs.readFileSync("src/core/constants.ts", "utf8").match(/VERSION3D = "([^"]+)"/)[1],
-              EDITOR_VERSION: fs.readFileSync("src/ha-3dhome-editor.ts", "utf8").match(/EDITOR_VERSION = "([^"]+)"/)[1] };
+              EDITOR_VERSION: fs.readFileSync("src/ha-3dhome-editor.ts", "utf8").match(/EDITOR_VERSION = "([^"]+)"/)[1],
+              "manifest.json": require("./custom_components/ha_3dhome/manifest.json").version };
             const bad = Object.entries(got).filter(([, x]) => x !== v);
             if (bad.length) { console.error("tag v" + v + " but " + bad.map(([k, x]) => k + "=" + x).join(", ")); process.exit(1); }' "$v"
-      - name: Committed dist/ is this build
-        run: npm run build && git diff --exit-code -- dist/
+      - name: The committed card files are this build
+        run: npm run build && git diff --exit-code -- custom_components/ha_3dhome/frontend/
       - name: Tests
         run: |
           npx playwright install --with-deps chromium
           npm run typecheck
           npm test
           npm run test:plan
+          npm run test:panel
           npm run test:demo
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - name: Integration tests
+        run: pip install -r requirements_test.txt && npm run test:py
       - name: Publish
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease";; esac
-          gh release create "$GITHUB_REF_NAME" dist/ha-3dhome.js dist/ha-3dhome-editor.js \
+          (cd custom_components && zip -r ../ha_3dhome.zip ha_3dhome -x '*/__pycache__/*')
+          gh release create "$GITHUB_REF_NAME" ha_3dhome.zip \
+            custom_components/ha_3dhome/frontend/ha-3dhome.js custom_components/ha_3dhome/frontend/ha-3dhome-editor.js \
             --title "$GITHUB_REF_NAME" --generate-notes $pre

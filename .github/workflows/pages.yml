@@ -3,7 +3,7 @@
 # One-time setup: Settings -> Pages -> Source: GitHub Actions.
 name: Demo site
 # Manual for now: run it from the Actions tab once Pages is turned on. To publish on every push to main, add:
-#   push: { branches: [main], paths: ["site/**", "dist/**", "examples/**", "tools/demo.js"] }
+#   push: { branches: [main], paths: ["site/**", "custom_components/ha_3dhome/frontend/**", "examples/**", "tools/demo.js"] }
 on:
   workflow_dispatch:
 permissions:

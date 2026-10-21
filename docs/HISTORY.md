@@ -59,17 +59,19 @@
 31. **3D Home (v5.0.0).** The project was renamed from ha-iso-home and published as its own repository. The card is now `custom:ha-3dhome-card` and the strategy `custom:ha-3dhome`; the old names (`custom:iso-home-3d-card`, `custom:iso-home`) still work and Save writes into either. The core loads the editor from its own folder, because HACS registers only one file. Added `hacs.json`, a tag-driven release workflow, and `site/`: a standalone demo on a fictional home (`examples/sample-home.json`) with a fake `hass`. The tests run on that home too (`tools/fixtures/test-home.json`, the same home with walls in the old format so the migration stays tested). The strategy registers itself in `window.customStrategies`, so on Home Assistant 2026.5+ it is listed under Settings → Dashboards → Add dashboard → Community dashboards. A dashboard made there has no layout, so the card shows an empty-map hint (`_showEmpty`) pointing at Edit → Floor plan. The old names are only claimed when the old ha-iso-home resource isn't installed too (`claimOldNames`, which reads `lovelace/resources`); otherwise whichever module loaded first took them and old dashboards ran either version at random. Home Assistant's Add dashboard dialog has no picture for community dashboards yet (`CustomStrategyEntry` has no image field); a matching one is ready in docs/images/add-dashboard/ (drawn by tools/art/add-dashboard.py).
 32. **Connection loss and lost WebGL contexts (v5.1.0).** On-demand rendering (v4.20) meant nothing redrew when a phone or tablet threw away the page's WebGL context in the background, so coming back to HA could leave a blank map. The card now redraws when the context is restored, and rebuilds itself (keeping the camera) when the context stays lost for 3 s on a visible page (`_ctxCheck`). It also follows `hass.connected` and the browser's online state: a drop longer than 2.5 s greys the map under a "Reconnecting to Home Assistant…" pill and taps that would call a service just nudge the pill (`_connState`, `_offlineTap`); Save refuses with a toast and keeps the edits. On reconnect every entity is re-applied and the scene redrawn. After a long sleep, a network change or a back/forward cache restore it pings the websocket and asks HA to reconnect if no answer comes in 8 s (`_probeConn`).
 33. **Readable TypeScript source (v5.2.0).** The two large source files (about 4,600 dense lines) became small modules in `src/core`, `src/card` and `src/editor`, formatted with Prettier and written in TypeScript (the config schema is in `src/types.ts`), still bundled into the same two files. Pure helpers are fully strict; the card and editor are strict apart from null checks. Long functions were split into named steps (`_init`, `_update`, pointer input), and the stylesheet moved to `styles.ts`. The editor now loads only when Edit is first pressed (`loadEditor`), so people who only view the map no longer download it. Nothing else changed: every test suite passes unchanged.
+34. **A sidebar page of its own (v5.3.0).** On a dashboard the map sat inside Lovelace: every save rewrote the dashboard, Home Assistant replaced the card element and the card had to hand its scene over (`PARKED`), and strategy dashboards were regenerated on every registry change. 3D Home became a Home Assistant integration (`custom_components/ha_3dhome`, HACS category integration) that adds a sidebar page per config entry (`panel_custom`, `<ha-3dhome-panel>`), keeps each page's config and a revision in `.storage`, and pushes every save to all open screens over a websocket subscription. A save that started from an older revision is refused, so two devices can't overwrite each other. The card applies a new layout in its running scene (`_applyLayout`) instead of restarting WebGL, on the panel and on dashboards. The integration serves the card files itself (versioned URLs, so no resource to bump) and loads the card on every page, so the card and the dashboard strategy keep working without a resource. An empty page offers to copy the map from a dashboard. Saving goes through a `LayoutStore` (the dashboard, or the panel's), and the editor became its own object (`Editor`) that the card talks to through `CardEditor` and that reaches the card only through `EditorHost` (`src/editor-contract.ts`), instead of methods copied onto the card.
 
 ## Key decisions
 
 | Decision | Why |
 |---|---|
-| Layout as JSON in the dashboard config | One source of truth that the in-card editor can save to; no file access to HA needed |
+| Layout as JSON in the dashboard config (v4–v5.2) | One source of truth that the in-card editor can save to; no file access to HA needed |
+| A custom panel and integration (v5.3) | No dashboard to regenerate on save, live updates across screens, files served with versioned URLs; the card and strategy stay for people who want the map on a dashboard |
 | Plain ES modules, CDN Three.js | No build step needed in Home Assistant; the dist files are just minified sources |
 | Orthographic camera | Keeps the "artsy isometric" look; rooms read like a diorama |
 | Squashed heights (`model_scale` [2.1, 4]) | Matches the stylised 60-unit walls instead of real-scale ceilings |
 | Downloader integration for SH3D | SourceForge zips aren't CORS-fetchable; HA downloads into `www/` and the browser reads `/local/` |
-| Strategy dashboard | Full-screen map with no Lovelace chrome; the editor writes into `strategy` directly |
+| Strategy dashboard (v4.1) | Full-screen map with no Lovelace chrome; the editor writes into `strategy` directly. Kept as an option next to the panel |
 | Touch: select-then-drag | Panning on a phone kept moving furniture by accident |
 
 ## Open items
@@ -77,6 +79,9 @@
 - **Floor plan follow-ups:**
   - door leaves (`doorpanel` objects) don't follow when an opening moves;
   - a wall can't yet be curved or tapered.
+- **Panel follow-ups:**
+  - an icon in `home-assistant/brands`, so the HACS brands check can run;
+  - strict null checks for the card and editor (about 700 errors today, mostly `querySelector` results and fields that are null only after teardown).
 - **Ideas:**
   - multiple floors or levels;
   - snap-to-wall for furniture;

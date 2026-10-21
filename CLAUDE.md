@@ -4,17 +4,20 @@ Read this first. It is the hand-off between sessions: what lives where, how to c
 
 ## What this is
 
-3D Home (`ha-3dhome`, formerly ha-iso-home) is a Home Assistant dashboard plugin, published through HACS. The source is small TypeScript modules that esbuild bundles into two JavaScript files (`npm run build`, `tools/bundle.js`). Module map and how the parts fit: docs/ARCHITECTURE.md.
+3D Home (`ha-3dhome`, formerly ha-iso-home) is a Home Assistant integration with a frontend, published through HACS (category integration). Its main face is a sidebar page (a custom panel); the same code also works as a Lovelace card and a dashboard strategy. The frontend is small TypeScript modules that esbuild bundles into two JavaScript files in `custom_components/ha_3dhome/frontend/` (`npm run build`, `tools/bundle.js`). Module map and how the parts fit: docs/ARCHITECTURE.md.
 
-- `src/ha-3dhome.ts` (core entry → `dist/ha-3dhome.js`): registers the card and the strategy, publishes shared helpers on `window.__ha3dhome` (`src/editor-api.ts`) and tells `src/card/editor-loader.ts` where the editor lives (next to itself; HACS registers only one file).
+- `custom_components/ha_3dhome/` (Python): serves the two files at `/ha_3dhome/…?v=<version>`, loads the core on every page (`add_extra_js_url`, so the card needs no resource), adds one sidebar page per config entry (`panel_custom`, element `ha-3dhome-panel`) and keeps each page's card config plus a revision in `.storage` (`store.py`), followed and saved over the websocket (`websocket.py`: `ha_3dhome/config/subscribe`, `ha_3dhome/config/save`, which refuses a save from an older revision). Tests: `tests/` (`npm run test:py`).
+- `src/ha-3dhome.ts` (core entry → `ha-3dhome.js`): registers the card, the panel and the strategy, publishes shared helpers on `window.__ha3dhome` (`src/editor-api.ts`) and tells `src/card/editor-loader.ts` where the editor lives (next to itself).
+  - `src/panel/`: `<ha-3dhome-panel>`. It shows one card, follows the stored config, gives the card a `LayoutStore` (`card.layoutStore`) so Save goes to the integration, holds pushed configs while someone edits, and offers to copy a map from a dashboard into an empty page (`src/core/lovelace.ts`).
   - `src/types.ts`: the config schema as types. `src/core/`: constants and pure helpers (items, plan geometry, surfaces, fixtures, sun, entities, Sweet Home 3D parsing) plus the strategy.
   - `src/card/`: the card. `card.ts` declares every field and holds the lifecycle; one part class per topic (`startup`, `camera`, `rooms`, `scene`, `models`, `lights`, `picking`, `live`, `plan`) is copied onto its prototype. Part methods take `this: Home3DCard`, and an interface merge in `card.ts` types them all as one class. `styles.ts` is the shadow DOM's CSS and markup.
-- `src/ha-3dhome-editor.ts` (editor entry → `dist/ha-3dhome-editor.js`): loaded the first time ✎ Edit is pressed (`_openEditor` → `loadEditor()`). It checks the version, then copies the methods of each part in `src/editor/` onto the card prototype. The parts read the core's helpers through `src/editor/shared.ts`.
+- `src/ha-3dhome-editor.ts` (editor entry → `ha-3dhome-editor.js`): loaded the first time ✎ Edit is pressed (`_openEditor` → `loadEditor()`). It registers the `Editor` class (`src/editor/editor.ts`, its parts in `src/editor/`) with the core, which makes one per card (`card._editor`). The editor reaches the card only as `this.card.…` through `EditorHost`, and the card calls it only through `CardEditor` (both in `src/editor-contract.ts`): add a new crossing there. The parts read the core's helpers through `src/editor/shared.ts`.
 - Tests bundle `src/` on the fly (`tools/bundle.js`), so there's no build step before `npm test`; `--dist` tests the committed build. The tests inline the editor, so it's there before Edit is pressed; `npm run test:demo` covers loading it on demand from real files.
-- **Types:** `npm run typecheck`. `src/types.ts` and `src/core/` are fully strict (`tsconfig.strict.json`); the card and editor are strict except null checks (`tsconfig.json`), because their fields fill in during `_init` and while editing. Unused locals fail the check. Add a field to `card.ts` with `declare` and a comment, never as a class field (that would be runtime code).
+- **Types:** `npm run typecheck`. `src/types.ts`, `src/core/` and `src/panel/` are fully strict (`tsconfig.strict.json`); the card and editor are strict except null checks (`tsconfig.json`), because their fields fill in during `_init` and while editing (turning null checks on there reports about 700 errors, mostly `querySelector` results and fields that are null only after teardown). The panel talks to the card through its own small `MapCard` interface so it stays in the strict set. Unused locals fail the check. Add a field to `card.ts` with `declare` and a comment, never as a class field (that would be runtime code).
 
 They define:
 
+- `ha-3dhome-panel`: the sidebar page the integration adds.
 - `ha-3dhome-card`: a Lovelace custom card (Three.js 3D floor plan, live lights, chips, the editor).
 - `ll-strategy-dashboard-ha-3dhome` (plus `ll-strategy-ha-3dhome`): a dashboard strategy, `custom:ha-3dhome`, that generates a full-screen panel view around the card.
 - The old names `iso-home-3d-card` and `custom:iso-home` stay registered as aliases, and Save writes into either. Don't remove them: existing dashboards use them.
@@ -25,8 +28,8 @@ This repo is public. Never commit anyone's real home layout, entity ids, Home As
 
 HACS installs GitHub releases, so a version tag is what ships and `main` is the working branch. Full steps: docs/RELEASING.md.
 
-1. Edit `src/`, then bump `VERSION3D` (`src/core/constants.ts`), `EDITOR_VERSION` (`src/ha-3dhome-editor.ts`) and `version` in package.json together. The editor refuses to attach to a core of another version.
-2. Run `npm run typecheck`, `npm test`, `npm run test:mobile`, `npm run test:plan` (and `-- --mobile`) and `npm run test:demo`; all must pass. Also run `npm run test:leaks` if you touched lifecycle, rebuild or disposal code (add `-- --look` when you touched the render looks). Then `npm run build` and commit `dist/`. `npm run test:all` runs the type check and every suite with one line each; `npm run format` applies Prettier.
+1. Edit `src/`, then bump `VERSION3D` (`src/core/constants.ts`), `EDITOR_VERSION` (`src/ha-3dhome-editor.ts`), `version` in package.json and `version` in `custom_components/ha_3dhome/manifest.json` together. The editor refuses to attach to a core of another version, and the build refuses a manifest that disagrees.
+2. Run `npm run typecheck`, `npm test`, `npm run test:mobile`, `npm run test:plan` (and `-- --mobile`), `npm run test:panel` and `npm run test:demo`; all must pass. Run `npm run test:py` when you touch `custom_components/` (it needs `pip install -r requirements_test.txt`; `PYTHON=` picks the interpreter). Also run `npm run test:leaks` if you touched lifecycle, rebuild or disposal code (add `-- --look` when you touched the render looks). Then `npm run build` and commit `custom_components/ha_3dhome/frontend/`. `npm run test:all` runs the type check and every suite with one line each; `npm run format` applies Prettier.
 3. Only the maintainer decides when to tag a release. Don't push tags or submit to the HACS default list unless asked.
 
 ## Floor plan data (v4.7)
@@ -85,7 +88,8 @@ HACS installs GitHub releases, so a version tag is what ships and `main` is the 
 - **Sweet Home 3D libraries**
   - They are SourceForge zips, each with a nested `.sh3f` zip holding `PluginFurnitureCatalog.properties` plus OBJ/MTL. They are not CORS-fetchable from the browser, which is why the Downloader integration exists.
   - Each device caches extracted model files in IndexedDB (`ha-3dhome` / `models`).
-- **HA replaces card elements** when a strategy dashboard's config changes (every save). A detached card parks in `PARKED` for its 30 s grace period and the new element adopts it (becomes a thin shell forwarding `hass`/`setConfig`), so there's no second WebGL scene. Config equality uses `stableJSON` (key order varies).
+- **HA replaces card elements** when a strategy dashboard's config changes (every save). A detached card parks in `PARKED` for its 30 s grace period and the new element adopts it (becomes a thin shell forwarding `hass`/`setConfig`), so there's no second WebGL scene. Config equality uses `stableJSON` (key order varies). The panel has none of this: its element stays, and a new config that differs only in `LAYOUT_KEYS` is applied in the running scene (`_applyLayout()`), as is a dashboard save.
+- **Panel saves:** the panel's own save comes back over the subscription, often before the save call returns. The panel ignores any config whose revision it already shows, and never applies one while `card._edit` is set; the editor fires `ha-3dhome-editing` on enter and exit.
 - **Test harness:** the smoke test must not declare top-level names that collide with the minified bundle (it uses `__card`, `__gen`, `__dash`). Tests find items by property (the sofa group, the fan overlay, the lounge floor), not by a fixed index.
 
 ## Testing
@@ -97,7 +101,11 @@ HACS installs GitHub releases, so a version tag is what ships and `main` is the 
 - Checks: render, room menu, edit mode, group select, fan + light attachment, mouse drag and undo, entity-panel drag-drop, Show as → Screen, library browse and place, save into the strategy.
 - `--mobile` checks touch: one-finger pan vs move-selected, tap-select, pinch cancelling a drag.
 
-The test uses `/opt/pw-browsers/chromium` when present, or `CHROMIUM_PATH`. Never run `playwright install` in the cloud sandbox.
+`npm run test:panel` loads `<ha-3dhome-panel>` with a fake integration in the page (subscribe pushes, save checks the revision): import from a dashboard, Save to the integration, a save from another device in the running scene, an edit clash, the narrow sidebar button, non-admins.
+
+`npm run test:py` runs the integration's tests with `pytest-homeassistant-custom-component` (a real Home Assistant core): config and options flow, the panel registration, subscribe/save/conflict, admin-only saving, removal.
+
+The browser tests use `/opt/pw-browsers/chromium` when present, or `CHROMIUM_PATH`. Never run `playwright install` in the cloud sandbox.
 
 ## Conventions
 
@@ -105,6 +113,10 @@ The test uses `/opt/pw-browsers/chromium` when present, or `CHROMIUM_PATH`. Neve
 - Keep new UI working at phone width. `.wrap` has `container-type: inline-size`; use `@container (max-width: 640px)`.
 - User-facing strings are plain English, with no jargon in toasts.
 - Commit messages: imperative, short subject, end with the attribution lines the session provides. Every commit also credits the maintainer with the trailer `Co-authored-by: Trent <43056103+tbell19@users.noreply.github.com>`.
+
+## Home Assistant APIs the integration leans on
+
+`panel_custom.async_register_panel`, `frontend.async_remove_panel`, `frontend.add_extra_js_url`, `hass.http.async_register_static_paths` (2024.7+), `helpers.storage.Store`, `websocket_api` (`websocket_command`, `require_admin`, `connection.subscriptions`) and the dispatcher. The options flow uses the 2024.12+ style (no `config_entry` passed in), hence `hacs.json` → `homeassistant: 2024.12.0`.
 
 ## Demo site
 

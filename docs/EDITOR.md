@@ -130,6 +130,6 @@ The blueprint is only visible in floor plan mode, unless you tick **Also show it
 
 ## Saving
 
-- **Save** (pinned at the right of the toolbar on phones) writes the layout into the dashboard and leaves edit mode.
+- **Save** (pinned at the right of the toolbar on phones) stores the layout and leaves edit mode. On the 3D Home page it goes to the integration, and every other screen with the page open shows it straight away; if someone saved from another device while you were editing, Save tells you instead of overwriting their work (Cancel, then edit again). On a dashboard it writes into the dashboard.
 - **Cancel** discards changes; it asks first if you made any.
 - **Undo/redo:** ↶ ↷, or Ctrl+Z / Ctrl+Shift+Z.
