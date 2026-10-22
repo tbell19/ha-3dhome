@@ -54,7 +54,7 @@ window.__states=${JSON.stringify(STATES)}; window.__cfg=${JSON.stringify(CONFIG)
     await p.waitForTimeout(1500);
   } // effects (on by default) load lazily: baseline after them
   const snap = () =>
-    ev(`(async()=>{ for(let i=0;i<200&&!card._edit&&!(card._aoBaked===card._world&&!card._batchT);i++) await new Promise(r=>setTimeout(r,50));   // outside the editor: merged and baked
+    ev(`(async()=>{ for(let i=0;i<200&&!card._edit&&!(card._batchBox&&!card._batchT);i++) await new Promise(r=>setTimeout(r,50));   // outside the editor: merged
      for(let i=0;i<3;i++){ window.gc&&gc(); await new Promise(r=>setTimeout(r,50)); }
      card._requestRender(); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));   // GPU memory counts what has been drawn
      const m=card._renderer?.info.memory||{}; return {geo:m.geometries, tex:m.textures, prog:card._renderer?.info.programs?.length,

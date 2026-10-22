@@ -190,14 +190,10 @@ export class CameraPart {
     return shift * px >= 0.5;
   }
 
-  /* Draws one frame. Outside the editor the corner shading is baked into the materials (ao-bake.ts). In the editor it is
-   * the GTAO pass, the costliest one (a second render of the scene plus a full-screen blur), so it sits out while the
-   * view moves and fades back in once the view has been still for SETTLE_MS. → true while it fades in */
+  /* Draws one frame. Ambient occlusion is the costliest pass (a second render of the scene plus a full-screen blur), so it
+   * sits out while the view moves and fades back in once the view has been still for SETTLE_MS. → true while it fades in */
   _draw(this: Home3DCard, moving: boolean) {
-    const baked = !!this._aoBaked && this._aoBaked === this._world && !this._edit && !this._plan;
-    if (this._aoU) this._aoU.uAoStrength.value = baked ? this._aoLevel || 0 : 0;
-    if (baked && this._aoPass) this._aoPass.enabled = false;
-    const ao = this._usePP && !baked ? this._aoPass : null;
+    const ao = this._usePP ? this._aoPass : null;
     const level = ao ? this._aoLevel || 0 : 0;
     const now = performance.now();
     if (moving) this._movedAt = now;
@@ -206,6 +202,7 @@ export class CameraPart {
     if (ao) {
       ao.enabled = k > 0;
       ao.blendIntensity = level * k;
+      this._aoReuse = k > 0 && this._aoUnchanged();
     }
     if (this._usePP && (k > 0 || this._bloomPass?.enabled)) this._composer.render();
     else this._renderer.render(this._scene, this._cam); // nothing left for the composer to add

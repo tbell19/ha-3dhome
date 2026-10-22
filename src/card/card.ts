@@ -36,8 +36,6 @@ import { PickingPart } from "./picking";
 import { LivePart } from "./live";
 import { PlanPart } from "./plan";
 import { BatchPart } from "./batch";
-import { BakePart } from "./ao-bake";
-import type { BakedAOUniforms } from "./ao-bake";
 import type { CardEditor } from "../editor-contract";
 
 /** A room the camera can frame: from the room menu, or one per floor. */
@@ -131,8 +129,7 @@ export interface Home3DCard
     PickingPart,
     LivePart,
     PlanPart,
-    BatchPart,
-    BakePart {}
+    BatchPart {}
 
 export class Home3DCard extends HTMLElement {
   /* `declare` adds types only: no field is created, so nothing changes at runtime. */
@@ -205,9 +202,10 @@ export class Home3DCard extends HTMLElement {
   declare _aoLevel: number; // the ambient occlusion strength the look asks for (0..1)
   declare _drawK: { p: THREE.Vector3; q: THREE.Quaternion; z: number } | null; // the camera as last drawn (_seenMove)
   declare _movedAt: number; // performance.now() of the last frame the view moved in
-  declare _aoU: BakedAOUniforms | null; // the baked corner shading, shared by every patched material (ao-bake.ts)
-  declare _aoRT: THREE.WebGLRenderTarget | null; // its map
-  declare _aoBaked: THREE.Group | null; // the world it was baked for
+  declare _aoReuse: boolean; // the next frame reuses the last ambient occlusion (only the lights changed)
+  declare _aoKey: Float64Array | null; // the camera and canvas it was computed for (_aoUnchanged)
+  declare _aoWorld: THREE.Group | null; // and the world
+  declare _aoFade: string | null; // and the see-through room
   declare _batchBox: THREE.Group | null; // the merged static meshes (batch.ts)
   declare _batched: THREE.Mesh[] | null; // the meshes they replace, hidden while they show
   declare _batchOn: boolean; // the merged meshes are showing
@@ -343,9 +341,6 @@ export class Home3DCard extends HTMLElement {
     this._settleT = null;
     clearTimeout(this._batchT);
     this._batchT = null;
-    this._aoRT?.dispose();
-    this._aoRT = null;
-    this._aoU = null;
     this._fly = null;
     this._focus = null;
     clearTimeout(this._backT);
@@ -698,7 +693,6 @@ export class Home3DCard extends HTMLElement {
    * Cached materials (this._mats), the shared glow texture, blueprint textures and Sweet Home 3D prototype meshes are kept. */
   _disposeWorld() {
     this._unbatch();
-    this._dropBakedAO();
     this._clearFade(true);
     this._scene?.remove(this._world);
     this._disposeTree(this._world);
@@ -739,7 +733,6 @@ for (const part of [
   LivePart,
   PlanPart,
   BatchPart,
-  BakePart,
 ])
   for (const k of Object.getOwnPropertyNames(part.prototype))
     if (k !== "constructor")
