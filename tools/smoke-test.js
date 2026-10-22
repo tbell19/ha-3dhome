@@ -113,6 +113,7 @@ const STATES = {
     `(()=>{const f=[...(card._faded||[])];return {n:f.length,see:f.every(m=>[].concat(m.material).every(x=>x.transparent&&x.opacity<0.5))}})()`,
   );
   check("framing a room fades what stands in front of it", fade.n > 0 && fade.see, JSON.stringify(fade));
+  check("a see-through room shows the meshes one by one", await ev(`card._batchOn===false`));
   await p.screenshot({ path: path.join(OUT, `${MOBILE ? "mobile" : "desktop"}-room-fade.png`) });
   await ev(`card._focusRoom(null)`);
   await wait(1200);
@@ -122,33 +123,22 @@ const STATES = {
       `!card._faded && (()=>{let ok=true;card._world.traverse(m=>{if(m.userData.fadeOrig)ok=false});return ok})()`,
     ),
   );
+  check("going home shows the merged meshes again", await ev(`card._batchOn===true`));
 
-  // panning skips the ambient occlusion pass (the costliest one) and brings it back once the view is still
-  if (!MOBILE && (await ev(`!!card._aoPass && card._usePP`))) {
-    await p.mouse.move(640, 420);
-    await p.mouse.down();
-    for (let i = 1; i <= 6; i++) {
-      await p.mouse.move(640 + 8 * i, 420 + 3 * i);
-      await ev(`new Promise(r=>requestAnimationFrame(()=>r()))`);
-    }
-    const mid = await ev(`card._aoPass.enabled`);
-    await p.mouse.up();
-    const back = await until(
-      `card._aoPass.enabled && card._aoPass.blendIntensity===card._aoLevel && !card._raf`,
-      60000,
-    );
-    check("panning skips ambient occlusion until the view settles", !mid && back, JSON.stringify({ mid, back }));
-    // a frame where only the lights changed reuses the last ambient occlusion
-    await wait(1000);
-    await until(`!card._raf`, 30000);
-    const full =
-      await ev(`(()=>{window.__aoFull=0;const a=card._aoPass,n=a.renderOverride.bind(a);a.renderOverride=(...x)=>{__aoFull++;return n(...x)};
-      const id=card._config.lights.find(l=>l.entity).entity;const h=makeHass();h.states={...card._hass.states,[id]:{state:'on',attributes:{brightness:90}}};
-      panel.hass=h;return new Promise(r=>setTimeout(r,1500))})().then(()=>__aoFull)`);
-    check("a light change reuses the ambient occlusion", full === 0, `${full} recomputed`);
-    await ev(`card._focusRoom(null)`);
-    await wait(1200);
-  }
+  // outside the editor the static meshes are merged and the corner shading is baked: no per-frame pass
+  await until(`!!card._batchBox && card._aoBaked===card._world`, 20000);
+  const merged =
+    await ev(`(()=>{const r=card._renderer;r.info.autoReset=false;r.info.reset();r.render(card._scene,card._cam);
+    const calls=r.info.render.calls;r.info.autoReset=true;return {calls,meshes:card._batched.length,merged:card._batchBox.children.length}})()`);
+  check(
+    "static meshes are merged into a few draw calls",
+    merged.meshes > 100 && merged.calls < 100,
+    JSON.stringify(merged),
+  );
+  check(
+    "corner shading is baked, with no shading pass per frame",
+    await ev(`card._aoU.uAoStrength.value>0 && !(card._aoPass&&card._aoPass.enabled)`),
+  );
 
   // string lights toggle from a tap anywhere along the string, not just its first point
   await ev(
@@ -237,6 +227,23 @@ const STATES = {
 
   await ev(`card.shadowRoot.querySelector('.edbtn').click()`);
   check("edit mode opens", await until(`!!card._edit && !!card.shadowRoot.querySelector('.bar')`, 8000));
+  check(
+    "the editor shows the meshes one by one, shaded by the pass",
+    await until(`!card._batchBox && card._aoU.uAoStrength.value===0`, 5000),
+  );
+  if (await ev(`!!card._aoPass && card._usePP && card._aoLevel>0`)) {
+    // moving the view skips the shading pass (the costliest one) and brings it back once the view is still
+    const mid = await ev(`(card._draw(true), card._requestRender(), card._aoPass.enabled)`);
+    const back = await until(
+      `card._aoPass.enabled && card._aoPass.blendIntensity===card._aoLevel && !card._raf`,
+      30000,
+    );
+    check(
+      "in the editor, moving skips the shading pass until the view settles",
+      !mid && back,
+      JSON.stringify({ mid, back }),
+    );
+  }
   await wait(500);
   const SOFA = await ev(`card._work.scene.boxes.findIndex(b=>b.group==='sofa')`),
     FAN = await ev(`'v:'+card._work.scene.overlays.findIndex(o=>o.type==='fan')`);
@@ -563,12 +570,17 @@ const STATES = {
     await ev(`card._focusRoom(null)`);
     await wait(1500);
     // a save from another device: the map keeps its scene and camera and only rebuilds what it shows
+    await until(`!card._fly && !card._raf`, 10000); // the flight home and any easing have finished
     await ev(`window.__r0=card._renderer; window.__zoom0=card._cam.zoom`);
     await ev(`server.saveFrom({...server.config, ambient: 0.5})`);
     await wait(600);
     check(
       "a save from another device shows without a reload (same scene, camera kept)",
       await ev(`card._config.ambient===0.5 && card._renderer===__r0 && card._ready && card._cam.zoom===__zoom0`),
+    );
+    check(
+      "after a new layout the meshes are merged and the shading baked again",
+      await until(`!!card._batchBox && card._aoBaked===card._world`, 20000),
     );
     await ev(
       `card._config={...card._config, idle_view:{room:card._rooms()[0].name, after:0.4}}; card._focusRoom(null)`,

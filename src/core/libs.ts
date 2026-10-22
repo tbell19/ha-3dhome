@@ -18,5 +18,7 @@ export const loadPostProcessing = () =>
     import("three/examples/jsm/postprocessing/GTAOPass.js"),
     import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
   ]);
+/** mergeGeometries, for joining the static meshes outside the editor */
+export const loadGeometryUtils = () => import("three/examples/jsm/utils/BufferGeometryUtils.js");
 /** JSZip, for opening Sweet Home 3D libraries */
 export const loadJSZip = () => import("jszip").then((m) => m.default);

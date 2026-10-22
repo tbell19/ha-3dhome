@@ -198,6 +198,7 @@ export class ModelsPart {
           inner.add(holder);
           this._fadeGen = (this._fadeGen || 0) + 1; // its real size can change what blocks the framed room
           this._renderer.shadowMap.needsUpdate = true;
+          this._scheduleBatch();
           this._requestRender();
         })
         .catch((e) => {

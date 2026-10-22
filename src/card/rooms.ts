@@ -339,6 +339,7 @@ export class RoomsPart {
     }
     for (const m of this._faded || []) if (!want.has(m)) this._unfadeMesh(m);
     this._faded = want;
+    this._showBatch(!want.size); // fading works mesh by mesh
     for (const m of want) this._fadeMesh(m, a);
   }
 
@@ -375,6 +376,7 @@ export class RoomsPart {
     for (const m of this._faded || []) this._unfadeMesh(m);
     this._faded = null;
     this._fadeSig = null;
+    this._showBatch(true);
     if (free) {
       for (const fm of this._fadeMats?.values() || []) fm.dispose();
       this._fadeMats = null;

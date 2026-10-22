@@ -54,7 +54,8 @@ window.__states=${JSON.stringify(STATES)}; window.__cfg=${JSON.stringify(CONFIG)
     await p.waitForTimeout(1500);
   } // effects (on by default) load lazily: baseline after them
   const snap = () =>
-    ev(`(async()=>{ for(let i=0;i<3;i++){ window.gc&&gc(); await new Promise(r=>setTimeout(r,50)); }
+    ev(`(async()=>{ for(let i=0;i<200&&!card._edit&&!(card._aoBaked===card._world&&!card._batchT);i++) await new Promise(r=>setTimeout(r,50));   // outside the editor: merged and baked
+     for(let i=0;i<3;i++){ window.gc&&gc(); await new Promise(r=>setTimeout(r,50)); }
      card._requestRender(); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));   // GPU memory counts what has been drawn
      const m=card._renderer?.info.memory||{}; return {geo:m.geometries, tex:m.textures, prog:card._renderer?.info.programs?.length,
      heap:Math.round((performance.memory?.usedJSHeapSize||0)/1024/1024*10)/10, liveCtx:__ctx.filter(c=>!c.isContextLost()).length, lst:__lst.length}; })()`);
@@ -78,6 +79,33 @@ window.__states=${JSON.stringify(STATES)}; window.__cfg=${JSON.stringify(CONFIG)
   );
   check("hass updates: JS heap flat (<8 MB growth)", s1.heap - s0.heap < 8, `${s0.heap} -> ${s1.heap} MB`);
 
+  /** one round of every mode: edit, floor plan, its tools, the look panel, a see-through room, back out */
+  const cycle = async (i) => {
+    await ev(`card._openEditor()`);
+    await p.waitForTimeout(300);
+    await ev(`card._editor._setPlanMode(true)`);
+    await p.waitForTimeout(200);
+    await ev(
+      `card._editor._setTool('wall'); card._editor._showPreview([100,300],[200,300],'wall'); card._editor.showMarker([100,300],'joint'); card._editor._showRoomPreview([[100,300],[200,300],[200,400]]); card._editor._setTool('select')`,
+    );
+    await ev(`card._editor._setPlanMode(false)`);
+    await p.waitForTimeout(200);
+    await ev(
+      `const b=card.shadowRoot.querySelector('[data-a=look]'); b.click(); b.click(); card._editor._exitEdit(false)`,
+    );
+    await p.waitForTimeout(300);
+    await ev(`(()=>{ const r=card._rooms(); card._focusRoom(r[${i} % r.length]); })()`);
+    await p.waitForTimeout(900);
+    await ev(`card._focusRoom(null)`);
+    await p.waitForTimeout(700);
+  };
+
+  // the editor's shading pass and the meshes the merge hides are first drawn (and their GPU memory taken) on the way:
+  // the editor checks below compare with the map after one round of every mode
+  await cycle(0);
+  const s1w = await snap();
+  console.log("after one round of every mode", s1w);
+
   // 2. editor churn
   await ev(`card._openEditor()`);
   await p.waitForTimeout(1500);
@@ -91,8 +119,8 @@ window.__states=${JSON.stringify(STATES)}; window.__cfg=${JSON.stringify(CONFIG)
   console.log("after 30 edits", s2);
   check(
     "editor rebuilds: geometries/textures back to baseline",
-    s2.geo <= s1.geo + 2 && s2.tex <= s1.tex + 2,
-    `${s1.geo}/${s1.tex} -> ${s2.geo}/${s2.tex}`,
+    s2.geo <= s1w.geo + 2 && s2.tex <= s1w.tex + 2,
+    `${s1w.geo}/${s1w.tex} -> ${s2.geo}/${s2.tex}`,
   );
 
   // 2b. floor-plan churn: corner drags rebuild the plan layer on every pointer move
@@ -111,31 +139,14 @@ window.__states=${JSON.stringify(STATES)}; window.__cfg=${JSON.stringify(CONFIG)
   console.log("after floor-plan churn", s2b);
   check(
     "floor-plan rebuilds: geometries/textures back to baseline",
-    s2b.geo <= s1.geo + 2 && s2b.tex <= s1.tex + 2,
-    `${s1.geo}/${s1.tex} -> ${s2b.geo}/${s2b.tex}`,
+    s2b.geo <= s1w.geo + 2 && s2b.tex <= s1w.tex + 2,
+    `${s1w.geo}/${s1w.tex} -> ${s2b.geo}/${s2b.tex}`,
   );
 
   // 2c. switching modes over and over: edit, floor plan, its tools, the look panel, rooms (see-through fade), back out
+  await cycle(0); // the first see-through room uploads the hidden originals of the merged meshes: not a leak
   const s2c0 = await snap();
-  for (let i = 0; i < 8; i++) {
-    await ev(`card._openEditor()`);
-    await p.waitForTimeout(300);
-    await ev(`card._editor._setPlanMode(true)`);
-    await p.waitForTimeout(200);
-    await ev(
-      `card._editor._setTool('wall'); card._editor._showPreview([100,300],[200,300],'wall'); card._editor.showMarker([100,300],'joint'); card._editor._showRoomPreview([[100,300],[200,300],[200,400]]); card._editor._setTool('select')`,
-    );
-    await ev(`card._editor._setPlanMode(false)`);
-    await p.waitForTimeout(200);
-    await ev(
-      `const b=card.shadowRoot.querySelector('[data-a=look]'); b.click(); b.click(); card._editor._exitEdit(false)`,
-    );
-    await p.waitForTimeout(300);
-    await ev(`(()=>{ const r=card._rooms(); card._focusRoom(r[${i} % r.length]); })()`);
-    await p.waitForTimeout(900);
-    await ev(`card._focusRoom(null)`);
-    await p.waitForTimeout(700);
-  }
+  for (let i = 1; i < 9; i++) await cycle(i);
   const s2c = await snap();
   console.log("after 8 mode cycles", s2c);
   check(

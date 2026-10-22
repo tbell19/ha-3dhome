@@ -162,10 +162,10 @@ export class CameraPart {
     this._raf = requestAnimationFrame(() => {
       this._raf = null;
       if (!this._renderer) return;
-      this._camMv = false;
       this._controls.update(); // sets _camMv (via "change") only if the camera really moved
       const stepped = this._stepOffset(); // always steps the offset easing
-      const moving = this._camMv || stepped;
+      const moving = this._camMv || stepped; // _camMv also counts moves since the last frame (without damping, a drag moves the camera from its pointer events)
+      this._camMv = false;
       for (const hp of this._helpers || []) hp.update();
       this._scaleHandles();
       this._updateFade();
@@ -190,10 +190,14 @@ export class CameraPart {
     return shift * px >= 0.5;
   }
 
-  /* Draws one frame. Ambient occlusion is the costliest pass (a second render of the scene plus a full-screen blur), so it
-   * sits out while the view moves and fades back in once the view has been still for SETTLE_MS. → true while it fades in */
+  /* Draws one frame. Outside the editor the corner shading is baked into the materials (ao-bake.ts). In the editor it is
+   * the GTAO pass, the costliest one (a second render of the scene plus a full-screen blur), so it sits out while the
+   * view moves and fades back in once the view has been still for SETTLE_MS. → true while it fades in */
   _draw(this: Home3DCard, moving: boolean) {
-    const ao = this._usePP ? this._aoPass : null;
+    const baked = !!this._aoBaked && this._aoBaked === this._world && !this._edit && !this._plan;
+    if (this._aoU) this._aoU.uAoStrength.value = baked ? this._aoLevel || 0 : 0;
+    if (baked && this._aoPass) this._aoPass.enabled = false;
+    const ao = this._usePP && !baked ? this._aoPass : null;
     const level = ao ? this._aoLevel || 0 : 0;
     const now = performance.now();
     if (moving) this._movedAt = now;
@@ -202,7 +206,6 @@ export class CameraPart {
     if (ao) {
       ao.enabled = k > 0;
       ao.blendIntensity = level * k;
-      this._aoReuse = k > 0 && this._aoUnchanged();
     }
     if (this._usePP && (k > 0 || this._bloomPass?.enabled)) this._composer.render();
     else this._renderer.render(this._scene, this._cam); // nothing left for the composer to add
@@ -267,11 +270,10 @@ export class CameraPart {
     const ph1 = Math.min(c.maxPolarAngle, Math.max(c.minPolarAngle, phi ?? s0.phi));
     const fly = (this._fly = {});
     const start = performance.now();
-    const damp = c.enableDamping;
-    c.enableDamping = false;
+    c.enableDamping = false; // on again when it ends (not "as found": a flight that replaces another finds it off)
     const step = (now: number) => {
       if (this._fly !== fly || !this._renderer) {
-        c.enableDamping = damp;
+        if (!this._fly) c.enableDamping = true; // unless another flight took over
         return;
       }
       const k = Math.min(1, (now - start) / ms);
@@ -286,7 +288,7 @@ export class CameraPart {
       if (k < 1) requestAnimationFrame(step);
       else {
         this._fly = null;
-        c.enableDamping = damp;
+        c.enableDamping = true;
       }
       this._syncNav();
       this._requestRender();
