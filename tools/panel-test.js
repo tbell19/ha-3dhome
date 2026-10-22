@@ -12,7 +12,7 @@
  * nothing offered to non-admins.
  */
 const path = require("path");
-const { OUT, CODE, SAMPLE_HOME, launch, check, report } = require("./harness");
+const { OUT, SAMPLE_HOME, launch, scripts, serve, check, report } = require("./harness");
 
 /* the sample home as an old (pre-v6) dashboard held it: in the iso-home strategy, with a railing and an old-style
  * string light, which the import leaves out and brings up to date */
@@ -66,18 +66,17 @@ window.makeHass=(admin)=>({states:{},user:{is_admin:admin},services:{},callServi
     if(m.type==='lovelace/config')return m.url_path==='juniper'?JSON.parse(JSON.stringify(__dash)):{views:[{cards:[]}]};
     throw new Error('unexpected '+m.type)}});
 </script>
-<script type=module>${CODE.editor}</script>
-<script type=module>${CODE.core}
+${scripts()}
+<script type=module>
 const __panel=document.createElement('ha-3dhome-panel');
 __panel.hass=makeHass(true); __panel.narrow=false; __panel.panel={url_path:'3d-home',config:{entry_id:'E1'}};
 document.getElementById('host').append(__panel);
 window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-map');</script>`;
-  await p.route("http://ha.test/**", (r) => r.fulfill({ body: html, contentType: "text/html" }));
 
   const rooms = () => ev(`[...card.shadowRoot.querySelectorAll('.rooms button')].map(b=>b.textContent)`);
   const importBox = `panel.shadowRoot.querySelector('.import')`;
 
-  await p.goto("http://ha.test/3d-home");
+  await serve(p, html);
   check("the panel element is registered", await ev(`!!customElements.get('ha-3dhome-panel')`));
   check("an empty panel shows the card's how-to-start hint", await until(`!!card.shadowRoot?.querySelector('.empty')`));
   check(

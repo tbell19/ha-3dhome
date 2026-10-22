@@ -27,7 +27,17 @@ jobs:
             const bad = Object.entries(got).filter(([, x]) => x !== v);
             if (bad.length) { console.error("tag v" + v + " but " + bad.map(([k, x]) => k + "=" + x).join(", ")); process.exit(1); }' "$v"
       - name: The committed card files are this build
-        run: npm run build && git diff --exit-code -- custom_components/ha_3dhome/frontend/
+        # the .gz copies may differ byte for byte between zlib versions, so they are checked by unzipping them instead
+        run: |
+          npm run build
+          git diff --exit-code -- custom_components/ha_3dhome/frontend/ ':(exclude)*.gz'
+          test -z "$(git ls-files --others -- custom_components/ha_3dhome/frontend/)"
+          node -e '
+            const fs = require("fs"), zlib = require("zlib"), { bundle } = require("./tools/bundle");
+            const dir = "custom_components/ha_3dhome/frontend/";
+            for (const f of Object.keys(bundle({ dist: true })))
+              if (!zlib.gunzipSync(fs.readFileSync(dir + f + ".gz")).equals(fs.readFileSync(dir + f))) {
+                console.error(f + ".gz is not " + f); process.exit(1); }'
       - name: Tests
         run: |
           npx playwright install --with-deps chromium
@@ -46,5 +56,4 @@ jobs:
           pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease";; esac
           (cd custom_components && zip -r ../ha_3dhome.zip ha_3dhome -x '*/__pycache__/*')
           gh release create "$GITHUB_REF_NAME" ha_3dhome.zip \
-            custom_components/ha_3dhome/frontend/ha-3dhome.js custom_components/ha_3dhome/frontend/ha-3dhome-editor.js \
             --title "$GITHUB_REF_NAME" --generate-notes $pre

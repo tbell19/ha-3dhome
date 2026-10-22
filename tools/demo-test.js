@@ -11,13 +11,6 @@ const ROOT = path.join(__dirname, ".."),
   OUT = path.join(__dirname, "out");
 const MOBILE = process.argv.includes("--mobile");
 fs.mkdirSync(OUT, { recursive: true });
-const js = (body) => ({ body, contentType: "application/javascript", headers: { "access-control-allow-origin": "*" } });
-const JSM = "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/";
-const esm = (rel) =>
-  fs
-    .readFileSync(path.join(ROOT, "node_modules/three/examples/jsm", rel), "utf8")
-    .replace(/from 'three'/g, "from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm'")
-    .replace(/from '(\.{1,2}\/[^']+)'/g, (_, r) => `from '${new URL(r, JSM + rel).href}/+esm'`);
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push(ok);
@@ -42,16 +35,15 @@ const check = (name, ok, detail = "") => {
       ? { viewport: { width: 390, height: 800 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }
       : { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 },
   );
-  await ctx.route("https://cdn.jsdelivr.net/**", (r) => {
-    const u = r.request().url();
-    if (u.includes("/examples/jsm/")) return r.fulfill(js(esm(u.split("/examples/jsm/")[1].replace(/\/\+esm$/, ""))));
-    for (const [k, f] of [
-      ["OrbitControls", "controls/OrbitControls.js"],
-      ["TransformControls", "controls/TransformControls.js"],
-    ])
-      if (u.includes(k)) return r.fulfill(js(esm(f)));
-    return r.fulfill(js(fs.readFileSync(path.join(ROOT, "node_modules/three/build/three.module.js"), "utf8")));
-  });
+  // everything but the demo's own server and its icon stand-ins is refused: the map must not need the internet
+  const external = [];
+  await ctx.route(
+    (u) => u.protocol.startsWith("http") && u.hostname !== "localhost" && u.hostname !== "api.iconify.design",
+    (r) => {
+      external.push(r.request().url());
+      return r.abort("internetdisconnected");
+    },
+  );
   await ctx.route("https://api.iconify.design/**", (r) => {
     const f = process.env.MDI_SVG && path.join(process.env.MDI_SVG, path.basename(new URL(r.request().url()).pathname));
     r.fulfill({
@@ -103,6 +95,7 @@ const check = (name, ok, detail = "") => {
     );
     check("Save keeps the layout in this browser", saved === "#123456", String(saved));
     check("no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
+    check("nothing was loaded from the internet", !external.length, external.slice(0, 5).join(", "));
   } catch (e) {
     check("demo run", false, e.message);
   }

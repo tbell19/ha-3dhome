@@ -185,7 +185,7 @@ export class Home3DCard extends HTMLElement {
   declare _toastT: ReturnType<typeof setTimeout>;
 
   // Three.js
-  declare T: typeof THREE; // the Three.js module, loaded from the CDN in _init
+  declare T: typeof THREE; // the Three.js module, loaded in _init (src/core/libs.ts)
   declare _renderer: THREE.WebGLRenderer;
   declare _scene: THREE.Scene;
   declare _cam: THREE.OrthographicCamera;
@@ -196,7 +196,6 @@ export class Home3DCard extends HTMLElement {
   declare _bloomPass: UnrealBloomPass | null;
   declare _usePP: boolean; // render through the composer
   declare _ppLoading: number | null;
-  declare _mods: Record<string, Promise<any>>; // dynamically imported modules by URL
   declare _raf: number | null;
   declare _aoLevel: number; // the ambient occlusion strength the look asks for (0..1)
   declare _drawK: { p: THREE.Vector3; q: THREE.Quaternion; z: number } | null; // the camera as last drawn (_seenMove)

@@ -28,7 +28,6 @@ A 3D Home page keeps its map in the integration's storage as one JSON object wit
 | `look` | on | Render looks, each a strength from `0` (off) to `1`. A look left out uses its default strength, and `look: false` turns them all off. Set from the editor's ✨ Look panel. See below |
 | `idle_view` | off | `{room, after}`: after `after` seconds with no touch, click, scroll or key on the map, fly back to `room` (a room name from the room menu; left out = whole home). Off while editing. Set from the ✨ Look panel's "When left alone" menus |
 | `max_pixel_ratio` | `2` | Cap on devicePixelRatio |
-| `three_url`, `orbit_url`, `jszip_url` | jsDelivr | Override CDN module URLs |
 
 ### Looks (`look`)
 
@@ -39,7 +38,7 @@ A 3D Home page keeps its map in the integration's storage as one JSON object wit
 | `stage` | `1` | Soft drop shadow under the house, baked from the room outlines, and a spotlit backdrop | One textured plane |
 | `bloom` | `0.5` | Glow around lit lamps. Night only; by day it is off | Post-processing pass |
 
-Example: `look: { light: 1, ao: 0.8, stage: 1, bloom: 0.3 }`. The post-processing modules load from the CDN the first time `ao` or `bloom` is above 0.
+Example: `look: { light: 1, ao: 0.8, stage: 1, bloom: 0.3 }`. The post-processing modules load (from the integration, like everything else) the first time `ao` or `bloom` is above 0.
 
 ## Scene
 

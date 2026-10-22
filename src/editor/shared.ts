@@ -21,7 +21,6 @@ export const {
   SURFACES,
   DOOR_STYLES,
   FIXTURES,
-  TC_URL,
   bArr,
   entIcon,
   esc,
@@ -46,7 +45,12 @@ export const {
   LAYOUT_KEYS,
 } = H;
 
-export const YAML_URL = "https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/+esm";
+/* The editor's third-party modules, bundled like the core's (src/core/libs.ts) and loaded when first needed. They share
+ * the core's Three.js file, so the gizmo works on the same Three.js the map draws with. */
+export const loadTransformControls = () => import("three/examples/jsm/controls/TransformControls.js");
+/** js-yaml, for card code pasted into the room controls panel */
+export const loadYaml = () => import("js-yaml");
+
 export const IDLE_AFTER: [number, string][] = [
   [0, "Never"],
   [30, "After 30 seconds"],

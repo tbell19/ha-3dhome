@@ -1,7 +1,7 @@
 /* What the core shares with the editor module. The editor is bundled on its own, so rather than carrying its own copy of
  * these helpers it reads them from window.__ha3dhome, which the core sets before it defines the card.
  */
-import { VERSION3D, TC_URL, CX, CY, AMBIENT, lookOf, SF, LIBS, LIB_DIR, LAYOUT_KEYS } from "./core/constants";
+import { VERSION3D, CX, CY, AMBIENT, lookOf, SF, LIBS, LIB_DIR, LAYOUT_KEYS } from "./core/constants";
 import { round1, jclone, ic, esc, rotPt, inPoly, polyArea, roomTitle, mean, stableJSON } from "./core/util";
 import { entIcon, ACTIVE, DOOR_CLASSES } from "./core/entities";
 import {
@@ -44,7 +44,6 @@ export const editorApi = {
   SURFACES,
   DOOR_STYLES,
   FIXTURES,
-  TC_URL,
   bArr,
   entIcon,
   esc,

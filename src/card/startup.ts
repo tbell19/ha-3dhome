@@ -3,7 +3,8 @@
 import type * as THREE from "three";
 import type { OrbitControls as OrbitControlsType } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Home3DCard } from "./card";
-import { THREE_URL, ORBIT_URL, CX, CY } from "../core/constants";
+import { CX, CY } from "../core/constants";
+import { loadThree, loadOrbitControls } from "../core/libs";
 import { cardStyles, CARD_HTML } from "./styles";
 import { editorAvailable, loadEditor } from "./editor-loader";
 
@@ -11,10 +12,9 @@ export class StartupPart {
   /** first start (and restart after a lost context): load Three.js, build the DOM, renderer, camera and listeners, then
    * the world */
   async _init(this: Home3DCard) {
-    const cfg = this._config;
     const gen = this._gen;
-    const T: typeof THREE = (this.T = await import(cfg.three_url || THREE_URL));
-    const { OrbitControls } = await import(cfg.orbit_url || ORBIT_URL);
+    const [three, { OrbitControls }] = await Promise.all([loadThree(), loadOrbitControls()]);
+    const T: typeof THREE = (this.T = three);
     if (gen !== this._gen || !this.isConnected) {
       this._loading = false;
       return;

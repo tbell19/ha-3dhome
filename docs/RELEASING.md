@@ -23,7 +23,7 @@ So `main` is the development branch, a version tag is the gate, and there is no 
    git tag v4.21.0-beta.1 && git push origin v4.21.0-beta.1   # pre-release (beta testers only)
    ```
 
-4. `.github/workflows/release.yml` checks that the four versions match the tag, that the committed card files are what the build produces, and runs the tests. Then it publishes the release with `ha_3dhome.zip` (the integration, for manual installs) and the two card files (for a card without the integration) attached, and notes generated from the commits.
+4. `.github/workflows/release.yml` checks that the four versions match the tag, that the committed card files are what the build produces, and runs the tests. Then it publishes the release with `ha_3dhome.zip` (the integration with its frontend files, for manual installs) attached, and notes generated from the commits.
 
 To pull a bad release, mark it as a pre-release or delete it on GitHub; HACS then offers the previous one again. Don't move a tag that has been published.
 
@@ -33,7 +33,7 @@ Semantic versioning: a patch for fixes, a minor for new features, a major when a
 
 ## Demo site
 
-`site/` is a static page that runs the built card on a fictional home (`examples/sample-home.json`) with a fake `hass`: no Home Assistant, no network calls except the CDN (Three.js, icons).
+`site/` is a static page that runs the built card on a fictional home (`examples/sample-home.json`) with a fake `hass`: no Home Assistant, no network calls except the icons (from Iconify, standing in for Home Assistant's own).
 
 - Locally: `npm run build && npm run demo`, then open http://localhost:8080.
 - `node tools/demo.js --out _site` assembles the publishable folder (the page, the built card, the sample layout).

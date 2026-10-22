@@ -1,6 +1,6 @@
 {
   "name": "ha-3dhome",
-  "version": "6.2.3",
+  "version": "6.2.4",
   "private": true,
   "description": "3D Home: a live 3D floor plan card and dashboard strategy for Home Assistant, with an editor built in",
   "type": "commonjs",
@@ -21,8 +21,10 @@
     "test:py": "${PYTHON:-python3} -m pytest -q -p no:cacheprovider"
   },
   "devDependencies": {
+    "@types/js-yaml": "4.0.9",
     "@types/three": "0.160.0",
     "esbuild": "0.24.0",
+    "js-yaml": "4.1.0",
     "jszip": "3.10.1",
     "playwright": "^1.47.0",
     "preact": "10.24.3",

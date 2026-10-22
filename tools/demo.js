@@ -7,12 +7,10 @@ const fs = require("fs"),
   path = require("path"),
   http = require("http");
 const ROOT = path.join(__dirname, "..");
-const FILES = {
-  // published path -> source
-  "card/ha-3dhome.js": "custom_components/ha_3dhome/frontend/ha-3dhome.js",
-  "card/ha-3dhome-editor.js": "custom_components/ha_3dhome/frontend/ha-3dhome-editor.js",
-  "sample-home.json": "examples/sample-home.json",
-};
+const FRONTEND = "custom_components/ha_3dhome/frontend";
+const FILES = { "sample-home.json": "examples/sample-home.json" }; // published path -> source
+// the built card: both entries and everything they load from lib/ (Three.js included, so the demo needs no CDN)
+for (const f of Object.keys(require("./bundle").bundle({ dist: true }))) FILES["card/" + f] = FRONTEND + "/" + f;
 for (const f of fs.readdirSync(path.join(ROOT, "site"))) FILES[f] = "site/" + f;
 const out = process.argv.indexOf("--out");
 if (out > 0) {

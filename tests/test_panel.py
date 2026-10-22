@@ -9,6 +9,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.ha_3dhome import FRONTEND_DIR
 from custom_components.ha_3dhome.const import DOMAIN
 
 ENTRY_DATA = {"title": "Home", "icon": "mdi:floor-plan", "require_admin": False, "url_path": "3d-home"}
@@ -45,6 +46,20 @@ async def test_config_flow_adds_a_panel(hass: HomeAssistant) -> None:
     assert panel.config["entry_id"] == done["result"].entry_id
     # only the panel loads the map: other pages don't pay for it
     assert panel.config["_panel_custom"]["module_url"] not in hass.data[DATA_EXTRA_MODULE_URL].urls
+
+
+async def test_serves_every_file_itself(hass: HomeAssistant, hass_client_no_auth) -> None:
+    """Three.js and the other libraries come from the integration (no CDN), gzipped when the browser accepts it."""
+    await _setup(hass)
+    client = await hass_client_no_auth()
+    core = await client.get("/ha_3dhome/ha-3dhome.js?v=1", headers={"Accept-Encoding": "identity"})
+    assert core.status == 200
+    assert "cdn.jsdelivr.net" not in await core.text()
+    lib = sorted((FRONTEND_DIR / "lib").glob("*.js"), key=lambda f: f.stat().st_size)[-1]  # the largest: Three.js
+    zipped = await client.get(f"/ha_3dhome/lib/{lib.name}", headers={"Accept-Encoding": "gzip"})
+    assert zipped.status == 200
+    assert zipped.headers["Content-Encoding"] == "gzip"
+    assert await zipped.read() == lib.read_bytes()  # the client unzips it
 
 
 async def test_options_rename_the_panel(hass: HomeAssistant) -> None:

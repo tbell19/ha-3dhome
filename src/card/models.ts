@@ -4,19 +4,15 @@ import type * as THREE from "three";
 import type JSZip from "jszip";
 import type { SceneItem } from "../types";
 import type { Home3DCard } from "./card";
-import { OBJ_URL, MTL_URL, JSZIP_URL, CX, CY, LIBS, LIB_DIR } from "../core/constants";
+import { CX, CY, LIBS, LIB_DIR } from "../core/constants";
+import { loadJSZip, loadModelLoaders } from "../core/libs";
 import { parseProps, zipFind, dirOf, IDB, LIBCACHE, MODELCACHE } from "../core/sh3d";
 import type { LibItem, Library, ModelFiles, ModelProto } from "../core/sh3d";
 
 export class ModelsPart {
   /* ---------- Sweet Home 3D models ---------- */
-  /** a module from the CDN, imported once */
-  async _mod(this: Home3DCard, url: string): Promise<any> {
-    return ((this._mods ||= {})[url] ||= import(url));
-  }
-
-  async _jszip(this: Home3DCard): Promise<typeof JSZip> {
-    return (await this._mod(this._config.jszip_url || JSZIP_URL)).default;
+  _jszip(this: Home3DCard): Promise<typeof JSZip> {
+    return loadJSZip();
   }
 
   /** cm per plan unit: [horizontal, vertical] */
@@ -129,7 +125,7 @@ export class ModelsPart {
           files = await this._extractModel(o);
           IDB.put(key, files);
         }
-        const [{ OBJLoader }, { MTLLoader }] = await Promise.all([this._mod(OBJ_URL), this._mod(MTL_URL)]);
+        const [{ OBJLoader }, { MTLLoader }] = await loadModelLoaders();
         const urls: Record<string, string> = {};
         for (const [n, b] of Object.entries(files.tex || {})) urls[n] = URL.createObjectURL(b);
         const mgr = new T.LoadingManager();

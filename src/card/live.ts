@@ -3,7 +3,8 @@
 import type * as THREE from "three";
 import type { CardConfig, Hass, HassEntity } from "../types";
 import type { Home3DCard, Screen } from "./card";
-import { JSM, CX, CY, AMBIENT, lookOf } from "../core/constants";
+import { CX, CY, AMBIENT, lookOf } from "../core/constants";
+import { loadPostProcessing } from "../core/libs";
 import { esc, smooth } from "../core/util";
 import { WEATHER_ICON3, stateRgb, entIcon, ACTIVE, SCREEN_OFF } from "../core/entities";
 
@@ -314,15 +315,11 @@ export class LivePart {
 
   async _loadPost(this: Home3DCard) {
     const gen = this._gen;
-    const cfg = this._config;
     if (this._ppLoading === gen) return;
     this._ppLoading = gen;
     try {
-      const [{ EffectComposer }, { RenderPass }, { OutputPass }, { GTAOPass }, { UnrealBloomPass }] = await Promise.all(
-        ["EffectComposer", "RenderPass", "OutputPass", "GTAOPass", "UnrealBloomPass"].map(
-          (f) => import((cfg.jsm_url || JSM) + "postprocessing/" + f + ".js/+esm"),
-        ),
-      );
+      const [{ EffectComposer }, { RenderPass }, { OutputPass }, { GTAOPass }, { UnrealBloomPass }] =
+        await loadPostProcessing();
       if (gen !== this._gen || !this._renderer) return;
       const T = this.T;
       const comp = (this._composer = new EffectComposer(this._renderer));
@@ -355,9 +352,10 @@ export class LivePart {
         renderer: THREE.WebGLRenderer,
         writeBuffer: THREE.WebGLRenderTarget,
         readBuffer: THREE.WebGLRenderTarget,
-        ...rest: unknown[]
+        deltaTime: number,
+        maskActive: boolean,
       ) => {
-        if (!this._aoReuse) return fullRender(renderer, writeBuffer, readBuffer, ...rest);
+        if (!this._aoReuse) return fullRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
         const out = ao.renderToScreen ? null : writeBuffer;
         ao.copyMaterial.uniforms.tDiffuse.value = readBuffer.texture;
         ao.copyMaterial.blending = T.NoBlending;

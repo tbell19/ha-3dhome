@@ -1,16 +1,8 @@
-/* Versions, names and URLs the card depends on, plus the plan-to-scene offset and the render-look defaults.
+/* Versions, names and URLs the card depends on (its third-party modules are in libs.ts), plus the plan-to-scene offset and the render-look defaults.
  */
 import type { CardConfig, LayoutKey, Looks } from "../types";
 
-export const VERSION3D = "6.2.3";
-export const CDN = "https://cdn.jsdelivr.net/npm/";
-export const THREE_URL = CDN + "three@0.160.0/+esm";
-export const JSM = CDN + "three@0.160.0/examples/jsm/";
-export const ORBIT_URL = JSM + "controls/OrbitControls.js/+esm";
-export const TC_URL = JSM + "controls/TransformControls.js/+esm";
-export const OBJ_URL = JSM + "loaders/OBJLoader.js/+esm";
-export const MTL_URL = JSM + "loaders/MTLLoader.js/+esm";
-export const JSZIP_URL = CDN + "jszip@3.10.1/+esm";
+export const VERSION3D = "6.2.4";
 export const CX = 296;
 export const CY = 391;
 /* render looks, each a strength 0..1 under `look:`. A missing key or true uses the default strength, 0 or false turns it off, and `look: false` turns them all off. */
