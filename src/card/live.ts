@@ -352,9 +352,10 @@ export class LivePart {
         renderer: THREE.WebGLRenderer,
         writeBuffer: THREE.WebGLRenderTarget,
         readBuffer: THREE.WebGLRenderTarget,
-        ...rest: unknown[]
+        deltaTime: number,
+        maskActive: boolean,
       ) => {
-        if (!this._aoReuse) return fullRender(renderer, writeBuffer, readBuffer, ...rest);
+        if (!this._aoReuse) return fullRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
         const out = ao.renderToScreen ? null : writeBuffer;
         ao.copyMaterial.uniforms.tDiffuse.value = readBuffer.texture;
         ao.copyMaterial.blending = T.NoBlending;
