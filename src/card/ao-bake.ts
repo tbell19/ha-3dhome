@@ -17,7 +17,7 @@ const HANG = 12; // what starts higher than this above the floor (hanging lamps,
 export interface BakedAOUniforms {
   uAoTex: { value: THREE.Texture | null };
   uAoRect: { value: THREE.Vector4 }; // x0, z0, 1/width, 1/depth (Three.js units)
-  uAoRange: { value: THREE.Vector2 }; // the height map's lowest height and span
+  uAoRange: { value: THREE.Vector4 }; // the height map's lowest height and span, and the map's size in texels
   uAoStrength: { value: number }; // 0 = off (the editor, or the look turned off)
 }
 
@@ -27,7 +27,7 @@ const VERT_BODY = `#include <project_vertex>
   vAoNormal = normalize(mat3(modelMatrix) * objectNormal);`;
 const FRAG_HEAD = `uniform sampler2D uAoTex;
 uniform vec4 uAoRect;
-uniform vec2 uAoRange;
+uniform vec4 uAoRange;
 uniform float uAoStrength;
 varying vec3 vAoWorld;
 varying vec3 vAoNormal;
@@ -35,12 +35,21 @@ float bakedAO() {
   if (uAoStrength <= 0.0) return 1.0;
   vec3 n = normalize(vAoNormal) * (gl_FrontFacing ? 1.0 : -1.0);
   vec2 q = vAoWorld.xz + n.xz * 1.2; // a wall's face reads the floor just in front of it
-  vec4 s = texture2D(uAoTex, (q - uAoRect.xy) * uAoRect.zw);
-  float top = uAoRange.x + s.g * uAoRange.y; // the topmost surface there
+  vec2 uv = (q - uAoRect.xy) * uAoRect.zw;
+  float a = texture2D(uAoTex, uv).r;
+  // the height of one texel, read at its centre: a blend of a wall's top and the floor beside it would put a ledge
+  // halfway up the wall
+  vec2 cell = (floor(uv * uAoRange.zw) + 0.5) / uAoRange.zw;
+  float top = uAoRange.x + texture2D(uAoTex, cell).g * uAoRange.y; // the topmost surface there
   float above = top - vAoWorld.y;
-  float a = s.r;
-  if (above > 1.5) a = min(a, 1.0 - 0.55 * exp(-above / 10.0)); // under a table or a shelf: darker the closer it is
-  else a = mix(a, 1.0, smoothstep(0.0, 16.0, -above)); // up a wall or a cupboard's side, away from the floor
+  if (n.y > 0.5) {
+    if (above > 1.5) a = min(a, 1.0 - 0.55 * exp(-above / 10.0)); // a floor under a table or a shelf
+  } else if (n.y > -0.5) {
+    // a wall or a cupboard's side: a little dark where it meets the floor, and up its whole height in a corner (the
+    // floor in front of a straight wall reads about 0.75, in a corner well under 0.6)
+    float corner = 1.0 - 0.3 * smoothstep(0.62, 0.42, a);
+    a = mix(mix(a, 1.0, 0.4), corner, smoothstep(0.0, 8.0, -above));
+  }
   return mix(1.0, a, uAoStrength);
 }
 `;
@@ -83,20 +92,24 @@ void main() {
   float ao = clamp(1.0 - 1.15 * occ / 16.0, 0.0, 1.0);
   gl_FragColor = vec4(ao, texture2D(tH, vUv).r, 0.0, 1.0);
 }`;
-/** a soft 5×5 blur of the shading (the height stays sharp) */
+/** a soft 5×5 blur of the shading over texels of about the same height, so a wall's top doesn't take on the dark of
+ * the floor beside it (the height stays sharp) */
 const BLUR_FRAG = `uniform sampler2D tA;
 uniform vec2 uTexel;
+uniform float uSpan;
 varying vec2 vUv;
 void main() {
+  float h0 = texture2D(tA, vUv).g;
   float s = 0.0;
   float wsum = 0.0;
   for (int x = -2; x <= 2; x++)
     for (int y = -2; y <= 2; y++) {
-      float w = exp(-0.35 * float(x * x + y * y));
-      s += texture2D(tA, vUv + vec2(float(x), float(y)) * uTexel).r * w;
+      vec4 t = texture2D(tA, vUv + vec2(float(x), float(y)) * uTexel);
+      float w = exp(-0.35 * float(x * x + y * y)) * step(abs(t.g - h0) * uSpan, 2.0);
+      s += t.r * w;
       wsum += w;
     }
-  gl_FragColor = vec4(s / wsum, texture2D(tA, vUv).g, 0.0, 1.0);
+  gl_FragColor = vec4(s / wsum, h0, 0.0, 1.0);
 }`;
 
 export class BakePart {
@@ -106,7 +119,7 @@ export class BakePart {
     return (this._aoU ||= {
       uAoTex: { value: null },
       uAoRect: { value: new T.Vector4() },
-      uAoRange: { value: new T.Vector2(0, 1) },
+      uAoRange: { value: new T.Vector4(0, 1, 1, 1) },
       uAoStrength: { value: 0 },
     });
   }
@@ -136,7 +149,7 @@ export class BakePart {
     // what the map covers: the house's footprint with a margin of ground
     const box = new T.Box3();
     world.traverse((o: any) => {
-      if (o.isMesh && !o.userData.roof && o.material?.visible !== false) box.expandByObject(o);
+      if (o.isMesh && o.visible && !noShade(o)) box.expandByObject(o); // not the backdrop, which is far bigger
     });
     if (box.isEmpty()) return;
     const x0 = box.min.x - PAD;
@@ -173,14 +186,11 @@ export class BakePart {
     const bb = new T.Box3();
     this._scene.traverse((o: any) => {
       if (!o.visible) return;
-      const m = o.material;
-      const mats = m ? (Array.isArray(m) ? m : [m]) : [];
       const skip =
         o.isSprite ||
         o.isLine ||
         o.isPoints ||
-        o.userData.roof ||
-        (o.isMesh && mats.some((x: THREE.Material) => !x.visible || x.transparent || x.colorWrite === false)) ||
+        (o.isMesh && noShade(o)) ||
         (o.isMesh && bb.setFromObject(o).min.y > HANG); // lamps, cords, fans, wall cabinets: little shade, and rings round a cord
       if (skip) {
         o.visible = false;
@@ -231,7 +241,11 @@ export class BakePart {
       },
       rawRT,
     );
-    pass(BLUR_FRAG, { tA: { value: rawRT.texture }, uTexel: { value: new T.Vector2(1 / tw, 1 / th) } }, aoRT);
+    pass(
+      BLUR_FRAG,
+      { tA: { value: rawRT.texture }, uTexel: { value: new T.Vector2(1 / tw, 1 / th) }, uSpan: { value: span } },
+      aoRT,
+    );
     r.setRenderTarget(target);
     r.setClearColor(clear, clearAlpha);
     heightMat.dispose();
@@ -240,7 +254,7 @@ export class BakePart {
 
     U.uAoTex.value = aoRT.texture;
     U.uAoRect.value.set(x0, z0 + d, 1 / w, -1 / d); // v runs from z0 + d (0) to z0 (1)
-    U.uAoRange.value.set(lo, span);
+    U.uAoRange.value.set(lo, span, tw, th);
     world.traverse((o: any) => {
       if (!o.isMesh) return;
       for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m) this._patchAO(m);
@@ -254,4 +268,10 @@ export class BakePart {
     this._aoBaked = null;
     if (this._aoU) this._aoU.uAoStrength.value = 0;
   }
+}
+
+/** → a reason the mesh casts no baked shade: the roof, or a hidden, see-through or invisible material */
+function noShade(o: THREE.Mesh) {
+  const mats = Array.isArray(o.material) ? o.material : [o.material];
+  return o.userData.roof || mats.some((x) => !x || !x.visible || x.transparent || x.colorWrite === false);
 }
