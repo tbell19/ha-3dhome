@@ -1,4 +1,4 @@
-/* What the browser tests share: Chromium with software WebGL, the CDN modules served from node_modules (no network),
+/* What the browser tests share: Chromium with software WebGL, the built files served at the integration's URL, every other host refused (so nothing may need the internet),
  * and a page that shows the 3D Home panel the way Home Assistant does, with a fake `hass` and a fake ha_3dhome
  * integration behind it.
  *
@@ -16,34 +16,28 @@ const ROOT = path.join(__dirname, "..");
 const OUT = path.join(__dirname, "out");
 fs.mkdirSync(OUT, { recursive: true });
 const DIST = process.argv.includes("--dist");
-const CODE = require("./bundle").bundle({ dist: DIST }); // { core, editor }
+const CODE = require("./bundle").bundle({ dist: DIST }); // the built files by path: ha-3dhome.js, lib/…
 const SAMPLE_HOME = JSON.parse(fs.readFileSync(path.join(ROOT, "examples/sample-home.json"), "utf8"));
 
-const JSM = "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/";
+const VERSION = require("../package.json").version;
+const BASE = "http://ha.test/ha_3dhome/"; // where the integration serves the built files (CODE)
 const js = (body) => ({ body, contentType: "application/javascript", headers: { "access-control-allow-origin": "*" } });
-/** a Three.js example module, with its imports pointed at the CDN (which is routed back here) */
-const jsm = (rel) =>
-  fs
-    .readFileSync(path.join(ROOT, "node_modules/three/examples/jsm", rel), "utf8")
-    .replace(/from 'three'/g, "from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm'")
-    .replace(/from '(\.{1,2}\/[^']+)'/g, (_, r) => `from '${new URL(r, JSM + rel).href}/+esm'`);
 
-/** Serves what the map loads from the CDN out of node_modules. `target` is a page or a browser context. */
-async function routeCdn(target) {
-  await target.route("https://cdn.jsdelivr.net/**", (r) => {
-    const u = r.request().url();
-    if (u.includes("js-yaml"))
-      return r.fulfill(js("export default { dump: (v) => JSON.stringify(v, null, 2), load: (t) => JSON.parse(t) };"));
-    if (u.includes("jszip"))
-      return r.fulfill(
-        js(
-          "var module={exports:{}};var exports=module.exports;" +
-            fs.readFileSync(path.join(ROOT, "node_modules/jszip/dist/jszip.min.js"), "utf8") +
-            "\nexport default module.exports;",
-        ),
-      );
-    if (u.includes("/examples/jsm/")) return r.fulfill(js(jsm(u.split("/examples/jsm/")[1].replace(/\/\+esm$/, ""))));
-    return r.fulfill(js(fs.readFileSync(path.join(ROOT, "node_modules/three/build/three.module.js"), "utf8")));
+/* Everything outside the fake Home Assistant is refused and listed here, so the tests prove the map needs no internet;
+ * report() fails when anything tried. */
+const external = [];
+/** Serves the built files at /ha_3dhome/ and refuses every other host. `target` is a page or a browser context. */
+async function routeFiles(target) {
+  await target.route(
+    (u) => u.protocol.startsWith("http") && u.host !== "ha.test",
+    (r) => {
+      external.push(r.request().url());
+      return r.abort("internetdisconnected");
+    },
+  );
+  await target.route(BASE + "**", (r) => {
+    const f = new URL(r.request().url()).pathname.slice("/ha_3dhome/".length);
+    return CODE[f] ? r.fulfill(js(CODE[f])) : r.fulfill({ status: 404, body: "not found" });
   });
 }
 
@@ -66,7 +60,7 @@ async function launch({ mobile = false, viewport = null, args = [] } = {}) {
       ? { viewport: viewport || { width: 390, height: 800 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }
       : { viewport: viewport || { width: 1280, height: 800 }, deviceScaleFactor: 1 },
   );
-  await routeCdn(ctx);
+  await routeFiles(ctx);
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => {
@@ -82,6 +76,12 @@ async function launch({ mobile = false, viewport = null, args = [] } = {}) {
   };
   return { browser, ctx, page, errors, ev, wait, until };
 }
+
+/** the editor and the core, loaded from the integration's URL as Home Assistant does (the editor first, so it is there
+ * before Edit is pressed) */
+const scripts = () =>
+  `<script type=module src="${BASE}ha-3dhome-editor.js?v=${VERSION}"></script>
+<script type=module src="${BASE}ha-3dhome.js?v=${VERSION}"></script>`;
 
 /**
  * The page: stand-ins for Home Assistant's elements, the editor and the core, then one panel whose stored map is
@@ -113,18 +113,20 @@ window.makeHass=(extra={})=>({states:${JSON.stringify(states)},user:{is_admin:${
     if(window.extraWS)return extraWS(m);
     return null},
   ...extra});</script>
-<script type=module>${CODE.editor}</script>
-<script type=module>${CODE.core}
+${scripts()}
+<script type=module>
 const __panel=document.createElement('ha-3dhome-panel');
 __panel.hass=makeHass(${hass}); __panel.narrow=false; __panel.panel={url_path:'3d-home',config:{entry_id:'E1'}};
 document.getElementById('host').append(__panel);
 window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-map');</script></body></html>`;
 }
 
-/** Points the fake Home Assistant origin (http://ha.test/) at `html`; `extra(route, url)` may answer other requests. */
+/** Points the fake Home Assistant origin (http://ha.test/) at `html`; `extra(route, url)` may answer other requests. The
+ * built files under /ha_3dhome/ fall through to routeFiles. */
 async function serve(page, html, extra) {
   await page.route("http://ha.test/**", (r) => {
     const u = r.request().url();
+    if (u.startsWith(BASE)) return r.fallback();
     return (extra && extra(r, u)) || r.fulfill({ body: html, contentType: "text/html" });
   });
   await page.goto("http://ha.test/3d-home");
@@ -138,9 +140,24 @@ function check(name, ok, detail = "") {
 }
 /** prints the tally and exits (non-zero when a check failed) */
 function report(what = "checks", suffix = "") {
+  check("nothing was loaded from the internet", !external.length, external.slice(0, 5).join(", "));
   const failed = results.filter((r) => !r.ok).length;
   console.log(`\n${results.length - failed}/${results.length} ${what} passed.${suffix}`);
   process.exit(failed ? 1 : 0);
 }
 
-module.exports = { ROOT, OUT, CODE, DIST, SAMPLE_HOME, launch, routeCdn, panelPage, serve, check, report, js, jsm };
+module.exports = {
+  ROOT,
+  OUT,
+  CODE,
+  DIST,
+  SAMPLE_HOME,
+  launch,
+  routeFiles,
+  scripts,
+  panelPage,
+  serve,
+  check,
+  report,
+  js,
+};

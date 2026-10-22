@@ -6,14 +6,10 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { LovelaceCardConfig } from "../types";
 import type { Editor } from "./editor";
 import { closeSidePanel } from "./side-panels";
-import { YAML_URL } from "./shared.js";
+import { loadYaml as importYaml } from "./shared.js";
 
-/** js-yaml, loaded from the CDN the first time it's needed (null when it can't be loaded) */
-const loadYaml = (editor: Editor) =>
-  editor.card
-    ._mod(YAML_URL)
-    .then((m) => m.default || m)
-    .catch(() => null);
+/** js-yaml, loaded the first time it's needed (null when it can't be loaded) */
+const loadYaml = () => importYaml().catch(() => null);
 
 export function RoomControlsPanel({ editor }: { editor: Editor }) {
   const card = editor.card;
@@ -59,7 +55,7 @@ export function RoomControlsPanel({ editor }: { editor: Editor }) {
 
   const toggleCode = async () => {
     if (code != null) return setCode(null);
-    const yaml = await loadYaml(editor);
+    const yaml = await loadYaml();
     setCode(!cards.length ? "" : yaml ? yaml.dump(cards, { lineWidth: -1 }) : JSON.stringify(cards, null, 2));
   };
 
@@ -70,7 +66,7 @@ export function RoomControlsPanel({ editor }: { editor: Editor }) {
       if (!text) value = [];
       else if (/^[[{]/.test(text)) value = JSON.parse(text);
       else {
-        const yaml = await loadYaml(editor);
+        const yaml = await loadYaml();
         if (!yaml) throw new Error("couldn't load the YAML reader, use JSON");
         value = yaml.load(text);
       }

@@ -40,7 +40,6 @@ export type EditorHost = Bound<
     | "_toast"
     // Three.js, the camera and the world
     | "T"
-    | "_mod"
     | "_renderer"
     | "_scene"
     | "_cam"

@@ -2,10 +2,16 @@
 
 3D Home has two halves:
 
-- **The frontend:** small TypeScript modules under `src/`, bundled by esbuild into two files in `custom_components/ha_3dhome/frontend/`: `ha-3dhome.js` (the sidebar page and the 3D map) and `ha-3dhome-editor.js` (everything behind ✎ Edit, which the core fetches from its own folder the first time Edit is pressed).
+- **The frontend:** small TypeScript modules under `src/`, bundled by esbuild into `custom_components/ha_3dhome/frontend/`: `ha-3dhome.js` (the sidebar page and the 3D map), `ha-3dhome-editor.js` (everything behind ✎ Edit, which the core fetches from its own folder the first time Edit is pressed) and `lib/`, the files either loads when first needed (Three.js and its add-ons, JSZip, js-yaml, the editor's body). Nothing comes from a CDN, so the map works with no internet. See [Third-party modules](#third-party-modules).
 - **The integration** (`custom_components/ha_3dhome/`, Python): it serves those files, adds the sidebar page and keeps each page's map in Home Assistant's storage. See [The panel and the integration](#the-panel-and-the-integration).
 
 This doc walks through them top to bottom.
+
+## Third-party modules
+
+Three.js (`three@0.160.0` and its add-ons), JSZip (`jszip@3.10.1`), js-yaml (`js-yaml@4.1.0`) and Preact are npm dev dependencies with exact versions, and the build bundles them: the map never fetches code from the internet, so it keeps working when the internet is down. Each third-party module is a dynamic `import()` (`src/core/libs.ts` for the core, `loadTransformControls`/`loadYaml` in `src/editor/shared.ts` for the editor). esbuild builds both entries in one pass with code splitting, so every dynamic import becomes its own file in `frontend/lib/` and the core and editor share one copy of Three.js (the gizmo has to use the same Three.js as the map). The lib/ files are named by a hash of their content, because Home Assistant caches the integration's static files for a long time and only the entries carry `?v=`.
+
+What loads when: opening the page fetches `ha-3dhome.js` (about 42 KB gzipped), then Three.js and OrbitControls (about 170 KB). The post-processing passes load when the `ao` or `bloom` look is on, the OBJ/MTL loaders and JSZip when a Sweet Home 3D model is placed or a library opened, and the editor, TransformControls and js-yaml only from ✎ Edit. `npm run build` writes a `.gz` copy next to every file; Home Assistant's static file handler sends it to any browser that accepts gzip.
 
 ## Module layout
 
@@ -14,7 +20,8 @@ This doc walks through them top to bottom.
 | `src/ha-3dhome.ts` | Core entry: defines `<ha-3dhome-panel>` and the map inside it, `<ha-3dhome-map>`; publishes `window.__ha3dhome`, tells `editor-loader` where the editor lives |
 | `src/types.ts` | The config schema as types: `CardConfig`, `Scene`, `WallSeg`, `Opening`, `SceneItem`, `LightConfig`, `Chip`, `Hass`… |
 | `src/global.d.ts` | What the code adds to `window` (`__ha3dhome`, `customCards`, `customStrategies`) |
-| `src/core/constants.ts` | Version, names, CDN URLs (pinned `three@0.160.0`, `jszip@3.10.1`), plan centre `CX=296, CY=391`, the Sweet Home 3D library list `LIBS`, render-look defaults |
+| `src/core/constants.ts` | Version, names, plan centre `CX=296, CY=391`, the Sweet Home 3D library list `LIBS`, render-look defaults |
+| `src/core/libs.ts` | The third-party modules (Three.js, OrbitControls, the OBJ/MTL loaders, post-processing, JSZip), each a lazy `import()` |
 | `src/core/util.ts` | Rounding, cloning, escaping, `rotPt`, `inPoly`, `polyArea`, `stableJSON` |
 | `src/core/items.ts` | Item kinds and pure item maths: `itemCenter`, `shiftItem`, `itemZ`, `scaleItem`, `mapPts` |
 | `src/core/plan-geometry.ts` | `segDir`, `wallExtensions`, `wallPieces`, `planJoints` |

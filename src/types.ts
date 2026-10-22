@@ -326,10 +326,6 @@ export interface CardConfig {
   look?: false | Partial<Record<keyof Looks, number | boolean>>;
   idle_view?: { room?: string; after?: number };
   max_pixel_ratio?: number;
-  three_url?: string;
-  orbit_url?: string;
-  jszip_url?: string;
-  jsm_url?: string;
   rooms?: unknown;
   [k: string]: unknown;
 }

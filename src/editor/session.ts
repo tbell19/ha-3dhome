@@ -5,7 +5,7 @@ import type { GenericItem } from "../core/items";
 import type { EditState } from "../card/card";
 import type { Editor } from "./editor";
 import { render } from "preact";
-import { KINDS, TC_URL, jclone, roomTitle, segDir } from "./shared";
+import { KINDS, loadTransformControls, jclone, roomTitle, segDir } from "./shared";
 import { closeSidePanels, toggleSidePanel, refreshSidePanels, panelButtons } from "./side-panels";
 import { showToolbar } from "./toolbar";
 
@@ -68,7 +68,7 @@ export class EditorSession {
 
   async enter(this: Editor) {
     if (this.card._edit) return;
-    const { TransformControls } = await this.card._mod(TC_URL);
+    const { TransformControls } = await loadTransformControls();
     this.card._work = jclone({
       scene: this.card._config.scene || {},
       lights: this.card._config.lights || [],
@@ -101,10 +101,11 @@ export class EditorSession {
     const tc = (this.card._tc = new TransformControls(this.card._cam, this.card._renderer.domElement));
     tc.setSize(0.9);
     tc.addEventListener("change", () => this.card._requestRender());
-    tc.addEventListener("dragging-changed", (e: { value?: boolean }) => {
-      this.card._controls.enabled = !e.value;
-      this.card._tcDragging = e.value;
-      if (e.value) this.card._tcUsed = true;
+    tc.addEventListener("dragging-changed", (e) => {
+      const dragging = !!e.value;
+      this.card._controls.enabled = !dragging;
+      this.card._tcDragging = dragging;
+      if (dragging) this.card._tcUsed = true;
     });
     tc.addEventListener("mouseDown", () => this.dragStart(this.card._edit.mode));
     tc.addEventListener("objectChange", () => this.dragPreview());
