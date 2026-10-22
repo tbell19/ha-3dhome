@@ -198,6 +198,14 @@ export class Home3DCard extends HTMLElement {
   declare _ppLoading: number | null;
   declare _mods: Record<string, Promise<any>>; // dynamically imported modules by URL
   declare _raf: number | null;
+  declare _aoLevel: number; // the ambient occlusion strength the look asks for (0..1)
+  declare _drawK: { p: THREE.Vector3; q: THREE.Quaternion; z: number } | null; // the camera as last drawn (_seenMove)
+  declare _movedAt: number; // performance.now() of the last frame the view moved in
+  declare _aoReuse: boolean; // the next frame reuses the last ambient occlusion (only the lights changed)
+  declare _aoKey: Float64Array | null; // the camera and canvas it was computed for (_aoUnchanged)
+  declare _aoWorld: THREE.Group | null; // and the world
+  declare _aoFade: string | null; // and the see-through room
+  declare _settleT: ReturnType<typeof setTimeout> | null; // redraws with ambient occlusion once the view is still
   declare _helpers: (THREE.Object3D & { update(): void; dispose?(): void })[]; // gizmo helpers that follow the camera
 
   // camera
@@ -324,6 +332,8 @@ export class Home3DCard extends HTMLElement {
     this._gen = (this._gen || 0) + 1; // invalidates in-flight async work (_init, model loads)
     if (this._raf) cancelAnimationFrame(this._raf);
     this._raf = null;
+    clearTimeout(this._settleT);
+    this._settleT = null;
     this._fly = null;
     this._focus = null;
     clearTimeout(this._backT);

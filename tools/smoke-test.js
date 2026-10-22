@@ -123,6 +123,33 @@ const STATES = {
     ),
   );
 
+  // panning skips the ambient occlusion pass (the costliest one) and brings it back once the view is still
+  if (!MOBILE && (await ev(`!!card._aoPass && card._usePP`))) {
+    await p.mouse.move(640, 420);
+    await p.mouse.down();
+    for (let i = 1; i <= 6; i++) {
+      await p.mouse.move(640 + 8 * i, 420 + 3 * i);
+      await ev(`new Promise(r=>requestAnimationFrame(()=>r()))`);
+    }
+    const mid = await ev(`card._aoPass.enabled`);
+    await p.mouse.up();
+    const back = await until(
+      `card._aoPass.enabled && card._aoPass.blendIntensity===card._aoLevel && !card._raf`,
+      60000,
+    );
+    check("panning skips ambient occlusion until the view settles", !mid && back, JSON.stringify({ mid, back }));
+    // a frame where only the lights changed reuses the last ambient occlusion
+    await wait(1000);
+    await until(`!card._raf`, 30000);
+    const full =
+      await ev(`(()=>{window.__aoFull=0;const a=card._aoPass,n=a.renderOverride.bind(a);a.renderOverride=(...x)=>{__aoFull++;return n(...x)};
+      const id=card._config.lights.find(l=>l.entity).entity;const h=makeHass();h.states={...card._hass.states,[id]:{state:'on',attributes:{brightness:90}}};
+      panel.hass=h;return new Promise(r=>setTimeout(r,1500))})().then(()=>__aoFull)`);
+    check("a light change reuses the ambient occlusion", full === 0, `${full} recomputed`);
+    await ev(`card._focusRoom(null)`);
+    await wait(1200);
+  }
+
   // string lights toggle from a tap anywhere along the string, not just its first point
   await ev(
     `(()=>{card._config.lights.push({entity:'light.test_string',fixture:'string',z:37,points:[[200,400],[320,400],[380,460]]});card._rebuild()})()`,
