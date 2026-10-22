@@ -1,308 +1,165 @@
-/* The inspector for the selected item: its fields, light tuning, the sun, position/size/rotation and fixtures.
+/* The inspector's logic: what its fields do to the selected items. The inspector itself is drawn by
+ * inspector-panel.tsx (and plan-inspector.tsx in floor plan mode).
  */
 import type { BoxEntry } from "../types";
 import type { GenericItem } from "../core/items";
 import type { LightGroup } from "../card/card";
 import type { Editor } from "./editor";
+import { showInspector } from "./inspector-panel";
 import {
   CX,
   CY,
-  KINDS,
   R1,
   ROTATABLE,
-  FIXTURES,
   bArr,
-  esc,
-  ic,
   itemCenter,
   itemBase,
   itemZ,
   scaleItem,
   mapPts,
   mean,
-  stringCount,
   stringLen,
   shiftItem,
-  hm,
 } from "./shared.js";
 
-/** One light setting slider: [field, label, min, max, step, default, format for display, description]. */
-type TuneRow = [string, string, number, number, number, number, (v: number) => string, string];
+/** One light setting slider. `normal` is the value when the light doesn't set it. */
+export interface LightTuneRow {
+  field: string;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  normal: number;
+  format: (v: number) => string;
+  hint: string;
+}
 
 export class EditorInspector {
-  /* ----- inspector ----- */
   renderInspector(this: Editor) {
     const box = this.card._ed.querySelector<HTMLElement>(".insp");
-    if (!box) return;
-    if (this.card._plan) return this._renderPlanInspector(box);
-    const e = this.card._edit,
-      n = e.sel.size;
-    if (!n) {
-      box.innerHTML = `<h4>Edit layout<span class="tw">${ic("chevron-down")}</span></h4><div class="sub">Tap something to select it, then drag it to move.
-        <details class="tips"><summary>Tips</summary>On touch, one finger only moves things that are already selected — otherwise it pans; two fingers zoom and rotate.
-        With a mouse, drag anything to move it; drag empty floor to pan, right-drag to orbit. W / E / R pick the move, rotate and scale gizmo (X switches its axes between the world and the item). Arrow keys nudge, [ / ] turn 15°. Shift-click multi-selects, Alt-click picks one piece of a group.
-        Markers: <span style="color:#ffd166">●</span> light <span style="color:#5aa9ff">●</span> hotspot <span style="color:#6fd39a">●</span> chip <span style="color:#ef6b5b">●</span> door.</details></div>
-        ${this._sunHTML(true)}`;
-      this._bindSun(box);
-      this._bindInspToggle(box);
-      return;
-    }
-    const key = e.primary,
-      k = key[0],
-      it = this.item(key);
-    const f = (lab: string, name: string, val: unknown, type = "number", step = 1) =>
-      `<label>${lab}<input data-f="${name}" type="${type}" step="${step}" value="${esc(val ?? "")}"></label>`;
-    let fields = "";
-    const xf = this._transformHTML(key, k, it, n);
-    if (!ROTATABLE.has(k) && n === 1) {
-      if (k === "h")
-        fields += f(`Tap radius (${this.card._imperial() ? "in" : "cm"})`, "hit", this._toReal(it.hit ?? 12));
-      else if (k !== "l" || (FIXTURES[it.fixture] && it.fixture !== "none"))
-        fields += f("Size %", "size", Math.round((it.size ?? 1) * 100), "number", 5);
-    }
-    const ang = this._itemAngle(k, it);
-    let extra = "";
-    if (k === "l") extra += this._lightTuneHTML(key, it);
-    if (k === "l") {
-      const fx = FIXTURES[it.fixture] ? it.fixture : "none";
-      extra += `<label style="margin-bottom:8px">Fixture<select data-fx>${Object.entries(FIXTURES)
-        .map(([v, l]) => `<option value="${v}"${v === fx ? " selected" : ""}>${l}</option>`)
-        .join("")}</select></label>`;
-      if (it.points?.length && fx === "string") {
-        const U = this.card._imperial() ? "in" : "cm",
-          len = stringLen(it.points);
-        extra += `<div class="grid">${f(`Length (${U})`, "len", this._toReal(len))}${f("Bulbs (0 = auto)", "count", it.count || 0)}${f("Sag", "sag", R1(it.sag ?? Math.min(8, (len / Math.max(1, it.points.length - 1)) * 0.05)), "number", 0.5)}</div>
-          <div class="sub" style="margin:4px 0 8px">${stringCount(it)} bulbs${it.count ? "" : ", about one every " + this.card._fmtLen(it.spacing || 14)}. Drag the yellow dots to stretch it, or a white dot to bend it.</div>
-          ${it.points.length > 2 ? `<div class="row" style="margin:0 0 8px"><button data-b="straighten">Straighten</button></div>` : ""}`;
-      }
-    }
-    if (k === "b") {
-      const b = bArr(it as BoxEntry),
-        pal = this.card._work.scene?.palette || {};
-      const cur = typeof b[5] === "string" ? (pal[b[5]] || ["#888888"])[0] : b[5][0];
-      extra += `<div class="grid"><label>Colour<input data-f="color" type="color" value="${esc(cur)}"></label></div>`;
-    }
-    if ("lhdc".includes(k) && (k !== "c" || it.entity != null || !it.label)) {
-      extra += `<label style="margin-bottom:8px">Entity<input data-f="entity" list="ents" value="${esc(it.entity || "")}" placeholder="light.kitchen"></label>
-        <datalist id="ents">${Object.keys(this.card._hass?.states || {})
-          .filter((id) => k !== "l" || /^(light|switch)\./.test(id))
-          .sort()
-          .map((id) => `<option value="${id}">`)
-          .join("")}</datalist>`;
-    }
-    const eid = (!ROTATABLE.has(k) || it.type === "screen") && (it.entity || it.climate);
-    if (eid) {
-      const cur =
-        it.type === "screen" ? "screen" : k === "l" ? "light" : k === "d" ? "door" : k === "h" ? "hotspot" : "badge";
-      const opts = [
-        ["badge", "Badge (icon + live state)"],
-        ["light", "Light glow"],
-        ["door", "Door / window marker"],
-        ["hotspot", "Invisible tap spot"],
-      ];
-      if (/^(media_player|camera)\./.test(eid)) opts.unshift(["screen", "Screen (16:9 with media preview)"]);
-      extra += `<label style="margin-bottom:8px">Show as<select data-as>${opts
-        .map(([v, l]) => `<option value="${v}"${v === cur ? " selected" : ""}>${l}</option>`)
-        .join("")}</select></label>`;
-    }
-    if (ang != null || n > 1)
-      extra += `<div class="row" style="margin:0 0 8px"><button data-b="rotl" title="Turn left">${ic("rotate-left")}90°</button><button data-b="rotr" title="Turn right">${ic("rotate-right")}90°</button>${ROTATABLE.has(k) || n > 1 ? '<button data-b="level">Level</button>' : ""}</div>`;
-    if (it.type === "screen")
-      extra += `<div class="row" style="margin:0 0 8px"><button data-b="stand">${it.stand ? "Remove stand" : "Add stand"}</button></div>`;
-    if (it.type === "model") {
-      extra += `<div class="row"><button data-b="mirror">${ic("flip-horizontal")}Mirror</button><button data-b="resetsize">Reset size</button></div>`;
-      if (this.card._modelErr?.[key])
-        extra += `<div class="credit" style="color:#ef8b7b">Couldn't load: ${esc(this.card._modelErr[key])}</div>`;
-      extra += `<div class="credit">${esc(it.name || "")} — ${esc(it.creator || "unknown author")} · ${esc(it.lic || "")} · Sweet Home 3D library</div>`;
-    }
-    box.innerHTML = `<h4>${esc(this._label(key))}<span class="tw">${ic("chevron-down")}</span></h4><div class="sub">${n > 1 ? `${n} items selected. Position, rotation and size change them all together; other fields edit the highlighted one.` : KINDS[k]}</div>
-      ${xf}${fields ? `<div class="grid">${fields}</div>` : ""}${extra}
-      <details style="margin-top:8px"><summary style="cursor:pointer;opacity:.8">Advanced (JSON)</summary>
-        <textarea data-json>${esc(JSON.stringify(it, null, 1))}</textarea><div class="row"><button data-b="json">Apply JSON</button></div></details>`;
-    box
-      .querySelectorAll<HTMLInputElement>("input[data-f]")
-      .forEach((inp) => inp.addEventListener("change", () => this._field(key, inp.dataset.f, inp.value)));
-    box
-      .querySelectorAll<HTMLElement>("button[data-b]")
-      .forEach((b) => b.addEventListener("click", () => this._field(key, b.dataset.b)));
-    box.querySelector<HTMLElement>("[data-lock]")?.addEventListener("click", () => {
-      this.card._edit.lock = !this.card._edit.lock;
-      this.renderInspector();
-    });
-    box
-      .querySelector<HTMLElement>("select[data-as]")
-      ?.addEventListener("change", (ev) => this._convertEntity(key, (ev.target as HTMLSelectElement).value));
-    box
-      .querySelector<HTMLElement>("select[data-fx]")
-      ?.addEventListener("change", (ev) => this._setFixture(key, (ev.target as HTMLSelectElement).value));
-    if (k === "l") this._bindLightTune(box, key);
-    this._bindInspToggle(box);
+    if (box) showInspector(this, box);
+  }
+
+  /** folds the inspector to its title bar, or unfolds it */
+  toggleInspector(this: Editor) {
+    this._inspMin = !this._inspMin;
+    this.renderInspector();
+  }
+
+  toggleScaleLock(this: Editor) {
+    this.card._edit.lock = !this.card._edit.lock;
+    this.renderInspector();
   }
 
   /* ----- per-light tuning: what this light looks like at the bulb's full brightness and colour. The live state from
    * Home Assistant still scales it; these set the top end (see _update / _tuneLight in the core). ----- */
-  _lightTuneRows(this: Editor, it: GenericItem): TuneRow[] {
-    const aimed = it.gx != null && Math.hypot(it.gx - it.x, it.gy - it.y) > 12,
-      spot = aimed || (!aimed && it.fixture === "can" && !it.points),
-      glow = !it.points;
+  _lightTuneRows(this: Editor, item: GenericItem): LightTuneRow[] {
+    const aimed = item.gx != null && Math.hypot(item.gx - item.x, item.gy - item.y) > 12,
+      spot = aimed || (item.fixture === "can" && !item.points),
+      glow = !item.points;
     const pct = (v: number) => Math.round(v * 100) + "%";
-    const rows: TuneRow[] = [
-      ["intensity", "Brightness", 0, 4, 0.05, 1, pct, "At the bulb's full brightness"],
-      ["saturation", "Colour", 0, 2, 0.05, 1, pct, "How strongly the bulb's colour shows"],
-      ["r", "Reach", 5, 200, 1, 40, (v) => this.card._fmtLen(v * (spot ? 3.2 : 2.6)), "How far the light travels"],
-      [
+    const row = (
+      field: string,
+      label: string,
+      [min, max, step, normal]: number[],
+      format: (v: number) => string,
+      hint = "",
+    ): LightTuneRow => ({ field, label, min, max, step, normal, format, hint });
+    const rows = [
+      row("intensity", "Brightness", [0, 4, 0.05, 1], pct, "At the bulb's full brightness"),
+      row("saturation", "Colour", [0, 2, 0.05, 1], pct, "How strongly the bulb's colour shows"),
+      row("r", "Reach", [5, 200, 1, 40], (v) => this.card._fmtLen(v * (spot ? 3.2 : 2.6)), "How far the light travels"),
+      row(
         "decay",
         "Falloff",
-        0,
-        3,
-        0.1,
-        glow ? 1.1 : 1.2,
+        [0, 3, 0.1, glow ? 1.1 : 1.2],
         (v) => v.toFixed(1),
         "Low lights evenly to the edge, high fades fast",
-      ],
+      ),
     ];
     if (spot)
       rows.push(
-        ["angle", "Beam width", 10, 85, 1, aimed ? 43 : 52, (v) => Math.round(v) + "°", ""],
-        ["soft", "Beam edge", 0, 1, 0.05, 0.8, (v) => (v < 0.15 ? "Sharp" : pct(v) + " soft"), ""],
+        row("angle", "Beam width", [10, 85, 1, aimed ? 43 : 52], (v) => Math.round(v) + "°"),
+        row("soft", "Beam edge", [0, 1, 0.05, 0.8], (v) => (v < 0.15 ? "Sharp" : pct(v) + " soft")),
       );
-    if (glow) rows.push(["halo", "Glow size", 0, 30, 1, 9, (v) => String(v), "The halo drawn around the bulb"]);
+    if (glow) rows.push(row("halo", "Glow size", [0, 30, 1, 9], (v) => String(v), "The halo drawn around the bulb"));
     return rows;
   }
 
-  _lightTuneHTML(this: Editor, key: string, it: GenericItem) {
-    const rows = this._lightTuneRows(it),
-      set = rows.some(([n]) => it[n] != null);
-    return `<details class="ltune"${this._ltuneOpen ? " open" : ""}><summary>Light settings</summary>
-      ${rows
-        .map(
-          ([
-            n,
-            lab,
-            min,
-            max,
-            step,
-            d,
-            fmt,
-            desc,
-          ]) => `<label><span class="n">${lab}</span><output data-lo="${n}">${esc(fmt(it[n] ?? d))}</output>
-        <input type="range" data-lt="${n}" min="${min}" max="${max}" step="${step}" value="${it[n] ?? d}">${desc ? `<span class="d">${desc}</span>` : ""}</label>`,
-        )
-        .join("")}
-      ${set ? `<div class="row"><button data-lreset>Reset light settings</button></div>` : ""}</details>`;
+  /** the light a key belongs to and its items: co-located bulbs (a two-bulb fan) render as one light, so a setting
+   * applies to all of them */
+  _lightMembers(this: Editor, key: string): [LightGroup | null, GenericItem[]] {
+    const group = this.card._lightGroups?.find((g) => g.keys.includes(key));
+    return group ? [group, group.keys.map((k) => this.item(k))] : [null, [this.item(key)]];
   }
 
-  _bindLightTune(this: Editor, box: HTMLElement, key: string) {
-    const det = box.querySelector<HTMLDetailsElement>(".ltune");
-    if (!det) return;
-    det.addEventListener("toggle", () => {
-      this._ltuneOpen = det.open;
-    });
-    const rows = Object.fromEntries(this._lightTuneRows(this.item(key)).map((r) => [r[0], r]));
-    // co-located bulbs (a two-bulb fan) render as one light, so a setting applies to all of them
-    const members = (): [LightGroup | null, GenericItem[]] => {
-      const rec = this.card._lightGroups?.find((g) => g.keys.includes(key));
-      return rec ? [rec, rec.keys.map((kk) => this.item(kk))] : [null, [this.item(key)]];
-    };
-    det.addEventListener("input", (ev) => {
-      const n = (ev.target as HTMLElement).dataset.lt;
-      if (!n) return;
-      if (!this._ltDrag) {
-        this.card._edit.undo.push(JSON.stringify(this.card._work));
-        this.card._edit.redo = [];
-        this.card._edit.dirty = true;
-        this._ltDrag = true;
-      }
-      const v = +(ev.target as HTMLInputElement).value,
-        [, , , , , d, fmt] = rows[n],
-        [rec, its] = members();
-      for (const it of its)
-        if (v === d) delete it[n];
-        else it[n] = v;
-      det.querySelector<HTMLElement>(`[data-lo="${n}"]`).textContent = fmt(v);
-      if (rec) {
-        rec.L = this.item(rec.keys[0]);
-        this.card._tuneLight(rec);
-      }
-      this.card._update();
-      this.card._requestRender();
-    });
-    det.addEventListener("change", () => {
-      if (this._ltDrag) {
-        this._ltDrag = false;
-        this.commit();
-      }
-    });
-    det.querySelector<HTMLElement>("[data-lreset]")?.addEventListener("click", () =>
-      this._mutate(() => {
-        for (const it of members()[1]) for (const n of Object.keys(rows)) delete it[n];
-        return [...this.card._edit.sel];
-      }),
-    );
+  /** One step of dragging a light setting slider: shown at once, one undo step for the whole drag. */
+  tuneLight(this: Editor, key: string, field: string, value: number) {
+    if (!this._ltDrag) {
+      this._pushUndo();
+      this._ltDrag = true;
+    }
+    const normal = this._lightTuneRows(this.item(key)).find((r) => r.field === field)?.normal;
+    const [group, items] = this._lightMembers(key);
+    for (const item of items)
+      if (value === normal) delete item[field];
+      else item[field] = value;
+    if (group) {
+      group.L = this.item(group.keys[0]);
+      this.card._tuneLight(group);
+    }
+    this.card._update();
+    this.card._requestRender();
+    this.renderInspector();
   }
 
-  /* ----- north + sun preview (no selection) ----- */
-  _sunHTML(this: Editor, preview?: boolean) {
-    const north = Number(this.card._work.scene?.north) || 0,
-      c = this.card._hass?.config || {},
-      hr = this.card._sunPreview;
-    const where = c.latitude != null && c.longitude != null;
-    return `<div class="sun" style="margin-top:8px"><div class="grid" style="grid-template-columns:1fr 1fr"><label>North °<input data-sun="north" type="number" step="5" value="${north}"></label>
-      <div class="row" style="align-items:end"><button data-sun="nl" title="Turn north left">${ic("rotate-left")}15°</button><button data-sun="nr" title="Turn north right">${ic("rotate-right")}15°</button></div></div>
-      <div class="sub">How far north is turned clockwise from the top of the floor plan. The red arrow points north; the sun follows Home Assistant's sun position.</div>
-      ${
-        preview && where
-          ? `<label style="margin-top:6px">Preview the sun at <b data-sun="t">${hr == null ? "now" : hm(hr)}</b><input data-sun="hour" type="range" min="0" max="24" step="0.25" value="${hr ?? new Date().getHours() + new Date().getMinutes() / 60}"></label>
-        ${hr == null ? "" : '<div class="row"><button data-sun="live">Back to now</button></div>'}`
-          : ""
-      }</div>`;
+  finishLightTune(this: Editor) {
+    if (!this._ltDrag) return;
+    this._ltDrag = false;
+    this.commit();
   }
 
-  _bindSun(this: Editor, box: HTMLElement) {
-    const setNorth = (v: number) => {
-      if (!isFinite(v)) return;
-      v = R1(((v % 360) + 360) % 360);
-      this._mutate(() => {
-        this.card._work.scene ||= {};
-        if (v) this.card._work.scene.north = v;
-        else delete this.card._work.scene.north;
-        return [...this.card._edit.sel];
-      });
-    };
-    box
-      .querySelector<HTMLElement>('[data-sun="north"]')
-      ?.addEventListener("change", (ev) => setNorth(Number((ev.target as HTMLInputElement).value)));
-    box
-      .querySelector<HTMLElement>('[data-sun="nl"]')
-      ?.addEventListener("click", () => setNorth((Number(this.card._work.scene?.north) || 0) - 15));
-    box
-      .querySelector<HTMLElement>('[data-sun="nr"]')
-      ?.addEventListener("click", () => setNorth((Number(this.card._work.scene?.north) || 0) + 15));
-    const hour = box.querySelector<HTMLInputElement>('[data-sun="hour"]');
-    hour?.addEventListener("input", () => {
-      this.card._sunPreview = Number(hour.value);
-      const v = this.card._sunPreview;
-      box.querySelector<HTMLElement>('[data-sun="t"]').textContent = hm(v);
-      this.card._update();
-      this.card._requestRender();
-    });
-    hour?.addEventListener("change", () => {
-      if (!box.querySelector<HTMLElement>('[data-sun="live"]')) this.renderInspector();
-    });
-    box.querySelector<HTMLElement>('[data-sun="live"]')?.addEventListener("click", () => {
-      this.card._sunPreview = null;
-      this.card._update();
-      this.card._requestRender();
-      this.renderInspector();
+  resetLightTune(this: Editor, key: string) {
+    const fields = this._lightTuneRows(this.item(key)).map((r) => r.field);
+    this._mutate(() => {
+      for (const item of this._lightMembers(key)[1]) for (const field of fields) delete item[field];
+      return [...this.card._edit.sel];
     });
   }
 
-  _bindInspToggle(this: Editor, box: HTMLElement) {
-    box.classList.toggle("min", !!this._inspMin);
-    box.querySelector<HTMLElement>("h4").onclick = () => {
-      this._inspMin = !this._inspMin;
-      box.classList.toggle("min", this._inspMin);
-    };
+  /* ----- north and the sun preview ----- */
+  setNorth(this: Editor, degrees: number) {
+    if (!isFinite(degrees)) return;
+    const north = R1(((degrees % 360) + 360) % 360);
+    this._mutate(() => {
+      const scene = (this.card._work.scene ||= {});
+      if (north) scene.north = north;
+      else delete scene.north;
+      return [...this.card._edit.sel];
+    });
+  }
+
+  /** shows the sun at `hour` (0 to 24), or where it is now with null; leaving the editor ends the preview */
+  previewSun(this: Editor, hour: number | null) {
+    this.card._sunPreview = hour;
+    this.card._update();
+    this.card._requestRender();
+    this.renderInspector();
+  }
+
+  /** replaces an item with JSON typed into the inspector */
+  applyJson(this: Editor, key: string, text: string) {
+    let value;
+    try {
+      value = JSON.parse(text);
+    } catch (e: any) {
+      return this.card._toast("Invalid JSON: " + e.message);
+    }
+    this._mutate(() => {
+      const [kind, i] = key.split(":");
+      this._list(kind)[+i] = value;
+      return [...this.card._edit.sel];
+    });
   }
 
   _field(this: Editor, key: string, name: string, raw?: any) {
@@ -326,19 +183,6 @@ export class EditorInspector {
       return this._mutate(() => {
         this._applyRotate(sel, name === "rotl" ? -90 : 90, this._pivotC);
         return sel;
-      });
-    }
-    if (name === "json") {
-      let v;
-      try {
-        v = JSON.parse(this.card._ed.querySelector<HTMLTextAreaElement>("textarea[data-json]").value);
-      } catch (e: any) {
-        return this.card._toast("Invalid JSON: " + e.message);
-      }
-      return this._mutate(() => {
-        const [kk, i] = key.split(":");
-        this._list(kk)[+i] = v;
-        return [...this.card._edit.sel];
       });
     }
     if (!["entity", "color", "mirror", "resetsize", "stand", "straighten"].includes(name) && (isNaN(num) || raw === ""))
@@ -459,49 +303,6 @@ export class EditorInspector {
     if (box.isEmpty()) return null;
     const s = box.getSize(new T.Vector3());
     return [s.x, s.z, s.y];
-  }
-
-  /* The Transform rows, laid out like Unity / Godot: X across, Y up, Z front to back (the gizmo's red, green and blue).
-   * Position and Size are in cm or inches; Rotation in degrees (Y turns, X and Z tilt); Scale in % (applied, then back to 100). */
-  _transformHTML(this: Editor, key: string, k: string, it: GenericItem, n: number) {
-    const U = this.card._imperial() ? "in" : "cm",
-      pos = this._selPos(),
-      rotatable = ROTATABLE.has(k);
-    const inp = (ax: string, name: string, val: unknown, step = 1, off?: boolean) =>
-      `<label class="ax-${ax}"><i>${ax.toUpperCase()}</i><input data-f="${name}" type="number" step="${step}" value="${esc(val ?? "")}"${off ? " disabled" : ""}></label>`;
-    const row = (lab: string, cells: string) => `<div class="xf"><b>${lab}</b>${cells}</div>`;
-    let h = row(
-      `Position <span style="opacity:.6;font-weight:400">${U}</span>`,
-      inp("x", "px", this._toReal(pos[0])) +
-        inp("y", "py", pos[2] == null ? "" : this._toReal(pos[2], true), 1, pos[2] == null) +
-        inp("z", "pz", this._toReal(pos[1])),
-    );
-    const ang = this._itemAngle(k, it);
-    if (rotatable || n > 1 || ang != null) {
-      const tilt = rotatable && !Array.isArray(it);
-      h += row(
-        "Rotation °",
-        inp("x", "rx", tilt ? it.rx || 0 : 0, 15, !tilt) +
-          inp("y", "ry", ang ?? 0, 15) +
-          inp("z", "rz", tilt ? it.rz || 0 : 0, 15, !tilt),
-      );
-    }
-    if (rotatable || n > 1) {
-      const lock = `<button data-lock title="Keep proportions">${ic(this.card._edit.lock || n > 1 ? "link-variant" : "link-variant-off")}</button>`;
-      h += row(
-        `Scale % ${n > 1 ? "" : lock}`,
-        inp("x", "sx", 100, 5) + inp("y", "sy", 100, 5) + inp("z", "sz", 100, 5),
-      );
-      const d = n > 1 ? this._selDims() : this._dims(key);
-      if (d)
-        h += row(
-          `Size <span style="opacity:.6;font-weight:400">${U}</span>`,
-          inp("x", "wx", d[0] > 0 ? this._toReal(d[0]) : "", 0.5, !(d[0] > 0)) +
-            inp("y", "wy", d[2] > 0 ? this._toReal(d[2], true) : "", 0.5, !(d[2] > 0)) +
-            inp("z", "wz", d[1] > 0 ? this._toReal(d[1]) : "", 0.5, !(d[1] > 0)),
-        );
-    }
-    return h;
   }
 
   _transformField(this: Editor, name: string, v: number) {

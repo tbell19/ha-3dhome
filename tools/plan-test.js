@@ -513,7 +513,7 @@ const MOBILE = process.argv.includes("--mobile");
     S0 = await ev(`card._work.lights[8]`);
   check(
     "a light becomes a string light along two points",
-    S0.kind === "string" && S0.points.length === 2 && S0.x == null && b0 >= 4,
+    S0.kind == null && S0.fixture === "string" && S0.points.length === 2 && S0.x == null && b0 >= 4,
     JSON.stringify({ b0, S0 }),
   );
   check(
@@ -554,7 +554,7 @@ const MOBILE = process.argv.includes("--mobile");
     check("undo puts the string's end back", (await ev(`card._work.lights[8].points.at(-1)[0]`)) === e[0]);
   }
   await shot("plan-9-fixtures.png");
-  await ev(`card._editor._exitEdit(true)`);
+  await ev(`card._editor._exitEdit()`); // leaves without asking, dropping the fixture edits
   await wait(1500);
 
   // 9. door leaves follow a sensor

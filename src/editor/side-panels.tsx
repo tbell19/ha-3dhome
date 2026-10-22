@@ -44,6 +44,11 @@ export function closeSidePanel(editor: Editor, name: SidePanel) {
   editor._syncBar();
 }
 
+/** Closes whichever side panel is open. */
+export function closeSidePanels(editor: Editor) {
+  for (const name of Object.keys(PANELS) as SidePanel[]) closeSidePanel(editor, name);
+}
+
 /** Draws every open side panel again from the editor's current state. */
 export function refreshSidePanels(editor: Editor) {
   for (const name of Object.keys(PANELS) as SidePanel[]) {

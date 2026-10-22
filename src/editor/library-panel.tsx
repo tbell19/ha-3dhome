@@ -57,8 +57,8 @@ function LibraryList({ editor, onOpen }: { editor: Editor; onOpen: (file: string
           ))}
         </div>
         <div class="note">
-          Models © their authors — see sweethome3d.com/free-3d-models for credits. CC-BY models need attribution if
-          you share renders.
+          Models © their authors — see sweethome3d.com/free-3d-models for credits. CC-BY models need attribution if you
+          share renders.
         </div>
       </div>
     </>
@@ -89,7 +89,8 @@ function LibraryRow({ editor, lib, onOpen }: { editor: Editor; lib: (typeof LIBS
   }, []);
 
   const label = { checking: "…", downloading: "…", ready: "Open", missing: "Download" }[status] ?? "Retry";
-  const shown = { checking: "checking…", downloading: "downloading…", ready: "downloaded", missing: "" }[status] ?? status;
+  const shown =
+    { checking: "checking…", downloading: "downloading…", ready: "downloaded", missing: "" }[status] ?? status;
   return (
     <div class="librow" data-f={lib.file}>
       <div>
@@ -99,8 +100,11 @@ function LibraryRow({ editor, lib, onOpen }: { editor: Editor; lib: (typeof LIBS
         </div>
       </div>
       <span class="st meta">{shown}</span>
-      <button class={status === "ready" ? "act primary" : "act"} disabled={status === "checking" || status === "downloading"}
-        onClick={() => (status === "ready" ? onOpen() : download())}>
+      <button
+        class={status === "ready" ? "act primary" : "act"}
+        disabled={status === "checking" || status === "downloading"}
+        onClick={() => (status === "ready" ? onOpen() : download())}
+      >
         {label}
       </button>
     </div>
@@ -121,8 +125,8 @@ function LibraryModels({ editor, file, onBack }: { editor: Editor; file: string;
   if (problem)
     body = (
       <div class="note">
-        Couldn't open this library: {problem}. If it was still downloading, wait and try again; otherwise
-        re-download it.
+        Couldn't open this library: {problem}. If it was still downloading, wait and try again; otherwise re-download
+        it.
       </div>
     );
   else if (!library) body = <div class="note">Opening library…</div>;
@@ -136,8 +140,12 @@ function LibraryModels({ editor, file, onBack }: { editor: Editor; file: string;
     body = (
       <>
         <div class="tools">
-          <input type="search" placeholder={`Search ${library.items.length} models…`} value={search}
-            onInput={(ev) => setSearch(ev.currentTarget.value)} />
+          <input
+            type="search"
+            placeholder={`Search ${library.items.length} models…`}
+            value={search}
+            onInput={(ev) => setSearch(ev.currentTarget.value)}
+          />
           <select value={category} onChange={(ev) => setCategory(ev.currentTarget.value)}>
             <option value="">All categories</option>
             {categories.map((c) => (

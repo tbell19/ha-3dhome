@@ -40,7 +40,7 @@ const OLD_DASHBOARD = {
 };
 
 (async () => {
-  const { page: p, errors, ev, wait, until } = await launch({ viewport: { width: 1100, height: 700 } });
+  const { browser, page: p, errors, ev, wait, until } = await launch({ viewport: { width: 1100, height: 700 } });
   const html = `<!doctype html><meta charset=utf-8><body style="margin:0"><div id=host></div>
 <script>customElements.define('ha-card',class extends HTMLElement{connectedCallback(){this.style.display='block'}});
 customElements.define('ha-icon',class extends HTMLElement{});

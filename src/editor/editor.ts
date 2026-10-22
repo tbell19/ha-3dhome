@@ -33,6 +33,7 @@ export class Editor implements CardEditor {
   declare _ltuneOpen: boolean; // the light tuning panel is open
   declare _ltDrag: boolean;
   declare _lookDrag: boolean;
+  declare _menu: { name: string; button: HTMLElement } | null; // the open toolbar menu (Draw or More) and its button
   declare _downloads: Record<string, Promise<string | null>>; // library downloads in progress, by file
 
   // selection

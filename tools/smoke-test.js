@@ -618,6 +618,7 @@ const STATES = {
 
   // a new panel has no layout yet: it should render and say how to start
   check("full map shows no empty hint", await ev(`!card.shadowRoot.querySelector('.empty')`));
+  await ev(`card._edit && card._editor._exitEdit()`); // the panel holds pushed maps while someone edits
   await ev(`server.saveFrom({})`);
   await wait(3000);
   check(
