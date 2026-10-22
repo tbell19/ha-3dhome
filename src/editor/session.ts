@@ -34,14 +34,14 @@ export class EditorSession {
   }
 
   item(this: Editor, key: string): GenericItem {
-    const [k, i] = key.split(":");
-    return this._list(k)[+i];
+    const [kind, i] = key.split(":");
+    return this._list(kind)[+i];
   }
 
   _setBoxObj(this: Editor, key: string): GenericItem {
-    const [k, i] = key.split(":");
-    const l = this._list(k);
-    if (k === "b" && Array.isArray(l[+i])) l[+i] = { b: l[+i] };
+    const [kind, i] = key.split(":");
+    const l = this._list(kind);
+    if (kind === "b" && Array.isArray(l[+i])) l[+i] = { b: l[+i] };
     return l[+i];
   }
 
@@ -52,18 +52,18 @@ export class EditorSession {
   }
 
   _label(this: Editor, key: string) {
-    const [k] = key.split(":"),
-      it = this.item(key);
-    if (!it) return key;
-    if (k === "b") return "Box" + (it.group ? ` · ${it.group}` : "");
-    if (k === "o" || k === "v")
-      return (it.type === "model" ? it.name || "Model" : it.type) + (it.group ? ` · ${it.group}` : "");
-    if (k === "w") return `Wall · ${this.card._fmtLen(segDir(it as WallSeg)[2])}`;
-    if (k === "n") return (<Record<string, string>>{ door: "Door", window: "Window" })[it.kind] || "Cut-out";
-    if (k === "p") return "Blueprint";
-    if (k === "r") return `Room · ${roomTitle(it.name || "unnamed")}`;
-    const ent = it.entity ? this.card._hass?.states[it.entity]?.attributes?.friendly_name || it.entity : "";
-    return `${KINDS[k][0].toUpperCase() + KINDS[k].slice(1)}${ent ? " · " + ent : it.label ? " · " + it.label : ""}`;
+    const [kind] = key.split(":");
+    const item = this.item(key);
+    if (!item) return key;
+    if (kind === "b") return "Box" + (item.group ? ` · ${item.group}` : "");
+    if (kind === "o" || kind === "v")
+      return (item.type === "model" ? item.name || "Model" : item.type) + (item.group ? ` · ${item.group}` : "");
+    if (kind === "w") return `Wall · ${this.card._fmtLen(segDir(item as WallSeg)[2])}`;
+    if (kind === "n") return (<Record<string, string>>{ door: "Door", window: "Window" })[item.kind] || "Cut-out";
+    if (kind === "p") return "Blueprint";
+    if (kind === "r") return `Room · ${roomTitle(item.name || "unnamed")}`;
+    const ent = item.entity ? this.card._hass?.states[item.entity]?.attributes?.friendly_name || item.entity : "";
+    return `${KINDS[kind][0].toUpperCase() + KINDS[kind].slice(1)}${ent ? " · " + ent : item.label ? " · " + item.label : ""}`;
   }
 
   async enter(this: Editor) {
@@ -159,13 +159,13 @@ export class EditorSession {
   /* The editor's layer over the map: the toolbar (toolbar.tsx) and the inspector (inspector-panel.tsx). Switching
    * between Furniture and Floor plan draws it again and closes the side panels. */
   _renderEditorUI(this: Editor) {
-    const layer = this.card._ed;
+    const layer = this.card._editorLayer;
     closeSidePanels(this);
     this.closeLibrary();
     this._menu = null;
     if (!layer.querySelector(":scope > .tb")) {
-      const toolbar = document.createElement("div"),
-        inspector = document.createElement("div");
+      const toolbar = document.createElement("div");
+      const inspector = document.createElement("div");
       toolbar.className = "tb";
       inspector.className = "insp";
       layer.append(toolbar, inspector);
@@ -190,8 +190,9 @@ export class EditorSession {
   _clearEditorUI(this: Editor) {
     closeSidePanels(this);
     this.closeLibrary();
-    for (const host of this.card._ed.querySelectorAll<HTMLElement>(":scope > .tb, :scope > .insp")) render(null, host);
-    this.card._ed.innerHTML = "";
+    for (const host of this.card._editorLayer.querySelectorAll<HTMLElement>(":scope > .tb, :scope > .insp"))
+      render(null, host);
+    this.card._editorLayer.innerHTML = "";
   }
 
   /** Opens the Draw or More menu under its button, or closes it when it is already open. */
@@ -208,7 +209,7 @@ export class EditorSession {
 
   /** Draws the toolbar and the open side panels again from the editor's state. */
   _syncBar(this: Editor) {
-    const toolbar = this.card._ed?.querySelector<HTMLElement>(":scope > .tb");
+    const toolbar = this.card._editorLayer?.querySelector<HTMLElement>(":scope > .tb");
     if (!toolbar || !this.card._edit) return;
     showToolbar(this, toolbar);
     refreshSidePanels(this);
@@ -326,8 +327,8 @@ export class EditorSession {
     };
     if (arrows[ev.key] && sel.length) {
       ev.preventDefault();
-      const [dx, dy] = this.card._screenDir(...arrows[ev.key]),
-        step = ev.shiftKey ? 10 : 1;
+      const [dx, dy] = this.card._screenDir(...arrows[ev.key]);
+      const step = ev.shiftKey ? 10 : 1;
       this._mutate(() => {
         this._applyMove(sel, dx * step, dy * step);
         return sel;
@@ -359,7 +360,7 @@ export class EditorSession {
       return;
     }
     if (!this.card._plan && !mod && ev.key.toLowerCase() === "x") {
-      this.card._ed.querySelector<HTMLElement>('[data-a="space"]')?.click();
+      this.card._editorLayer.querySelector<HTMLElement>('[data-a="space"]')?.click();
       return;
     }
     if (ev.key === "Delete" || ev.key === "Backspace") {
@@ -374,8 +375,8 @@ export class EditorSession {
       ev.preventDefault();
       this._duplicate();
     } else if (ev.key === "Escape") this._select([]);
-    else if (ev.key === "r" && !mod) this.card._ed.querySelector<HTMLElement>('[data-a="rotate"]')?.click();
+    else if (ev.key === "r" && !mod) this.card._editorLayer.querySelector<HTMLElement>('[data-a="rotate"]')?.click();
     else if ((ev.key === "g" || ev.key === "t") && !mod)
-      this.card._ed.querySelector<HTMLElement>('[data-a="translate"]')?.click();
+      this.card._editorLayer.querySelector<HTMLElement>('[data-a="translate"]')?.click();
   }
 }

@@ -1,2 +1,4 @@
 # The integration's tests (npm run test:py). Pinned to the Home Assistant release they were last run against.
 pytest-homeassistant-custom-component==0.13.316
+# the frontend component imports hass_frontend, which the test package doesn't pull in
+home-assistant-frontend==20260128.6

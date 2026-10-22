@@ -34,8 +34,8 @@ export function RoomControlsPanel({ editor }: { editor: Editor }) {
   const setCards = (list: LovelaceCardConfig[]) => editor.setRoomCards(room, list);
 
   const move = (i: number, by: number) => {
-    const list = [...cards],
-      j = i + by;
+    const list = [...cards];
+    const j = i + by;
     if (j < 0 || j >= list.length) return;
     [list[i], list[j]] = [list[j], list[i]];
     setCards(list);

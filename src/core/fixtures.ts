@@ -27,17 +27,17 @@ export function spanSag(L: LightConfig, span: number) {
   return L.sag ?? Math.min(8, span * 0.05);
 }
 export function stringBulbs(L: LightConfig): [number, number, number][] {
-  const pts = L.points || [],
-    n = stringCount(L),
-    len = stringLen(pts),
-    out: [number, number, number][] = [];
+  const pts = L.points || [];
+  const n = stringCount(L);
+  const len = stringLen(pts);
+  const out: [number, number, number][] = [];
   if (pts.length < 2 || !len) return out;
   for (let k = 0; k < n; k++) {
     let d = n === 1 ? len / 2 : (len * k) / (n - 1);
     for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1],
-        b = pts[i],
-        span = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const a = pts[i - 1];
+      const b = pts[i];
+      const span = Math.hypot(b[0] - a[0], b[1] - a[1]);
       if (d <= span + 1e-6 || i === pts.length - 1) {
         const t = span ? Math.min(1, d / span) : 0;
         out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, spanSag(L, span) * 4 * t * (1 - t)]);

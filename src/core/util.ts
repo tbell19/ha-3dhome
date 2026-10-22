@@ -2,7 +2,7 @@
  */
 import type { Pt } from "../types";
 
-export const R1 = (v: number) => Math.round(v * 10) / 10;
+export const round1 = (v: number) => Math.round(v * 10) / 10;
 export const jclone = <T>(o: T): T => JSON.parse(JSON.stringify(o));
 export const ic = (name: string) => `<ha-icon icon="mdi:${name}"></ha-icon>`; // HA's own icon element, for buttons and labels
 export const esc = (s: unknown) =>
@@ -12,19 +12,19 @@ export const esc = (s: unknown) =>
   );
 /** rotate (x, y) about (cx, cy) by `deg` degrees, clockwise seen from above */
 export const rotPt = (x: number, y: number, cx: number, cy: number, deg: number): Pt => {
-  const r = (deg * Math.PI) / 180,
-    c = Math.cos(r),
-    s = Math.sin(r),
-    dx = x - cx,
-    dy = y - cy;
+  const r = (deg * Math.PI) / 180;
+  const c = Math.cos(r);
+  const s = Math.sin(r);
+  const dx = x - cx;
+  const dy = y - cy;
   return [cx + dx * c - dy * s, cy + dx * s + dy * c];
 };
 /** is (x, y) inside the polygon? (ray casting) */
 export const inPoly = (x: number, y: number, pts: Pt[]) => {
   let inside = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-    const [xi, yi] = pts[i],
-      [xj, yj] = pts[j];
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
   }
   return inside;

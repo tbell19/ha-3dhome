@@ -34,7 +34,7 @@ export type EditorHost = Bound<
     | "_layoutStore"
     // DOM
     | "_wrap"
-    | "_ed"
+    | "_editorLayer"
     | "_edBtn"
     | "_keys"
     | "_toast"

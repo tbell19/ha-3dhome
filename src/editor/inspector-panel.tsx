@@ -8,7 +8,7 @@ import type { BoxEntry } from "../types";
 import type { GenericItem } from "../core/items";
 import type { Editor } from "./editor";
 import { PlanInspector } from "./plan-inspector";
-import { FIXTURES, KINDS, R1, ROTATABLE, bArr, hm, stringCount, stringLen } from "./shared";
+import { FIXTURES, KINDS, round1, ROTATABLE, bArr, hm, stringCount, stringLen } from "./shared";
 
 /** Draws the inspector into its box (the `.insp` element of the editor layer). */
 export function showInspector(editor: Editor, box: HTMLElement) {
@@ -493,7 +493,7 @@ function StringLight({ editor, itemKey, item }: { editor: Editor; itemKey: strin
   const card = editor.card;
   const unit = card._imperial() ? "in" : "cm";
   const length = stringLen(item.points);
-  const sag = R1(item.sag ?? Math.min(8, (length / Math.max(1, item.points.length - 1)) * 0.05));
+  const sag = round1(item.sag ?? Math.min(8, (length / Math.max(1, item.points.length - 1)) * 0.05));
   const set = (name: string) => (ev: Event) =>
     editor._field(itemKey, name, (ev.currentTarget as HTMLInputElement).value);
   return (

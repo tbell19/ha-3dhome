@@ -9,7 +9,7 @@ import { showInspector } from "./inspector-panel";
 import {
   CX,
   CY,
-  R1,
+  round1,
   ROTATABLE,
   bArr,
   itemCenter,
@@ -36,7 +36,7 @@ export interface LightTuneRow {
 
 export class EditorInspector {
   renderInspector(this: Editor) {
-    const box = this.card._ed.querySelector<HTMLElement>(".insp");
+    const box = this.card._editorLayer.querySelector<HTMLElement>(".insp");
     if (box) showInspector(this, box);
   }
 
@@ -54,9 +54,9 @@ export class EditorInspector {
   /* ----- per-light tuning: what this light looks like at the bulb's full brightness and colour. The live state from
    * Home Assistant still scales it; these set the top end (see _update / _tuneLight in the core). ----- */
   _lightTuneRows(this: Editor, item: GenericItem): LightTuneRow[] {
-    const aimed = item.gx != null && Math.hypot(item.gx - item.x, item.gy - item.y) > 12,
-      spot = aimed || (item.fixture === "can" && !item.points),
-      glow = !item.points;
+    const aimed = item.gx != null && Math.hypot(item.gx - item.x, item.gy - item.y) > 12;
+    const spot = aimed || (item.fixture === "can" && !item.points);
+    const glow = !item.points;
     const pct = (v: number) => Math.round(v * 100) + "%";
     const row = (
       field: string,
@@ -130,7 +130,7 @@ export class EditorInspector {
   /* ----- north and the sun preview ----- */
   setNorth(this: Editor, degrees: number) {
     if (!isFinite(degrees)) return;
-    const north = R1(((degrees % 360) + 360) % 360);
+    const north = round1(((degrees % 360) + 360) % 360);
     this._mutate(() => {
       const scene = (this.card._work.scene ||= {});
       if (north) scene.north = north;
@@ -190,37 +190,37 @@ export class EditorInspector {
     if (["px", "py", "pz", "rx", "ry", "rz", "sx", "sy", "sz", "wx", "wy", "wz", "size", "hit"].includes(name))
       return this._transformField(name, num);
     this._mutate(() => {
-      const it = this.item(key);
-      if (name === "len" && it.points?.length > 1) {
+      const item = this.item(key);
+      if (name === "len" && item.points?.length > 1) {
         // stretch (or shrink) the last span; bulbs follow
-        const P = it.points,
-          a = P[P.length - 2],
-          b = P[P.length - 1],
-          span = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        const P = item.points;
+        const a = P[P.length - 2];
+        const b = P[P.length - 1];
+        const span = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
         const ns = Math.max(1, span + this._fromReal(num) - stringLen(P));
-        P[P.length - 1] = [R1(a[0] + ((b[0] - a[0]) / span) * ns), R1(a[1] + ((b[1] - a[1]) / span) * ns)];
+        P[P.length - 1] = [round1(a[0] + ((b[0] - a[0]) / span) * ns), round1(a[1] + ((b[1] - a[1]) / span) * ns)];
       } else if (name === "count") {
-        if (num > 0) it.count = Math.min(200, Math.round(num));
-        else delete it.count;
-      } else if (name === "sag") it.sag = Math.max(0, num);
-      else if (name === "straighten" && it.points?.length > 2) it.points = [it.points[0], it.points.at(-1)];
-      else if (name === "entity") it.entity = raw.trim();
+        if (num > 0) item.count = Math.min(200, Math.round(num));
+        else delete item.count;
+      } else if (name === "sag") item.sag = Math.max(0, num);
+      else if (name === "straighten" && item.points?.length > 2) item.points = [item.points[0], item.points.at(-1)];
+      else if (name === "entity") item.entity = raw.trim();
       else if (name === "color") {
-        const b = bArr(it as BoxEntry);
-        const T = this.card.T,
-          col = new T.Color(raw);
+        const b = bArr(item as BoxEntry);
+        const T = this.card.T;
+        const col = new T.Color(raw);
         b[5] = [
           raw,
           "#" + col.clone().multiplyScalar(0.78).getHexString(),
           "#" + col.clone().multiplyScalar(0.88).getHexString(),
         ];
-      } else if (name === "mirror") it.mirror = !it.mirror || undefined;
-      else if (name === "stand") it.stand = !it.stand || undefined;
+      } else if (name === "mirror") item.mirror = !item.mirror || undefined;
+      else if (name === "stand") item.stand = !item.stand || undefined;
       else if (name === "resetsize") {
         const [sxy, sz] = this.card._modelScale();
-        it.w = R1(it.cm[0] / sxy);
-        it.d = R1(it.cm[1] / sxy);
-        it.h = R1(it.cm[2] / sz);
+        item.w = round1(item.cm[0] / sxy);
+        item.d = round1(item.cm[1] / sxy);
+        item.h = round1(item.cm[2] / sz);
       }
       return [...this.card._edit.sel];
     });
@@ -231,48 +231,50 @@ export class EditorInspector {
   _selPos(this: Editor) {
     const keys = [...this.card._edit.sel];
     if (keys.length === 1) {
-      const k = keys[0][0],
-        it = this.item(keys[0]),
-        c = itemCenter(k, it) || [CX, CY];
-      return [c[0], c[1], itemZ(k, it)];
+      const kind = keys[0][0];
+      const item = this.item(keys[0]);
+      const c = itemCenter(kind, item) || [CX, CY];
+      return [c[0], c[1], itemZ(kind, item)];
     }
     return [...this._pivotC, Math.min(...keys.map((key) => itemBase(key[0], this.item(key))))];
   }
 
   /* which way an item faces: `rot` for furniture, the run of a string light, or an aimed light's beam; null if it has no direction */
-  _itemAngle(this: Editor, k: string, it: GenericItem) {
-    if (ROTATABLE.has(k)) return Array.isArray(it) ? 0 : it.rot || 0;
+  _itemAngle(this: Editor, kind: string, item: GenericItem) {
+    if (ROTATABLE.has(kind)) return Array.isArray(item) ? 0 : item.rot || 0;
     const p =
-      it.points?.length > 1
-        ? [it.points[0], it.points.at(-1)]
-        : it.gx != null && Math.hypot(it.gx - it.x, it.gy - it.y) > 12
+      item.points?.length > 1
+        ? [item.points[0], item.points.at(-1)]
+        : item.gx != null && Math.hypot(item.gx - item.x, item.gy - item.y) > 12
           ? [
-              [it.x, it.y],
-              [it.gx, it.gy],
+              [item.x, item.y],
+              [item.gx, item.gy],
             ]
           : null;
-    return p ? R1(((((Math.atan2(p[1][1] - p[0][1], p[1][0] - p[0][0]) * 180) / Math.PI) % 360) + 360) % 360) : null;
+    return p
+      ? round1(((((Math.atan2(p[1][1] - p[0][1], p[1][0] - p[0][0]) * 180) / Math.PI) % 360) + 360) % 360)
+      : null;
   }
 
   /* [width, depth, height] of one item along its own axes, in plan units (0 where that axis can't change) */
   _dims(this: Editor, key: string) {
-    const k = key[0],
-      it = this.item(key);
-    if (k === "b") {
-      const b = bArr(it as BoxEntry);
+    const kind = key[0];
+    const item = this.item(key);
+    if (kind === "b") {
+      const b = bArr(item as BoxEntry);
       return [b[1] - b[0], b[3] - b[2], b[4]];
     }
-    if (it.type === "model") return [it.w, it.d, it.h];
-    if (it.type === "screen") {
-      const w = it.w || 32;
+    if (item.type === "model") return [item.w, item.d, item.h];
+    if (item.type === "screen") {
+      const w = item.w || 32;
       return [w, 0, (w * 9) / 16];
     }
-    if (it.type === "table") return [it.r * 2, 0, it.z];
+    if (item.type === "table") return [item.r * 2, 0, item.z];
     const g = this.card._items.get(key);
     if (!g) return null;
-    const r = g.rotation.y,
-      tg = g.children[0]?.userData.tilt ? g.children[0] : null,
-      tr = tg?.rotation.clone(); // measured untilted
+    const r = g.rotation.y;
+    const tg = g.children[0]?.userData.tilt ? g.children[0] : null;
+    const tr = tg?.rotation.clone(); // measured untilted
     g.rotation.y = 0;
     tg?.rotation.set(0, 0, 0);
     g.updateMatrixWorld(true);
@@ -287,16 +289,16 @@ export class EditorInspector {
 
   /* the selection's overall size, lined up with the plan */
   _selDims(this: Editor) {
-    const T = this.card.T,
-      box = new T.Box3();
+    const T = this.card.T;
+    const box = new T.Box3();
     for (const key of this.card._edit.sel) {
-      const k = key[0],
-        g = this.card._items.get(key);
-      if (ROTATABLE.has(k) && g) {
+      const kind = key[0];
+      const g = this.card._items.get(key);
+      if (ROTATABLE.has(kind) && g) {
         g.updateMatrixWorld(true);
         box.expandByObject(g);
       } else {
-        const c = itemCenter(k, this.item(key));
+        const c = itemCenter(kind, this.item(key));
         if (c) box.expandByPoint(new T.Vector3(c[0] - CX, c[2] ?? 0, c[1] - CY));
       }
     }
@@ -306,27 +308,27 @@ export class EditorInspector {
   }
 
   _transformField(this: Editor, name: string, v: number) {
-    const T = this.card.T,
-      sel = [...this.card._edit.sel],
-      key = this.card._edit.primary,
-      k = key[0],
-      it = this.item(key),
-      pos = this._selPos();
+    const T = this.card.T;
+    const sel = [...this.card._edit.sel];
+    const key = this.card._edit.primary;
+    const kind = key[0];
+    const item = this.item(key);
+    const pos = this._selPos();
     this._mutate(() => {
       if (name[0] === "p") {
         // position: x across, y up (elevation), z front to back
-        const i = { px: 0, pz: 1, py: 2 }[name],
-          d = this._fromReal(v, i === 2) - (pos[i] ?? 0);
+        const i = { px: 0, pz: 1, py: 2 }[name];
+        const d = this._fromReal(v, i === 2) - (pos[i] ?? 0);
         if (Math.abs(d) > 0.01) this._applyMove(sel, i === 0 ? d : 0, i === 1 ? d : 0, i === 2 ? d : 0);
       } else if (name[0] === "r") {
         // rotation: set the highlighted item's angle; the rest of the selection turns with it
-        const r = Math.PI / 180,
-          q0 = this._itemQuat(k, it),
-          e = new T.Euler().setFromQuaternion(q0, "YXZ");
+        const r = Math.PI / 180;
+        const q0 = this._itemQuat(kind, item);
+        const e = new T.Euler().setFromQuaternion(q0, "YXZ");
         if (name === "rx") e.x = v * r;
         else if (name === "rz") e.z = v * r;
         else e.y = -v * r;
-        if (!ROTATABLE.has(k) || Array.isArray(it)) {
+        if (!ROTATABLE.has(kind) || Array.isArray(item)) {
           e.x = 0;
           e.z = 0;
         }
@@ -334,13 +336,13 @@ export class EditorInspector {
         if (Math.abs(dq.w) < 0.9999999) this._applyRotQ(sel, dq, this.card._pivot.position.clone());
       } else if (name === "size") {
         const s = Math.max(5, v) / 100;
-        if (s === 1) delete it.size;
-        else it.size = s;
-      } else if (name === "hit") it.hit = Math.max(1, R1(this._fromReal(v)));
+        if (s === 1) delete item.size;
+        else item.size = s;
+      } else if (name === "hit") item.hit = Math.max(1, round1(this._fromReal(v)));
       else {
         // scale % or size: x across, y up, z front to back → scaleItem's (sx, sy = depth, sz = height)
-        const i = { x: 0, z: 1, y: 2 }[name[1]],
-          uni = sel.length > 1 || this.card._edit.lock || !ROTATABLE.has(k);
+        const i = { x: 0, z: 1, y: 2 }[name[1]];
+        const uni = sel.length > 1 || this.card._edit.lock || !ROTATABLE.has(kind);
         let r = v / 100;
         if (name[0] === "w") {
           const cur = (sel.length > 1 ? this._selDims() : this._dims(key))?.[i];
@@ -360,18 +362,18 @@ export class EditorInspector {
   /* resize the selection about its centre. One item stretches along its own axes; several scale evenly together, so the
    * gaps between them grow too and anything stacked (a lamp on a table) stays on top. */
   _scaleSel(this: Editor, keys: string[], sx: number, sy: number, sz: number) {
-    const [px, py] = this._pivotC,
-      multi = keys.length > 1;
+    const [px, py] = this._pivotC;
+    const multi = keys.length > 1;
     const z0 = multi ? Math.min(...keys.map((key) => itemBase(key[0], this.item(key)))) : undefined;
     for (const key of keys) {
-      const k = key[0],
-        it = this.item(key);
-      if (!it) continue;
-      if (ROTATABLE.has(k)) {
-        const c = itemCenter(k, it);
-        if (c && multi) shiftItem(k, it, (c[0] - px) * (sx - 1), (c[1] - py) * (sy - 1));
-      } else mapPts(it, (x, y) => [px + (x - px) * sx, py + (y - py) * sy]);
-      scaleItem(k, it, sx, sy, sz, z0);
+      const kind = key[0];
+      const item = this.item(key);
+      if (!item) continue;
+      if (ROTATABLE.has(kind)) {
+        const c = itemCenter(kind, item);
+        if (c && multi) shiftItem(kind, item, (c[0] - px) * (sx - 1), (c[1] - py) * (sy - 1));
+      } else mapPts(item, (x, y) => [px + (x - px) * sx, py + (y - py) * sy]);
+      scaleItem(kind, item, sx, sy, sz, z0);
     }
   }
 
@@ -379,17 +381,17 @@ export class EditorInspector {
    * sensible spot for the new fixture (ceiling, table, floor lamp), which the Height field can then fine-tune. */
   _setFixture(this: Editor, key: string, fx: string) {
     this._mutate(() => {
-      const L = this.item(key),
-        H = this.card._work.scene?.wall_height ?? 46,
-        c = itemCenter("l", L);
+      const L = this.item(key);
+      const H = this.card._work.scene?.wall_height ?? 46;
+      const c = itemCenter("l", L);
       if (fx === "string" && !L.points?.length) {
         L.points = [
-          [R1(c[0] - 30), R1(c[1])],
-          [R1(c[0] + 30), R1(c[1])],
+          [round1(c[0] - 30), round1(c[1])],
+          [round1(c[0] + 30), round1(c[1])],
         ];
         for (const f of ["x", "y", "gx", "gy", "gz"]) delete L[f];
       } else if (fx !== "string" && L.points?.length) {
-        [L.x, L.y] = mean(L.points).map(R1);
+        [L.x, L.y] = mean(L.points).map(round1);
         delete L.points;
         delete L.count;
         delete L.sag;
@@ -401,11 +403,11 @@ export class EditorInspector {
       const z = {
         can: H - 0.5,
         ceiling: H - 0.5,
-        pendant: R1(H * 0.7),
-        bulb: R1(H * 0.72),
+        pendant: round1(H * 0.7),
+        bulb: round1(H * 0.72),
         floorlamp: 36,
         tablelamp: 25,
-        string: R1(H * 0.8),
+        string: round1(H * 0.8),
       }[fx];
       if (z != null) L.z = z;
       return [key];

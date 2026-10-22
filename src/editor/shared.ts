@@ -14,7 +14,7 @@ export const {
   LIBS,
   LIB_DIR,
   PLAN,
-  R1,
+  round1,
   ROOM_FILLS,
   ROTATABLE,
   SF,

@@ -41,7 +41,7 @@ interface PageView {
 const VIEWS = new Map<string, PageView>(); // by config entry id
 
 /** the parts of a card config the panel decides itself, so they aren't stored */
-const PANEL_OWNED = ["type", "fill", "dashboard", "card_id"] as const; // the last three were card options before v6
+const PANEL_OWNED = ["type", "fill", "aspect_ratio", "dashboard", "card_id"] as const; // all but `type` were card options before v6
 
 export class Home3DPanel extends HTMLElement {
   private _hass: Hass | null = null;

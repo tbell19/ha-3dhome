@@ -13,8 +13,8 @@ export function layoutOf(config: CardConfig): Layout {
 
 export class EditorSave {
   async _save(this: Editor) {
-    const card = this.card,
-      btn = card._ed.querySelector<HTMLButtonElement>('[data-a="save"]');
+    const card = this.card;
+    const btn = card._editorLayer.querySelector<HTMLButtonElement>('[data-a="save"]');
     if (card._offSince)
       return card._toast("Not connected to Home Assistant. Your changes are kept: save again once it's back", 5000);
     btn.disabled = true;

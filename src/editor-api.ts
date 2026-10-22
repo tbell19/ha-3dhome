@@ -2,7 +2,7 @@
  * these helpers it reads them from window.__ha3dhome, which the core sets before it defines the card.
  */
 import { VERSION3D, TC_URL, CX, CY, AMBIENT, lookOf, SF, LIBS, LIB_DIR, LAYOUT_KEYS } from "./core/constants";
-import { R1, jclone, ic, esc, rotPt, inPoly, polyArea, roomTitle, mean, stableJSON } from "./core/util";
+import { round1, jclone, ic, esc, rotPt, inPoly, polyArea, roomTitle, mean, stableJSON } from "./core/util";
 import { entIcon, ACTIVE, DOOR_CLASSES } from "./core/entities";
 import {
   bArr,
@@ -37,7 +37,7 @@ export const editorApi = {
   LIBS,
   LIB_DIR,
   PLAN,
-  R1,
+  round1,
   ROOM_FILLS,
   ROTATABLE,
   SF,

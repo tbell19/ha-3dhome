@@ -11,8 +11,8 @@ export class LivePart {
   /* ---------- screens ---------- */
   /** paint a screen with its entity's artwork and title (async when there is artwork), and tint its light */
   _drawScreen(this: Home3DCard, sc: Screen, st: HassEntity | undefined, boost: number) {
-    const a = st?.attributes || {},
-      on = !!st && !SCREEN_OFF.has(st.state);
+    const a = st?.attributes || {};
+    const on = !!st && !SCREEN_OFF.has(st.state);
     const pic = on ? a.entity_picture_local || a.entity_picture || "" : "";
     const title = on ? a.media_title || a.app_name || a.source || a.friendly_name || "" : "";
     const sub = on
@@ -25,9 +25,9 @@ export class LivePart {
     };
     if (sc.sig === sig) return setLight();
     sc.sig = sig;
-    const g = sc.canvas.getContext("2d")!,
-      W = 512,
-      H = 288;
+    const g = sc.canvas.getContext("2d")!;
+    const W = 512;
+    const H = 288;
     const fit = (txt: unknown, max: number) => {
       let t = String(txt);
       if (g.measureText(t).width <= max) return t;
@@ -47,12 +47,12 @@ export class LivePart {
         g.fillRect(0, 0, W, H);
         sc.rgb = null;
       } else {
-        let textX = 32,
-          textW = W - 64,
-          textY = H - 64;
+        let textX = 32;
+        let textW = W - 64;
+        let textY = H - 64;
         if (img) {
-          const ar = img.width / img.height,
-            cover = Math.max(W / img.width, H / img.height);
+          const ar = img.width / img.height;
+          const cover = Math.max(W / img.width, H / img.height);
           g.filter = "blur(16px)";
           g.drawImage(
             img,
@@ -75,8 +75,8 @@ export class LivePart {
             g.fillRect(0, 0, W, H);
           } else {
             // album art: square cover on the left, text beside it
-            const S = H - 56,
-              sw = S * Math.min(ar, 1.2);
+            const S = H - 56;
+            const sw = S * Math.min(ar, 1.2);
             g.shadowColor = "rgba(0,0,0,.6)";
             g.shadowBlur = 18;
             g.drawImage(img, 28, 28, sw, S);
@@ -91,16 +91,16 @@ export class LivePart {
             const tg = t.getContext("2d");
             tg.drawImage(img, 0, 0, 6, 6);
             const d = tg.getImageData(0, 0, 6, 6).data;
-            let r = 0,
-              gg = 0,
-              b = 0;
+            let r = 0;
+            let gg = 0;
+            let b = 0;
             for (let i = 0; i < d.length; i += 4) {
               r += d[i];
               gg += d[i + 1];
               b += d[i + 2];
             }
-            const n = d.length / 4,
-              mx = Math.max(r, gg, b) / n || 1;
+            const n = d.length / 4;
+            const mx = Math.max(r, gg, b) / n || 1;
             sc.rgb = [r / n / mx, gg / n / mx, b / n / mx];
           } catch (e: any) {
             sc.rgb = [1, 1, 1];
@@ -140,8 +140,8 @@ export class LivePart {
 
   /* ---------- html overlays ---------- */
   _buildOverlays(this: Home3DCard) {
-    const cfg = this._cfg(),
-      ov = this._ov;
+    const cfg = this._cfg();
+    const ov = this._ov;
     ov.innerHTML = "";
     this._anchors = [];
     this._chips = (cfg.chips || []).map((cc) => {
@@ -177,8 +177,8 @@ export class LivePart {
   }
 
   _placeOverlays(this: Home3DCard) {
-    const T = this.T,
-      v = new T.Vector3();
+    const T = this.T;
+    const v = new T.Vector3();
     for (const a of [...(this._anchors || []), ...(this._roomLabels || [])]) {
       v.set(a.p[0] - CX, a.p[2], a.p[1] - CY).project(this._cam);
       a.node.style.left = ((v.x + 1) / 2) * 100 + "%";
@@ -199,12 +199,12 @@ export class LivePart {
    * Each is a 0..1 strength (lookOf). The post-processing passes (ao, bloom) load on first use. */
   _applyLook(this: Home3DCard, day: number) {
     // day: daylight 0 (night) .. 1, from _update
-    const T = this.T,
-      L = lookOf(this._cfg()),
-      r = this._renderer,
-      t = L.light,
-      mix = (a: number, b: number) => a + (b - a) * t,
-      night = day < 0.5;
+    const T = this.T;
+    const L = lookOf(this._cfg());
+    const r = this._renderer;
+    const t = L.light;
+    const mix = (a: number, b: number) => a + (b - a) * t;
+    const night = day < 0.5;
     const A = Math.max(0, Math.min(1, +(this._cfg().ambient ?? AMBIENT) || 0)); // daytime room fill: the even light everywhere
     this._amb.intensity = mix(0.22 + 0.53 * day * A, 0.08 + 0.17 * day * A);
     this._hemi.intensity = mix(0.16 + 0.39 * day * A, 0.35 + 0.9 * day * A);
@@ -234,8 +234,8 @@ export class LivePart {
       });
       for (const g of this._lightGroups) if (g.light.castShadow) g.light.shadow.radius = 1 + 3 * t;
       r.shadowMap.needsUpdate = true;
-      const s = L.stage,
-        hex = (a: number, b: number) => "#" + new T.Color(a).lerp(new T.Color(b), s).getHexString();
+      const s = L.stage;
+      const hex = (a: number, b: number) => "#" + new T.Color(a).lerp(new T.Color(b), s).getHexString();
       const card = this.shadowRoot.querySelector<HTMLElement>("ha-card");
       if (card) card.style.background = s ? hex(0x1b1a18, 0x141311) : ""; // the spotlight itself is _stageSpot, in the scene
     }
@@ -260,13 +260,13 @@ export class LivePart {
 
   /* the card background as a scene background colour. The output pass tone-maps it, so undo ACES first (per channel; fine for greys). */
   _sceneBg(this: Home3DCard, s: number) {
-    const T = this.T,
-      k = this._renderer.toneMappingExposure / 0.6;
+    const T = this.T;
+    const k = this._renderer.toneMappingExposure / 0.6;
     const aces = (v: number) => (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.432951) + 0.238081);
     const untone = (c: THREE.Color) => {
       for (const ch of ["r", "g", "b"] as const) {
-        let lo = 0,
-          hi = 1;
+        let lo = 0;
+        let hi = 1;
         for (let i = 0; i < 30; i++) {
           const m = (lo + hi) / 2;
           if (aces(m * k) < c[ch]) lo = m;
@@ -285,8 +285,8 @@ export class LivePart {
   }
 
   async _loadPost(this: Home3DCard) {
-    const gen = this._gen,
-      cfg = this._config;
+    const gen = this._gen;
+    const cfg = this._config;
     if (this._ppLoading === gen) return;
     this._ppLoading = gen;
     try {
@@ -296,8 +296,8 @@ export class LivePart {
         ),
       );
       if (gen !== this._gen || !this._renderer) return;
-      const T = this.T,
-        comp = (this._composer = new EffectComposer(this._renderer));
+      const T = this.T;
+      const comp = (this._composer = new EffectComposer(this._renderer));
       comp.addPass(new RenderPass(this._scene, this._cam));
       const ao = (this._aoPass = new GTAOPass(this._scene, this._cam, 256, 256));
       ao.updateGtaoMaterial({
@@ -336,8 +336,8 @@ export class LivePart {
   /* ---------- live update ---------- */
   /** apply the entities' states to the scene: daylight, lamps, screens, chips, door badges, 3D doors and weather */
   _update(this: Home3DCard) {
-    const h = this._hass,
-      cfg = this._cfg();
+    const h = this._hass;
+    const cfg = this._cfg();
     if (!h || !this._lightGroups) return;
     const boost = this._updateDaylight(h, cfg);
     this._updateLamps(h, cfg, boost);
@@ -352,9 +352,9 @@ export class LivePart {
   /** the sun's position, colour and strength, the ambient look and window light. Returns how much to boost lamps
    * (1 at night, less by day) */
   _updateDaylight(this: Home3DCard, h: Hass, cfg: CardConfig): number {
-    const sun = h.states[cfg.sun_entity || "sun.sun"],
-      pos = this._sunPos(),
-      north = Number(cfg.scene?.north) || 0;
+    const sun = h.states[cfg.sun_entity || "sun.sun"];
+    const pos = this._sunPos();
+    const north = Number(cfg.scene?.north) || 0;
     // daylight 0..1: from the sun's elevation (civil twilight is −6°), or sun.sun's state when there is no position
     let el = pos ? pos.elevation : sun && sun.state === "below_horizon" ? -10 : 45;
     if (cfg.night_mode === "never" || this._plan) el = Math.max(el, this._plan ? 55 : 30); // plan editing is always lit
@@ -378,15 +378,15 @@ export class LivePart {
   _updateLamps(this: Home3DCard, h: Hass, cfg: CardConfig, boost: number) {
     const T = this.T;
     for (const g of this._lightGroups) {
-      let sum = 0,
-        rgb = [0, 0, 0],
-        anyOn = false;
+      let sum = 0;
+      let rgb = [0, 0, 0];
+      let anyOn = false;
       for (const L of g.members) {
         const st = h.states[L.entity];
         if (!st || st.state !== "on") continue;
         anyOn = true;
-        const bri = (st.attributes.brightness ?? 255) / 255,
-          c = L.color || stateRgb(st);
+        const bri = (st.attributes.brightness ?? 255) / 255;
+        const c = L.color || stateRgb(st);
         sum += bri;
         rgb = rgb.map((v, i) => v + c[i] * bri);
       }
@@ -394,10 +394,10 @@ export class LivePart {
       const color = (this._tmpCol ||= new T.Color());
       if (anyOn && sum > 0) color.setRGB(rgb[0] / sum / 255, rgb[1] / sum / 255, rgb[2] / sum / 255);
       else color.setRGB(1, 0.8, 0.55);
-      const avg = Math.min(1, sum / n),
-        level = anyOn ? (0.06 + 0.94 * avg) * Math.sqrt(n) : 0; // follows the bulbs' real brightness; per-light settings set the top end
-      const L = g.L,
-        strength = (cfg.light_strength ?? 1) * (L.intensity ?? 1);
+      const avg = Math.min(1, sum / n);
+      const level = anyOn ? (0.06 + 0.94 * avg) * Math.sqrt(n) : 0; // follows the bulbs' real brightness; per-light settings set the top end
+      const L = g.L;
+      const strength = (cfg.light_strength ?? 1) * (L.intensity ?? 1);
       if (L.saturation != null && L.saturation !== 1) {
         const c = { h: 0, s: 0, l: 0 };
         color.getHSL(c);
@@ -456,9 +456,9 @@ export class LivePart {
           parts.push(
             `<span class="item"><ha-icon icon="mdi:thermostat"></ha-icon>${cur != null ? Math.round(cur) + "°" : "–"}</span>`,
           );
-          const lo = st.attributes.target_temp_low,
-            hi = st.attributes.target_temp_high,
-            tt = st.attributes.temperature;
+          const lo = st.attributes.target_temp_low;
+          const hi = st.attributes.target_temp_high;
+          const tt = st.attributes.temperature;
           const tgt =
             tt != null ? `${Math.round(tt)}°` : lo != null && hi != null ? `${Math.round(lo)}–${Math.round(hi)}°` : "";
           if (tgt) parts.push(`<span class="item" style="opacity:.75">${tgt}</span>`);
@@ -484,8 +484,8 @@ export class LivePart {
   /** door and window badges: open or shut */
   _updateDoorBadges(this: Home3DCard, h: Hass) {
     for (const { cfg: dc, node } of this._doors) {
-      const open = h.states[dc.entity]?.state === "on",
-        icon = open ? dc.icon_open || "mdi:door-open" : dc.icon_closed || "mdi:door-closed";
+      const open = h.states[dc.entity]?.state === "on";
+      const icon = open ? dc.icon_open || "mdi:door-open" : dc.icon_closed || "mdi:door-closed";
       if (node._icon === icon) continue;
       node._icon = icon;
       node.className = "door " + (open ? "open" : "closed");
@@ -498,13 +498,13 @@ export class LivePart {
     if (this._weather) {
       const st = h.states[cfg.weather];
       if (st) {
-        const a = st.attributes,
-          w = this._weather;
+        const a = st.attributes;
+        const w = this._weather;
         const outside = cfg.outdoor_temperature ? this._fmt(cfg.outdoor_temperature, 0) : Math.round(a.temperature);
         const wind = a.wind_speed != null ? ` · ${Math.round(a.wind_speed)} ${a.wind_speed_unit || ""}` : "";
-        const icon = WEATHER_ICON3[st.state] || "mdi:weather-partly-cloudy",
-          t = `${outside}${a.temperature_unit || "°"}`,
-          sub = `${a.humidity ?? "–"}% humidity${wind}`;
+        const icon = WEATHER_ICON3[st.state] || "mdi:weather-partly-cloudy";
+        const t = `${outside}${a.temperature_unit || "°"}`;
+        const sub = `${a.humidity ?? "–"}% humidity${wind}`;
         if (w._sig !== icon + t + sub) {
           w._sig = icon + t + sub;
           w.querySelector<HTMLElement>("ha-icon").setAttribute("icon", icon);

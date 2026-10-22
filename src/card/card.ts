@@ -175,7 +175,7 @@ export class Home3DCard extends HTMLElement {
   // DOM
   declare _wrap: HTMLElement;
   declare _ov: HTMLElement; // overlay layer for chips and labels
-  declare _ed: HTMLElement; // editor UI layer
+  declare _editorLayer: HTMLElement; // editor UI layer
   declare _edBtn: HTMLElement | null;
   declare _conn: HTMLElement | null; // the "Reconnecting" pill
   declare _toastT: ReturnType<typeof setTimeout>;
@@ -423,8 +423,8 @@ export class Home3DCard extends HTMLElement {
   /* → true when anything _update() reads differs from the last applied hass: a watched entity's state object (HA keeps
    * the object of an unchanged entity), the locale or location, or a minute has passed (the sun moves) */
   _hassChanged(h: Hass) {
-    const seen = this._seen,
-      now = Date.now();
+    const seen = this._seen;
+    const now = Date.now();
     let changed =
       !seen ||
       this._seenCfg !== this._cfg() ||
@@ -495,8 +495,8 @@ export class Home3DCard extends HTMLElement {
   /* After a long sleep or a network change the websocket can be dead without HA noticing yet (it still says connected).
    * Ping it, and if no answer comes back, have HA reconnect now rather than whenever the socket finally times out. */
   _probeConn() {
-    const h = this._hass,
-      c = h?.connection;
+    const h = this._hass;
+    const c = h?.connection;
     if (!c?.ping || h.connected === false || this._probeT) return;
     this._probeT = setTimeout(() => {
       this._probeT = null;
@@ -559,12 +559,12 @@ export class Home3DCard extends HTMLElement {
 
   /** a short message at the bottom of the map (the editor's feedback, mostly) */
   _toast(msg: string, ms = 2600) {
-    if (!this._ed) return;
-    let t = this._ed.querySelector<HTMLElement>(".toast");
+    if (!this._editorLayer) return;
+    let t = this._editorLayer.querySelector<HTMLElement>(".toast");
     if (!t) {
       t = document.createElement("div");
       t.className = "toast";
-      this._ed.append(t);
+      this._editorLayer.append(t);
     }
     t.textContent = msg;
     t.style.opacity = "1";
@@ -611,8 +611,8 @@ export class Home3DCard extends HTMLElement {
 
   /* a new panel or dashboard starts with nothing in it: say how to begin */
   _showEmpty() {
-    const cfg = this._cfg(),
-      sc = cfg.scene || {};
+    const cfg = this._cfg();
+    const sc = cfg.scene || {};
     const empty = !this._edit && ![sc.wall_segs, sc.floors, sc.boxes, sc.objects, cfg.lights].some((a) => a?.length);
     let el = this._wrap?.querySelector<HTMLElement>(".empty");
     if (!empty) return el?.remove();
@@ -643,8 +643,8 @@ export class Home3DCard extends HTMLElement {
   }
 
   _disposeTree(root: THREE.Object3D) {
-    const keep = new Set(Object.values(this._mats || {})),
-      keepTex = new Set([...(this._bpTex?.values() || []), ...Object.values(this._surfTexs || {})]);
+    const keep = new Set(Object.values(this._mats || {}));
+    const keepTex = new Set([...(this._bpTex?.values() || []), ...Object.values(this._surfTexs || {})]);
     root.traverse((o: any) => {
       if (o.isLight) o.shadow?.dispose?.();
       if (o.userData.shared) return;

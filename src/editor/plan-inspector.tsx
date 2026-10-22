@@ -7,7 +7,7 @@ import type { Opening, Pt, WallSeg } from "../types";
 import type { GenericItem } from "../core/items";
 import type { Editor } from "./editor";
 import { AdvancedJson, Choice, Field, Icon, Sun, Title } from "./inspector-panel";
-import { DOOR_STYLES, R1, SURFACES, polyArea, segDir } from "./shared";
+import { DOOR_STYLES, round1, SURFACES, polyArea, segDir } from "./shared";
 
 type Props = { editor: Editor; itemKey: string; item: GenericItem };
 
@@ -85,10 +85,10 @@ function summary(editor: Editor, kind: string, item: GenericItem) {
   if (kind === "w") return `${card._fmtLen(segDir(item as WallSeg)[2])} long`;
   if (kind === "n") return "A box cut out of the walls it overlaps";
   if (kind === "r") {
-    const xs = item.pts.map((p: Pt) => p[0]),
-      ys = item.pts.map((p: Pt) => p[1]);
-    const width = Math.max(...xs) - Math.min(...xs),
-      depth = Math.max(...ys) - Math.min(...ys);
+    const xs = item.pts.map((p: Pt) => p[0]);
+    const ys = item.pts.map((p: Pt) => p[1]);
+    const width = Math.max(...xs) - Math.min(...xs);
+    const depth = Math.max(...ys) - Math.min(...ys);
     return `${card._fmtArea(polyArea(item.pts))} · ${card._fmtLen(width)} × ${card._fmtLen(depth)}`;
   }
   if (kind === "p") return `${card._fmtLen(item.w)} × ${card._fmtLen(item.h)}`;
@@ -229,7 +229,7 @@ function Wall({ editor, itemKey, item }: Props) {
   const scene = card._work.scene || {};
   const unit = card._imperial() ? "in" : "cm";
   const [ux, uy, length] = segDir(item as WallSeg);
-  const angle = R1(((((Math.atan2(uy, ux) * 180) / Math.PI) % 360) + 360) % 360);
+  const angle = round1(((((Math.atan2(uy, ux) * 180) / Math.PI) % 360) + 360) % 360);
   const set = (name: string) => setter(editor, itemKey, name);
   const button = (name: string, icon: string, text: string) => (
     <PlanButton editor={editor} itemKey={itemKey} name={name} icon={icon}>

@@ -6,7 +6,7 @@ import type { LovelaceCardConfig, Looks } from "../types";
 import type { GenericItem } from "../core/items";
 import type { Editor } from "./editor";
 import type { LookName } from "./look-panel";
-import { inPoly, CX, CY, DOOR_CLASSES, R1, itemCenter, lookOf, AMBIENT } from "./shared.js";
+import { inPoly, CX, CY, DOOR_CLASSES, round1, itemCenter, lookOf, AMBIENT } from "./shared.js";
 
 export class EditorPanels {
   /** Sets one look's strength (0 to 1) while its slider moves. Only values that differ from the default are stored. */
@@ -68,19 +68,19 @@ export class EditorPanels {
   _roomEntities(this: Editor, key: string) {
     const room = this.card._rooms().find((r) => r.name === key);
     if (!room) return [];
-    const w = this.card._work,
-      polys = (w.scene?.floors || [])
-        .filter((f) => room.floors.includes(f.name) && f.pts?.length >= 3)
-        .map((f) => f.pts);
+    const w = this.card._work;
+    const polys = (w.scene?.floors || [])
+      .filter((f) => room.floors.includes(f.name) && f.pts?.length >= 3)
+      .map((f) => f.pts);
     const inside = (x: number, y: number) =>
       polys.length
         ? polys.some((pts) => inPoly(x, y, pts))
         : x >= room.rect[0] && x <= room.rect[1] && y >= room.rect[2] && y <= room.rect[3];
     const out: string[] = [];
-    const add = (k: string, it: GenericItem) => {
-      if (!it?.entity || out.includes(it.entity)) return;
-      const [x, y] = itemCenter(k, it);
-      if (inside(x, y)) out.push(it.entity);
+    const add = (kind: string, item: GenericItem) => {
+      if (!item?.entity || out.includes(item.entity)) return;
+      const [x, y] = itemCenter(kind, item);
+      if (inside(x, y)) out.push(item.entity);
     };
     for (const [k, n] of [
       ["l", "lights"],
@@ -88,20 +88,20 @@ export class EditorPanels {
       ["c", "chips"],
       ["d", "doors"],
     ])
-      for (const it of (w as Record<string, GenericItem[]>)[n] || []) add(k, it);
+      for (const item of (w as Record<string, GenericItem[]>)[n] || []) add(k, item);
     for (const o of w.scene?.objects || []) add("o", o);
     return out;
   }
 
   /* pointer-driven drag from the panel onto the canvas (works with mouse and touch) */
   _dragEntity(this: Editor, id: string, ev0: PointerEvent) {
-    const st = this.card._hass?.states[id],
-      wrapR = () => this.card._wrap.getBoundingClientRect(),
-      canvas = this.card._renderer.domElement;
+    const st = this.card._hass?.states[id];
+    const wrapR = () => this.card._wrap.getBoundingClientRect();
+    const canvas = this.card._renderer.domElement;
     let ghost: HTMLElement | null = null;
     const over = (ev: PointerEvent) => {
-      const r = canvas.getBoundingClientRect(),
-        panel = this.card._ed.querySelector<HTMLElement>(".ents")?.getBoundingClientRect();
+      const r = canvas.getBoundingClientRect();
+      const panel = this.card._editorLayer.querySelector<HTMLElement>(".ents")?.getBoundingClientRect();
       const inCanvas = ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
       const inPanel =
         panel &&
@@ -117,7 +117,7 @@ export class EditorPanels {
         ghost = document.createElement("div");
         ghost.className = "ghost";
         ghost.textContent = st?.attributes.friendly_name || id;
-        this.card._ed.append(ghost);
+        this.card._editorLayer.append(ghost);
       }
       const w = wrapR();
       ghost.style.left = ev.clientX - w.left + "px";
@@ -136,15 +136,15 @@ export class EditorPanels {
         return this._placeEntity(id, x, y);
       }
       if (!over(ev)) return;
-      const T = this.card.T,
-        r = canvas.getBoundingClientRect(),
-        ray = new T.Raycaster();
+      const T = this.card.T;
+      const r = canvas.getBoundingClientRect();
+      const ray = new T.Raycaster();
       ray.setFromCamera(
         new T.Vector2(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1),
         this.card._cam,
       );
       const p = ray.ray.intersectPlane(new T.Plane(new T.Vector3(0, 1, 0), 0), new T.Vector3());
-      if (p) this._placeEntity(id, R1(p.x + CX), R1(p.z + CY));
+      if (p) this._placeEntity(id, round1(p.x + CX), round1(p.z + CY));
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -153,9 +153,9 @@ export class EditorPanels {
 
   /* pick a sensible representation for an entity: light glow, door marker, climate chip, or a live badge */
   _entityItem(this: Editor, id: string, x: number, y: number, as?: string): [string, GenericItem] {
-    const st = this.card._hass?.states[id],
-      d = id.split(".")[0],
-      dc = st?.attributes?.device_class;
+    const st = this.card._hass?.states[id];
+    const d = id.split(".")[0];
+    const dc = st?.attributes?.device_class;
     as ||=
       d === "light"
         ? "light"
@@ -173,20 +173,20 @@ export class EditorPanels {
   }
 
   _placeEntity(this: Editor, id: string, x: number, y: number) {
-    const [k, item] = this._entityItem(id, x, y);
-    this._mutate(() => [this._push(k, item)]);
+    const [kind, item] = this._entityItem(id, x, y);
+    this._mutate(() => [this._push(kind, item)]);
     this.card._toast(`Added ${this.card._hass?.states[id]?.attributes.friendly_name || id}. Drag it into place.`);
   }
 
   _convertEntity(this: Editor, key: string, as: string) {
-    const it = this.item(key),
-      id = it.entity || it.climate;
+    const current = this.item(key);
+    const id = current.entity || current.climate;
     if (!id) return;
-    const c = itemCenter(key[0], it);
+    const c = itemCenter(key[0], current);
     this._mutate(() => {
-      const [k, i] = key.split(":");
-      this._list(k).splice(+i, 1);
-      const [nk, item] = this._entityItem(id, R1(c[0]), R1(c[1]), as);
+      const [kind, i] = key.split(":");
+      this._list(kind).splice(+i, 1);
+      const [nk, item] = this._entityItem(id, round1(c[0]), round1(c[1]), as);
       if (as === "badge" && id.startsWith("climate.")) {
         delete item.climate;
         item.entity = id;

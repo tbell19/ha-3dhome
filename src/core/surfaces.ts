@@ -33,10 +33,10 @@ export function paintSurface(name: string, S = 256): SurfaceCanvas {
   }; // draw at 9 offsets so edges tile
   const blotch = (n: number, r0: number, r1: number, lo: number, hi: number, a: number) => {
     for (let i = 0; i < n; i++) {
-      const x = rnd() * S,
-        y = rnd() * S,
-        r = r0 + rnd() * (r1 - r0),
-        v = Math.round(lo + rnd() * (hi - lo));
+      const x = rnd() * S;
+      const y = rnd() * S;
+      const r = r0 + rnd() * (r1 - r0);
+      const v = Math.round(lo + rnd() * (hi - lo));
       wrap((dx, dy) => {
         const gr = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
         gr.addColorStop(0, grey(v, a));
@@ -47,8 +47,8 @@ export function paintSurface(name: string, S = 256): SurfaceCanvas {
     }
   };
   const speckle = (amp: number) => {
-    const im = g.getImageData(0, 0, S, S),
-      d = im.data;
+    const im = g.getImageData(0, 0, S, S);
+    const d = im.data;
     for (let i = 0; i < d.length; i += 4) {
       const n = (rnd() - 0.5) * amp;
       d[i] += n;
@@ -70,11 +70,11 @@ export function paintSurface(name: string, S = 256): SurfaceCanvas {
   g.fillStyle = grey(244);
   g.fillRect(0, 0, S, S);
   if (name === "wood") {
-    const rows = 5,
-      rh = S / rows;
+    const rows = 5;
+    const rh = S / rows;
     for (let r = 0; r < rows; r++) {
-      const y = r * rh,
-        j = rnd() * S;
+      const y = r * rh;
+      const j = rnd() * S;
       for (const [x0, x1] of [
         [j - S, j],
         [j, j + S],
@@ -84,9 +84,9 @@ export function paintSurface(name: string, S = 256): SurfaceCanvas {
       }
       for (let k = 0; k < 7; k++) {
         // grain
-        const gy = y + 3 + rnd() * (rh - 6),
-          amp = 1 + rnd() * 2,
-          ph = rnd() * 6.3;
+        const gy = y + 3 + rnd() * (rh - 6);
+        const amp = 1 + rnd() * 2;
+        const ph = rnd() * 6.3;
         g.strokeStyle = grey(170, 0.18);
         g.lineWidth = 1;
         g.beginPath();
@@ -98,8 +98,8 @@ export function paintSurface(name: string, S = 256): SurfaceCanvas {
       g.fillRect(j - 0.75, y, 1.5, rh);
     }
   } else if (name === "tile" || name === "stone") {
-    const n = 2,
-      ts = S / n;
+    const n = 2;
+    const ts = S / n;
     for (let i = 0; i < n; i++)
       for (let k = 0; k < n; k++) {
         g.fillStyle = grey(Math.round(232 + rnd() * 18));
@@ -118,15 +118,15 @@ export function paintSurface(name: string, S = 256): SurfaceCanvas {
     g.fillRect(S - gw / 2, 0, gw, S);
     g.fillRect(0, S - gw / 2, S, gw);
   } else if (name === "brick") {
-    const rows = 12,
-      rh = S / rows,
-      bw = S / 4;
+    const rows = 12;
+    const rh = S / rows;
+    const bw = S / 4;
     g.fillStyle = grey(250);
     g.fillRect(0, 0, S, S); // mortar
     for (let r = 0; r < rows; r++)
       for (let b = 0; b < 4; b++) {
-        const x = b * bw + (r % 2 ? bw / 2 : 0),
-          v = Math.round(200 + rnd() * 34);
+        const x = b * bw + (r % 2 ? bw / 2 : 0);
+        const v = Math.round(200 + rnd() * 34);
         for (const dx of [0, -S]) {
           g.fillStyle = grey(v);
           g.fillRect(x + dx + 1.5, r * rh + 1.5, bw - 3, rh - 3);

@@ -339,9 +339,9 @@ function Menu({ editor, name, children }: { editor: Editor; name: string; childr
   useLayoutEffect(() => {
     const button = editor._menu?.button;
     if (!open || !button || !box.current) return;
-    const wrap = editor.card._wrap.getBoundingClientRect(),
-      at = button.getBoundingClientRect(),
-      bar = editor.card._ed.querySelector<HTMLElement>(".bar")!.getBoundingClientRect();
+    const wrap = editor.card._wrap.getBoundingClientRect();
+    const at = button.getBoundingClientRect();
+    const bar = editor.card._editorLayer.querySelector<HTMLElement>(".bar")!.getBoundingClientRect();
     box.current.style.top = bar.bottom - wrap.top + 6 + "px";
     box.current.style.left =
       Math.max(8, Math.min(at.left - wrap.left, wrap.width - box.current.offsetWidth - 8)) + "px";

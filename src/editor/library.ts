@@ -4,7 +4,7 @@
 import type { Library, LibItem } from "../core/sh3d";
 import type { Editor } from "./editor";
 import { showLibrary } from "./library-panel";
-import { R1, SF, zipFind } from "./shared";
+import { round1, SF, zipFind } from "./shared";
 
 /** each model's icon as an object URL (null when the library has none), made once */
 const ICONS = new WeakMap<LibItem, Promise<string | null>>();
@@ -14,12 +14,12 @@ export class EditorLibrary {
     this.closeLibrary();
     const host = document.createElement("div");
     host.className = "lib";
-    this.card._ed.append(host);
+    this.card._editorLayer.append(host);
     showLibrary(this, host);
   }
 
   closeLibrary(this: Editor) {
-    const host = this.card._ed?.querySelector<HTMLElement>(":scope > .lib");
+    const host = this.card._editorLayer?.querySelector<HTMLElement>(":scope > .lib");
     if (host) showLibrary(this, host, false);
   }
 
@@ -73,8 +73,8 @@ export class EditorLibrary {
   /** Places a library model in the middle of the view, at its real size. */
   _placeModel(this: Editor, model: LibItem) {
     this.closeLibrary();
-    const [cmPerUnit, cmPerHeight] = this.card._modelScale(),
-      [x, y] = this._target();
+    const [cmPerUnit, cmPerHeight] = this.card._modelScale();
+    const [x, y] = this._target();
     this._mutate(() => [
       this._push("o", {
         type: "model",
@@ -87,10 +87,10 @@ export class EditorLibrary {
         lic: model.lic,
         x,
         y,
-        z: R1(model.elev / cmPerHeight),
-        w: R1(model.w / cmPerUnit),
-        d: R1(model.d / cmPerUnit),
-        h: R1(model.h / cmPerHeight),
+        z: round1(model.elev / cmPerHeight),
+        w: round1(model.w / cmPerUnit),
+        d: round1(model.d / cmPerUnit),
+        h: round1(model.h / cmPerHeight),
         cm: [model.w, model.d, model.h],
       }),
     ]);

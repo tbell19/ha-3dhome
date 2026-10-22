@@ -2,7 +2,7 @@
 
 3D Home has two halves:
 
-- **The frontend:** small TypeScript modules under `src/`, bundled by esbuild into two files in `custom_components/ha_3dhome/frontend/`: `ha-3dhome.js` (viewer, panel and strategy) and `ha-3dhome-editor.js` (everything behind ✎ Edit, which the core fetches from its own folder the first time Edit is pressed).
+- **The frontend:** small TypeScript modules under `src/`, bundled by esbuild into two files in `custom_components/ha_3dhome/frontend/`: `ha-3dhome.js` (the sidebar page and the 3D map) and `ha-3dhome-editor.js` (everything behind ✎ Edit, which the core fetches from its own folder the first time Edit is pressed).
 - **The integration** (`custom_components/ha_3dhome/`, Python): it serves those files, adds the sidebar page and keeps each page's map in Home Assistant's storage. See [The panel and the integration](#the-panel-and-the-integration).
 
 This doc walks through them top to bottom.
@@ -11,17 +11,17 @@ This doc walks through them top to bottom.
 
 | Path | What it does |
 |---|---|
-| `src/ha-3dhome.ts` | Core entry: defines `<ha-3dhome-card>`, `<ha-3dhome-panel>` and the strategy elements (plus the old aliases), publishes `window.__ha3dhome`, tells `editor-loader` where the editor lives |
+| `src/ha-3dhome.ts` | Core entry: defines `<ha-3dhome-panel>` and the map inside it, `<ha-3dhome-map>`; publishes `window.__ha3dhome`, tells `editor-loader` where the editor lives |
 | `src/types.ts` | The config schema as types: `CardConfig`, `Scene`, `WallSeg`, `Opening`, `SceneItem`, `LightConfig`, `Chip`, `Hass`… |
 | `src/global.d.ts` | What the code adds to `window` (`__ha3dhome`, `customCards`, `customStrategies`) |
 | `src/core/constants.ts` | Version, names, CDN URLs (pinned `three@0.160.0`, `jszip@3.10.1`), plan centre `CX=296, CY=391`, the Sweet Home 3D library list `LIBS`, render-look defaults |
 | `src/core/util.ts` | Rounding, cloning, escaping, `rotPt`, `inPoly`, `polyArea`, `stableJSON` |
 | `src/core/items.ts` | Item kinds and pure item maths: `itemCenter`, `shiftItem`, `itemZ`, `scaleItem`, `mapPts` |
-| `src/core/plan-geometry.ts` | `segDir`, `wallExtensions`, `wallPieces`, `planJoints`, `legacyWalls` |
+| `src/core/plan-geometry.ts` | `segDir`, `wallExtensions`, `wallPieces`, `planJoints` |
+| `src/core/vec2.ts` | 2D vector helpers on plan points (`add`, `sub`, `dot`, `cross`, `perp`, `distance`, `lerp`) |
 | `src/core/surfaces.ts`, `fixtures.ts`, `sun.ts`, `entities.ts`, `sh3d.ts` | Textures, fixtures and string lights, sun position, entity icons and states, `parseProps`/`zipFind`/the `IDB` cache |
-| `src/core/strategy.ts` | `class Home3DStrategy`: `generate(config)` → `{views:[panel view with the card]}` |
-| `src/core/lovelace.ts` | Finding 3D Home in dashboard configs: `findCard` (Save into a dashboard), `homeConfigIn` and `dashboardsWithHome` (the panel's import) |
-| `src/panel/panel.ts` | `class Home3DPanel` (`<ha-3dhome-panel>`): the sidebar page. Follows its stored config, hands the card a `LayoutStore`, offers to import a dashboard's map |
+| `src/core/lovelace.ts` | The panel's import from dashboards: `dashboardsWithHome` finds maps made with the 5.x card or strategy (and the ha-iso-home names) and brings them up to date |
+| `src/panel/panel.ts` | `class Home3DPanel` (`<ha-3dhome-panel>`): the sidebar page. Follows its stored config, hands the map a `LayoutStore`, offers to import a dashboard's map |
 | `src/card/card.ts` | `class Home3DCard`: every field (typed, with a comment), lifecycle (config, hass, connection, attach/detach, teardown) and `_rebuild()` |
 | `src/card/startup.ts` … `plan.ts` | One part per topic: startup (`_init` and its steps), camera, rooms, scene build, models, lights, picking (pointer input), live update and looks, the plan layer |
 | `src/card/styles.ts` | The shadow DOM's stylesheet and markup |
@@ -30,7 +30,8 @@ This doc walks through them top to bottom.
 | `src/editor-api.ts` | The core helpers the editor uses, published as `window.__ha3dhome` |
 | `src/ha-3dhome-editor.ts` | Editor entry: checks the version, then registers the `Editor` with the core |
 | `src/editor/editor.ts` | `class Editor`: the editor object, its own fields, and its parts copied onto its prototype |
-| `src/editor/*.ts` | The editor's parts: `session` (enter/exit, toolbar, keys), `selection` (gizmo, drags, undo), `panels`, `inspector`, `plan` (floor plan editor), `save` (layout stores), `library`; `shared.ts` reads the core helpers |
+| `src/editor/*.ts` | The editor's logic, one part per topic: `session` (enter/exit, toolbar actions, keys), `selection` (gizmo, drags, undo), `panels` (look, room controls, adding entities), `inspector` (what its fields do), `plan` (floor plan editor), `save`, `library`; `shared.ts` reads the core helpers |
+| `src/editor/*.tsx` | The editor's UI as Preact components: `toolbar`, `inspector-panel` and `plan-inspector`, `side-panels` (hosts `look-panel`, `room-controls-panel`, `add-panel`), `library-panel` |
 | `custom_components/ha_3dhome/` | The integration: `__init__.py` (serving the files, the panel), `config_flow.py`, `store.py` (a page's config and revision), `websocket.py` (follow and save) |
 
 ### How the parts make one class
@@ -51,7 +52,7 @@ Editing state the card itself reads stays on the card: `_edit` (selection, undo 
 
 ### Type checking
 
-`npm run typecheck` runs two passes. `tsconfig.strict.json` checks `src/types.ts`, `src/core/` and `src/panel/` with every strict option, including null checks. `tsconfig.json` checks everything else strictly except `strictNullChecks`: the card's fields start empty and fill in during `_init`, and the editor's fields exist only while editing, so null checks there would mean a `!` on nearly every line. Editor items are `GenericItem` (any item's fields) because one key can name a box, a light or a wall; a cast such as `it as WallSeg` marks where the kind is known.
+`npm run typecheck` runs two passes. `tsconfig.strict.json` checks `src/types.ts`, `src/core/` and `src/panel/` with every strict option, including null checks. `tsconfig.json` checks everything else strictly except `strictNullChecks`: the card's fields start empty and fill in during `_init`, and the editor's fields exist only while editing, so null checks there would mean a `!` on nearly every line. Editor items are `GenericItem` (any item's fields) because one key can name a box, a light or a wall; a cast such as `item as WallSeg` marks where the kind is known.
 
 ## Lifecycle
 
@@ -74,7 +75,6 @@ Editing state the card itself reads stays on the card: `_edit` (selection, undo 
 
 1. **`_buildScene(scene)`**
    - **Floors:** `ShapeGeometry` per floor polygon, tagged `userData.floor` and `userData.room`.
-   - **Legacy walls** (`walls` / `front_walls`, only in configs not yet saved by v4.7+): boxes per span plus lintels. Tagged `userData.wall`.
    - **`_buildPlanLayer(scene)`:** everything in floor plan mode lives in `this._wallG`, so `_rebuildPlan()` can rebuild just that layer while a corner is dragged.
      - **Walls:** for `wall_segs[i]` (key `w:i`), `wallPieces()` splits the wall into solid blocks around every opening that passes at least halfway through it. It cuts the wall's length at each opening's edges, then for each slice takes the complement of the openings' z-ranges, and merges neighbours. Each block is a rotated `BoxGeometry`. No CSG.
      - **Corners:** `wallExtensions()` pushes ends that meet another wall end at an angle out by half that wall's thickness.
@@ -91,8 +91,7 @@ Editing state the card itself reads stays on the card: `_edit` (selection, undo 
    - Ambient, hemisphere and sun lights. In edit mode, a flat north arrow beside the house (`_buildCompass`).
    - Before that, `_buildRoof()` adds shadow-only geometry outside plan mode: a slab over each indoor room just above the tallest wall, and every wall raised to the slab top (openings still cut), which fills cut-away walls and keeps wall tops out of the sun. The material has `colorWrite`/`depthWrite` off and `raycast` is a no-op, so it only shows up in shadow maps. Layers can't do this: three r160's shadow pass tests layers against the *view* camera.
    - Config lights are grouped by rounded `x:y:z`, so two bulbs in one fixture become one physical light:
-     - `kind:"string"` → a point light plus emissive bulb spheres;
-     - `kind:"niche"` → a point light plus the emissive niche panel;
+     - `fixture:"string"` → a point light plus emissive bulb spheres along `points`;
      - lights with an aim point `gx/gy` more than 12 units away → `SpotLight`; otherwise `PointLight`. Each gets an additive glow sprite.
    - The first `max_shadow_lights` (default 8) cast shadows, largest radius first.
    - Fixtures within 6 units of a light become its emissive "bulb" meshes.
@@ -138,7 +137,6 @@ All handlers sit on the canvas. **`pointerdown` uses `{capture:true}`** so it ru
 
 `this._work` is a deep copy of the editable keys (`scene`, `lights`, `hotspots`, `chips`, `doors`) plus the rest of the config.
 - **Keys** are `kind:index`, with kind ∈ `b o v l h c d` (furniture mode) or `w n p` (floor plan mode: `scene.wall_segs`, `scene.openings`, `scene.blueprints`).
-- **`_enterEdit()` runs `_migrateWalls()`** (legacy `walls` → `wall_segs` + `openings`) before the first undo snapshot, so every snapshot uses one format.
 
 **Rotatable items** (`b`, `o`, `v`)
 - `itemCenter(k, it)` gives the centre `[x, y, z]`.
@@ -149,7 +147,7 @@ All handlers sit on the canvas. **`pointerdown` uses `{capture:true}`** so it ru
 **Rotatable items** also include openings (`n`) and blueprints (`p`): centre `x/y` plus `rot`.
 
 **Point items** (`l`, `h`, `c`, `d`, `w`)
-- `mapPts(it, f)` maps every plan point: `x/y`, aim `gx/gy`, hit `hx/hy`, string-light `points`, niche `rect`, wall ends `a/b`.
+- `mapPts(it, f)` maps every plan point: `x/y`, aim `gx/gy`, hit `hx/hy`, string-light `points`, wall ends `a/b`.
 
 **Floor plan mode** (`this._plan`, `this._tool` ∈ `select | wall | door | window | measure`)
 - `pickKey()` only returns `w/n/p` keys in plan mode (skipping locked blueprints) and never returns them in furniture mode.
@@ -158,25 +156,24 @@ All handlers sit on the canvas. **`pointerdown` uses `{capture:true}`** so it ru
 - Joints Dragging one writes the snapped point into every member end and calls `_rebuildPlan()`. Pointer up pushes one undo snapshot and does a full `_commit()`.
 - Tools act on a click (pointer up without movement): `_toolClick()`. Mouse hover draws the preview wall, snap dot and length tip (`_toolHover()`).
 - `_snapPoint()` priority: an existing corner (10 px), then onto a wall line, then (with Snap) a 15° angle and whole-unit length from the previous point, else whole units.
-- `_applyPlanVis()` hides non-plan item groups (except structural overlays) while in plan mode. `_update()` forces day lighting.
+- `applyPlanVis()` hides non-plan item groups while in plan mode. `_update()` forces day lighting.
 - Units: `_imperial()` (from `scene.units` or `hass.config.unit_system.length`), `_fmtLen()`, `_toReal()` / `_fromReal()` using `model_scale`.
 - **Blueprint upload:** `hass.fetchWithAuth('/api/image/upload')` with a JPEG of at most 2400 px; served unauthenticated at `/api/image/serve/<id>/original`. The fallback is an inline 1400 px JPEG data URL.
 
 **Selection**
 - `_expand(key)` adds:
   - every item sharing the same `group`;
-  - **attachments** (`_attached`): lights and hotspots inside a fixture's footprint (pendant, lamps, fan radius, track segment, plant wall, string bulbs).
+  - **attachments** (`_attached`): lights and hotspots inside a fixture's footprint (pendant, lamps, fan radius, string bulbs).
 - `Alt` skips expansion.
 
 **Undo/redo:** stacks of JSON snapshots of `_work`.
 
 **Save:** `_save()` hands the layout (`LAYOUT_KEYS`: scene, lights, hotspots, chips, doors, look, ambient, idle view, room cards) to the card's `LayoutStore` and takes the config it returns as the card's own:
-- **On the panel**, the store is the panel's: `ha_3dhome/config/save` (see below).
-- **On a dashboard** (`dashboardStore()` in `src/editor/save.ts`), it calls `lovelace/config` for the current dashboard. If `config.strategy.type` is `custom:ha-3dhome` it writes the layout into the strategy; otherwise `findCard()` finds the card (by `card_id` if set, else the first `custom:ha-3dhome-card`) in views, sections or nested cards. It then calls `lovelace/config/save`.
+the panel's, which calls `ha_3dhome/config/save` (see below).
 
 ## Add-entity panel
 
-- `_toggleEntityPanel()` lists `hass.states` with search and domain filters.
+- `AddPanel` (`add-panel.tsx`) lists `hass.states` with search and domain filters.
 - `_dragEntity()` is a pointer-driven drag that works for mouse and touch. It shows a ghost label; on drop it raycasts the floor plane.
 - `_entityItem(id, x, y, as)` picks the representation:
 
@@ -215,29 +212,17 @@ All handlers sit on the canvas. **`pointerdown` uses `{capture:true}`** so it ru
    - measures the bounding box and caches the prototype in `MODELCACHE`.
 5. **Instance:** each instance is a clone, scaled non-uniformly to `w × h × d` and sat on the floor at `z`.
 
-## Dashboard strategy
+## The editor's UI
 
-`Home3DStrategy.generate(config)` strips `type/title/path/icon/extra_views` and returns:
-
-```js
-{ title, views: [ { type: "panel", path, title, icon,
-                    cards: [{ fill: true, ...card, type: "custom:ha-3dhome-card" }] },
-                  ...extra_views ] }
-```
-
-`fill: true` makes the card fill the viewport height (`100vh − header`).
-
-The core also pushes `{type: "ha-3dhome", strategyType: "dashboard", name, description, documentationURL}` onto `window.customStrategies`. Home Assistant 2026.5 and later read that list for the *Community dashboards* section of Settings → Dashboards → Add dashboard, as long as the resource is loaded (HACS does that). A dashboard made there holds only `{strategy: {type: "custom:ha-3dhome"}}`; with no walls, floors, boxes, objects or lights the card shows an empty-map hint (`_showEmpty()`, called from `_rebuild()`, hidden while editing). Save fills the strategy in as usual.
-
-The old names (`iso-home-3d-card`, `ll-strategy-dashboard-iso-home`) are defined by `claimOldNames()` a moment after load. It asks Home Assistant for the resource list and leaves the names alone when the old ha-iso-home card is registered too, so load order can't decide which code an old dashboard runs.
+The editor's toolbar, inspector and side panels are [Preact](https://preactjs.com/) components (`.tsx`), bundled into the editor file only, so the map itself loads none of it. Each is drawn from the editor's state (mostly `card._work` and `card._edit`) and drawn again after every change: `_syncBar()` redraws the toolbar and the open side panel, `renderInspector()` the inspector. Preact compares and only touches what changed, so there is no HTML string building and no hand-wired listeners. Components keep only small UI state of their own (a search box, a folded section) and call the editor's methods to change anything (`editor._field`, `editor.setLook`, `editor.toolbarAction`, …), which push an undo step and commit as before. Leaving edit mode unmounts them all (`_clearEditorUI()`).
 
 ## The panel and the integration
 
-A Lovelace card lives inside a dashboard, and a strategy dashboard is regenerated whenever its config or the entity, device or area registries change. Saving the map rewrote the dashboard, Home Assistant replaced the card element, and the card had to park its scene so the new element could adopt it (`PARKED`). A panel sits below all that: Home Assistant creates the element for the sidebar page and hands it `hass`, `narrow`, `route` and `panel`, and nothing regenerates it.
+Up to 5.x the map was also a Lovelace card and a dashboard strategy. A strategy dashboard is regenerated whenever its config or the entity, device or area registries change, so saving the map replaced the card element, and the card had to park its scene so the new element could adopt it. 6.0 keeps only the panel: Home Assistant creates the element for the sidebar page and hands it `hass`, `narrow`, `route` and `panel`, and nothing regenerates it.
 
 **The integration** (`custom_components/ha_3dhome/`):
 
-- `async_setup` serves `frontend/` at `/ha_3dhome` (cached, with `?v=<version>` in the URL so an update fetches new files), adds `ha-3dhome.js` to every page with `frontend.add_extra_js_url` (so the card and strategy work on dashboards without a resource), and registers the websocket commands.
+- `async_setup` serves `frontend/` at `/ha_3dhome` (cached, with `?v=<version>` in the URL so an update fetches new files), and registers the websocket commands.
 - Each config entry is one sidebar page: `panel_custom.async_register_panel` with the element `ha-3dhome-panel` and `config: {entry_id}`. The config flow asks for the title, icon, access and address; the options flow changes the first three.
 - `store.py` keeps one file per page in `.storage` (`ha_3dhome.<entry_id>`): the card config (the layout plus card options such as `weather` or `room_menu`) and a revision number.
 - `websocket.py`:
@@ -246,9 +231,9 @@ A Lovelace card lives inside a dashboard, and a strategy dashboard is regenerate
 
 **The panel element** (`src/panel/panel.ts`):
 
-- It creates one `<ha-3dhome-card>` filling the page (`fill: true`, `--header-height: 0`), forwards `hass` to it, and sets `card.layoutStore` so Save goes to the integration.
+- It creates one `<ha-3dhome-map>` filling the page, forwards `hass` to it, and sets `card.layoutStore` so Save goes to the integration.
 - It subscribes to its config while it is attached. A pushed config the card isn't showing yet goes to `card.setConfig()`. The card compares it with its current config (`sameOptions`): when only the layout differs it calls `_applyLayout()`, which rebuilds the world in the running scene (same renderer, camera kept); a change of card options restarts the card as before.
 - A config pushed while someone edits is held until the editor closes (the card fires `ha-3dhome-editing`), and that edit's Save is refused by the revision check with a message saying why.
 - The stored config leaves out what the panel sets itself (`type`, `fill`, `dashboard`, `card_id`).
 - On narrow screens Home Assistant hides the sidebar, so the panel shows Home Assistant's own `ha-menu-button` over the map's top-left corner (the card moves its weather badge aside through `--ha-3dhome-inset-left`).
-- An empty page opened by an admin looks for maps on dashboards (`dashboardsWithHome()`: every dashboard's config, strategy or card) and offers to copy one in. The dashboard is left unchanged.
+- An empty page opened by an admin looks for maps on dashboards (`dashboardsWithHome()`: every dashboard's config, strategy or card) and offers to copy one in, dropping item types the editor can't make (the first mockup's railings, glass and the like) and updating old string lights. The dashboard is left unchanged.

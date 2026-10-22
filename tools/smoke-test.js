@@ -69,7 +69,7 @@ const STATES = {
 
 (async () => {
   const libZip = await buildMockLib();
-  const { browser, ctx, page: p, errors, ev, wait } = await launch({ mobile: MOBILE });
+  const { browser, ctx, page: p, errors, ev, wait, until } = await launch({ mobile: MOBILE });
   const html = panelPage({
     states: STATES,
     hass: "{services:{downloader:{download_file:{}}}}",
@@ -209,8 +209,8 @@ const STATES = {
   await ev(`delete card._update; delete card._placeOverlays`);
 
   await ev(`card.shadowRoot.querySelector('.edbtn').click()`);
-  await wait(1500);
-  check("edit mode opens", await ev(`!!card._edit && !!card.shadowRoot.querySelector('.bar')`));
+  check("edit mode opens", await until(`!!card._edit && !!card.shadowRoot.querySelector('.bar')`, 8000));
+  await wait(500);
   const SOFA = await ev(`card._work.scene.boxes.findIndex(b=>b.group==='sofa')`),
     FAN = await ev(`'v:'+card._work.scene.overlays.findIndex(o=>o.type==='fan')`);
   await ev(`card._editor.clickSelect('b:${SOFA}')`);

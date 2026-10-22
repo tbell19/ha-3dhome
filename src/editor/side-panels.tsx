@@ -20,7 +20,8 @@ export type SidePanel = keyof typeof PANELS;
 /** Only one of these shows at a time: they share the right-hand side. */
 const EXCLUSIVE: SidePanel[] = ["lookp", "rcp", "ents"];
 
-const hostOf = (editor: Editor, name: SidePanel) => editor.card._ed?.querySelector<HTMLElement>(":scope > ." + name);
+const hostOf = (editor: Editor, name: SidePanel) =>
+  editor.card._editorLayer?.querySelector<HTMLElement>(":scope > ." + name);
 
 export const isOpen = (editor: Editor, name: SidePanel) => !!hostOf(editor, name);
 
@@ -31,7 +32,7 @@ export function toggleSidePanel(editor: Editor, name: SidePanel, open = !isOpen(
   for (const other of EXCLUSIVE) if (other !== name) closeSidePanel(editor, other);
   const host = document.createElement("div");
   host.className = name;
-  editor.card._ed.append(host);
+  editor.card._editorLayer.append(host);
   draw(editor, name, host);
   editor._syncBar();
 }

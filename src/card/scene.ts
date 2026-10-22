@@ -20,13 +20,13 @@ export class ScenePart {
    * The slab sits just above the tallest wall so ceiling lamps still light the room below. */
   _buildRoof(this: Home3DCard, sc: Scene) {
     if (this._plan || sc.roof === false) return;
-    const T = this.T,
-      WT = sc.wall_thickness ?? 4,
-      G = new T.Group();
-    const segs = sc.wall_segs || [],
-      opens = sc.openings || [];
-    const H = Math.max(sc.wall_height ?? 46, ...segs.filter((w) => !w.low).map((w) => w.h ?? 0)) + 0.5,
-      TOP = H + 1.5; // over the tallest wall
+    const T = this.T;
+    const WT = sc.wall_thickness ?? 4;
+    const G = new T.Group();
+    const segs = sc.wall_segs || [];
+    const opens = sc.openings || [];
+    const H = Math.max(sc.wall_height ?? 46, ...segs.filter((w) => !w.low).map((w) => w.h ?? 0)) + 0.5;
+    const TOP = H + 1.5; // over the tallest wall
     const mat = (this._mats.__roof ||= new T.MeshBasicMaterial({
       side: T.DoubleSide,
       colorWrite: false,
@@ -62,9 +62,9 @@ export class ScenePart {
     segs.forEach((w, i) => {
       const full: WallSeg = { ...w, h: TOP };
       delete full.low;
-      const [ux, uy] = segDir(w),
-        t = w.t ?? WT,
-        ry = -Math.atan2(uy, ux);
+      const [ux, uy] = segDir(w);
+      const t = w.t ?? WT;
+      const ry = -Math.atan2(uy, ux);
       for (const [p0, p1, z0, z1] of wallPieces(full, ext[i], opens, TOP, WT)) {
         const sm = (p0 + p1) / 2;
         add(
@@ -83,25 +83,25 @@ export class ScenePart {
    * Built inside the opening's item group (so `rot` applies), in plan coordinates. Each moving part is a pivot group
    * whose `mv` says how it opens: a turn about its hinge, or a slide along x / up. `t` runs 0 (shut) → 1 (open). */
   _buildDoorLeaf(this: Home3DCard, o: Opening) {
-    const T = this.T,
-      [, def] = DOOR_STYLES[o.style],
-      col = o.color || def,
-      th = 1.4,
-      gap = 0.3;
-    const x1 = o.x - o.w / 2,
-      x2 = o.x + o.w / 2,
-      z0 = o.z || 0,
-      hh = o.h - gap,
-      y = o.y,
-      d = o.d ?? 6;
-    const right = o.hinge === "right",
-      side = o.flip ? -1 : 1,
-      parent = this._cur,
-      parts: DoorLeaf["parts"] = [];
+    const T = this.T;
+    const [, def] = DOOR_STYLES[o.style];
+    const col = o.color || def;
+    const th = 1.4;
+    const gap = 0.3;
+    const x1 = o.x - o.w / 2;
+    const x2 = o.x + o.w / 2;
+    const z0 = o.z || 0;
+    const hh = o.h - gap;
+    const y = o.y;
+    const d = o.d ?? 6;
+    const right = o.hinge === "right";
+    const side = o.flip ? -1 : 1;
+    const parent = this._cur;
+    const parts: DoorLeaf["parts"] = [];
     const glassMat = this._mat("#a9cfe6", { transparent: true, opacity: 0.3, depthWrite: false });
     const pivot = (px: number, py: number, mv: { rot?: number; x?: number; y?: number }) => {
-      const outer = new T.Group(),
-        inner = new T.Group();
+      const outer = new T.Group();
+      const inner = new T.Group();
       outer.position.set(px - CX, 0, py - CY);
       inner.position.set(-(px - CX), 0, -(py - CY));
       outer.add(inner);
@@ -133,8 +133,8 @@ export class ScenePart {
       pivot(x2, y, { rot: side * (Math.PI / 2) });
       slab(m + gap / 2, x2 - gap, y);
     } else if (o.style === "sliding") {
-      const m = o.x,
-        ov = 1;
+      const m = o.x;
+      const ov = 1;
       this._cur = parent;
       framed(right ? x1 + gap : m - ov, right ? m + ov : x2 - gap, y - side * 0.9); // fixed pane
       pivot(o.x, y, { x: (right ? -1 : 1) * (o.w / 2 - gap) });
@@ -227,15 +227,15 @@ export class ScenePart {
     const key = color + "~" + tex + JSON.stringify(opts);
     this._mats ||= {};
     if (this._mats[key]) return this._mats[key] as THREE.MeshLambertMaterial;
-    const map = this._surfTex(tex),
-      m = (this._mats[key] = new this.T.MeshLambertMaterial({ color, map, ...opts }));
+    const map = this._surfTex(tex);
+    const m = (this._mats[key] = new this.T.MeshLambertMaterial({ color, map, ...opts }));
     m.color.multiplyScalar(1 / (map.image as SurfaceCanvas).mean!);
     return m;
   }
 
   _surfTex(this: Home3DCard, name: string) {
-    const T = this.T,
-      cm = this._modelScale()[0];
+    const T = this.T;
+    const cm = this._modelScale()[0];
     let t = (this._surfTexs ||= {})[name];
     if (!t) {
       t = this._surfTexs![name] = new T.CanvasTexture(paintSurface(name));
@@ -249,15 +249,15 @@ export class ScenePart {
   /* box UVs in plan units, projected along each face's normal, so textures keep their real size and line up across pieces.
    * (ox, oy, oz) is the box centre in the frame the texture should be continuous in; heights are stretched back to true scale. */
   _planUV(this: Home3DCard, geo: THREE.BufferGeometry, ox = 0, oy = 0, oz = 0) {
-    const [mx, mz] = this._modelScale(),
-      vs = mz / mx,
-      P = geo.attributes.position,
-      N = geo.attributes.normal,
-      U = geo.attributes.uv as THREE.BufferAttribute;
+    const [mx, mz] = this._modelScale();
+    const vs = mz / mx;
+    const P = geo.attributes.position;
+    const N = geo.attributes.normal;
+    const U = geo.attributes.uv as THREE.BufferAttribute;
     for (let i = 0; i < P.count; i++) {
-      const x = P.getX(i) + ox,
-        y = (P.getY(i) + oy) * vs,
-        z = P.getZ(i) + oz;
+      const x = P.getX(i) + ox;
+      const y = (P.getY(i) + oy) * vs;
+      const z = P.getZ(i) + oz;
       if (Math.abs(N.getY(i)) > 0.5) U.setXY(i, x, z);
       else if (Math.abs(N.getX(i)) > 0.5) U.setXY(i, z, y);
       else U.setXY(i, x, y);
@@ -287,9 +287,9 @@ export class ScenePart {
     az = 0,
     tilt?: number[],
   ) {
-    const T = this.T,
-      outer = new T.Group(),
-      inner = new T.Group();
+    const T = this.T;
+    const outer = new T.Group();
+    const inner = new T.Group();
     outer.position.set(center[0] - CX, 0, center[1] - CY);
     outer.rotation.y = (-rot * Math.PI) / 180;
     inner.position.set(-(center[0] - CX), 0, -(center[1] - CY));
@@ -320,12 +320,12 @@ export class ScenePart {
   }
 
   _endItem(this: Home3DCard) {
-    const o = this._outer,
-      tg = o?.children[0];
+    const o = this._outer;
+    const tg = o?.children[0];
     if (tg?.userData.tilt) {
       // the tilt pivot: middle of the untilted item, in the outer group's frame (o.userData.tc)
-      const T = this.T,
-        ry = o.rotation.y;
+      const T = this.T;
+      const ry = o.rotation.y;
       o.rotation.y = 0;
       o.updateMatrixWorld(true);
       const box = new T.Box3().setFromObject(tg);
@@ -391,18 +391,18 @@ export class ScenePart {
 
   /* stage look: a soft, offset "drop shadow" under the house, baked from the floor outlines into a blurred texture */
   _buildStageShadow(this: Home3DCard, sc: Scene) {
-    const T = this.T,
-      pts = (sc.floors || []).flatMap((f) => f.pts || []);
+    const T = this.T;
+    const pts = (sc.floors || []).flatMap((f) => f.pts || []);
     if (!pts.length) return;
-    const M = 60,
-      [x1, x2, y1, y2] = [
-        Math.min(...pts.map((p) => p[0])) - M,
-        Math.max(...pts.map((p) => p[0])) + M,
-        Math.min(...pts.map((p) => p[1])) - M,
-        Math.max(...pts.map((p) => p[1])) + M,
-      ];
-    const k = 1,
-      c = document.createElement("canvas");
+    const M = 60;
+    const [x1, x2, y1, y2] = [
+      Math.min(...pts.map((p) => p[0])) - M,
+      Math.max(...pts.map((p) => p[0])) + M,
+      Math.min(...pts.map((p) => p[1])) - M,
+      Math.max(...pts.map((p) => p[1])) + M,
+    ];
+    const k = 1;
+    const c = document.createElement("canvas");
     c.width = Math.ceil((x2 - x1) * k);
     c.height = Math.ceil((y2 - y1) * k);
     const g = c.getContext("2d")!;
@@ -437,8 +437,8 @@ export class ScenePart {
      * (alpha falls to 0 at its rim), so it blends into the flat card background with no seam. */
     const cs = document.createElement("canvas");
     cs.width = cs.height = 256;
-    const gs = cs.getContext("2d")!,
-      rg = gs.createRadialGradient(128, 128, 0, 128, 128, 128);
+    const gs = cs.getContext("2d")!;
+    const rg = gs.createRadialGradient(128, 128, 0, 128, 128, 128);
     for (const [at, al] of [
       [0, 1],
       [0.55, 0.47],
@@ -556,11 +556,11 @@ export class ScenePart {
         this._sphere(o.x + dx, o.y + dy, z + dz, r, "#4f7a45");
     } else if (o.type === "screen") {
       // 16:9 screen showing the entity's artwork / snapshot (drawn into a canvas texture in _drawScreen)
-      const T = this.T,
-        w = o.w || 32,
-        h = (w * 9) / 16,
-        z = o.z ?? 20,
-        par = this._cur || this._world;
+      const T = this.T;
+      const w = o.w || 32;
+      const h = (w * 9) / 16;
+      const z = o.z ?? 20;
+      const par = this._cur || this._world;
       this._box(o.x - w / 2 - 0.8, o.x + w / 2 + 0.8, o.y - 1, o.y, z - 0.8, h + 1.6, "#121212");
       if (o.stand) {
         this._box(o.x - 1, o.x + 1, o.y - 1.6, o.y - 0.6, 0, z, "#1b1b1b");
@@ -611,8 +611,8 @@ export class ScenePart {
       this._cyl(o.x, o.y, o.z + 6, 0.25, (o.top ?? 62) - o.z - 6, "#3a3a3a", 6);
       this._fixture(o.x, o.y, this._cyl(o.x, o.y, o.z, 2.8, 6, this._emissive("#fff1cf"), 16));
     } else if (o.type === "fan") {
-      const z = o.z ?? 44,
-        r = o.r ?? 22;
+      const z = o.z ?? 44;
+      const r = o.r ?? 22;
       this._cyl(o.x, o.y, z + 1, 0.6, (o.ceiling ?? z + 8) - z - 1, "#2a1f17", 6);
       this._cyl(o.x, o.y, z, 4, 2.5, "#3b2d22", 16);
       for (let k = 0; k < 5; k++) {
