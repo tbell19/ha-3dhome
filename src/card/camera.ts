@@ -52,8 +52,9 @@ export class CameraPart {
     this._requestRender();
   }
 
-  /* The part of the card the controls leave clear, in px of the wrap: above the room bar and nav, and below the room cards
-   * on a phone (they span the top) or beside them on a wide screen, whichever is bigger. Collapsed cards leave the full width. */
+  /* The part of the card the controls leave clear, in px of the wrap: inside the device's safe areas (the .safe box, inset by
+   * the panel's --ha-3dhome-safe-* insets), above the room bar and nav, and below the room cards on a phone (they span the
+   * top) or beside them on a wide screen, whichever is bigger. Collapsed cards leave the full width. */
   _safeArea(this: Home3DCard) {
     const wr = this._wrap.getBoundingClientRect();
     const w = this._wrap.clientWidth;
@@ -63,10 +64,15 @@ export class CameraPart {
       const r = el && !el.classList.contains("hide") ? el.getBoundingClientRect() : null;
       return r?.width && r?.height ? r : null;
     };
+    const safe = rel(this.shadowRoot?.querySelector<HTMLElement>(".safe"));
+    const sx = safe ? safe.left - wr.left : 0;
+    const sy = safe ? safe.top - wr.top : 0;
+    const sw = safe ? safe.width : w;
+    const sh = safe ? safe.bottom - wr.top : h;
     // the room bar and the nav buttons along the bottom: the view stops above the higher of them
     const bars = [".rooms", ".nav"].map((q) => rel(this.shadowRoot?.querySelector<HTMLElement>(q))).filter(Boolean);
-    const bottom = bars.length ? Math.max(h * 0.6, Math.min(...bars.map((r) => r.top - wr.top)) - M) : h;
-    const full = { x: 0, y: 0, w, h: bottom };
+    const bottom = bars.length ? Math.max(h * 0.6, Math.min(...bars.map((r) => r.top - wr.top)) - M) : sh;
+    const full = { x: sx, y: sy, w: sw, h: bottom - sy };
     const box = this.shadowRoot?.querySelector<HTMLElement>(".rcards");
     if (!box || box.classList.contains("min") || this._edit) return full;
     const r = rel(box);
@@ -74,8 +80,8 @@ export class CameraPart {
     const top = r.bottom - wr.top + M;
     const below = bottom - top;
     const left = r.left - wr.left - M;
-    if (below * w >= left * bottom) return below > h * 0.25 ? { x: 0, y: top, w, h: below } : full;
-    return left > w * 0.3 ? { x: 0, y: 0, w: left, h: bottom } : full;
+    if (below * sw >= (left - sx) * (bottom - sy)) return below > h * 0.25 ? { x: sx, y: top, w: sw, h: below } : full;
+    return left - sx > w * 0.3 ? { x: sx, y: sy, w: left - sx, h: bottom - sy } : full;
   }
 
   /* Centre the view in the safe area: a camera view offset shifts the whole picture, so everything that centres on the orbit

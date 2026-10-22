@@ -2,7 +2,7 @@
  */
 import type { CardConfig, LayoutKey, Looks } from "../types";
 
-export const VERSION3D = "6.2.1";
+export const VERSION3D = "6.2.2";
 export const CDN = "https://cdn.jsdelivr.net/npm/";
 export const THREE_URL = CDN + "three@0.160.0/+esm";
 export const JSM = CDN + "three@0.160.0/examples/jsm/";

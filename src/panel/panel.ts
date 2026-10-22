@@ -14,7 +14,8 @@ import { panelStyles } from "./styles";
 /** What Home Assistant passes in `panel` (the integration sets `config`). */
 interface PanelInfo {
   url_path: string;
-  config: { entry_id: string };
+  /** _panel_custom.handle_safe_area: Home Assistant left the safe areas to the panel instead of padding it */
+  config: { entry_id: string; _panel_custom?: { handle_safe_area?: boolean } };
 }
 
 /** What the integration sends on every save: the card config and its revision. */
@@ -74,6 +75,7 @@ export class Home3DPanel extends HTMLElement {
   set panel(panel: PanelInfo) {
     if (this._panel && this._panel.config.entry_id !== panel.config.entry_id) this._stop();
     this._panel = panel;
+    this.toggleAttribute("edge-to-edge", !!panel.config._panel_custom?.handle_safe_area);
     this._start();
   }
 

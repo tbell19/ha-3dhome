@@ -187,6 +187,38 @@ window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-ma
   );
   await p.screenshot({ path: path.join(OUT, "panel-narrow.png") });
 
+  // safe areas: where Home Assistant leaves them to the panel, the map fills the screen and only its controls move in
+  const edge = (q) =>
+    `(()=>{const r=card.shadowRoot.querySelector('${q}').getBoundingClientRect();return [r.top,r.bottom]})()`;
+  const rooms0 = await ev(edge(".rooms"));
+  await ev(`document.documentElement.style.setProperty('--safe-area-inset-top','40px');
+    document.documentElement.style.setProperty('--safe-area-inset-bottom','30px');
+    panel.panel={url_path:'3d-home',config:{entry_id:'E1',_panel_custom:{handle_safe_area:true}}}`);
+  await wait(300);
+  check(
+    "edge to edge: the map fills the screen",
+    await ev(`panel.hasAttribute('edge-to-edge') && Math.abs(card.getBoundingClientRect().height-innerHeight)<1`),
+  );
+  const rooms1 = await ev(edge(".rooms"));
+  check("edge to edge: the room bar clears the bottom inset", Math.abs(rooms0[1] - 30 - rooms1[1]) < 1, rooms1.join());
+  check(
+    "edge to edge: the sidebar button clears the top inset",
+    await ev(`Math.abs(panel.shadowRoot.querySelector('.menu').getBoundingClientRect().top-44)<1`),
+  );
+  check("edge to edge: the camera keeps the view out of the insets", await ev(`card._safeArea().y>=40`));
+  await ev(`card._openEditor()`);
+  await until(`!!card._edit`);
+  check(
+    "edge to edge: the editor's toolbar clears the top inset",
+    await ev(`card.shadowRoot.querySelector('.bar').getBoundingClientRect().top>=40`),
+  );
+  await ev(`card._editor._exitEdit(false)`);
+  await until(`!card._edit`);
+  await ev(`document.documentElement.style.removeProperty('--safe-area-inset-top');
+    document.documentElement.style.removeProperty('--safe-area-inset-bottom');
+    panel.panel={url_path:'3d-home',config:{entry_id:'E1'}}`);
+  await wait(300);
+
   // Home Assistant may make a new panel element for the same page: the map moves over, scene and all
   await ev(`(()=>{const q=document.createElement('ha-3dhome-panel');panel.remove();q.hass=makeHass(true);q.panel={url_path:'3d-home',config:{entry_id:'E1'}};
     document.getElementById('host').append(q);window.panel=q})()`);

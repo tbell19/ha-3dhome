@@ -8,7 +8,8 @@ export const cardStyles = `
   :host { display: block; height: 100%; }
   ha-card { overflow: hidden; background: var(--ha-3dhome-bg, #1b1a18); border-radius: 0; border: 0; height: 100%; }
   .wrap { position: relative; width: 100%; container-type: inline-size; touch-action: none; font-family: var(--ha-font-family-body, system-ui);
-    height: 100%; min-height: 360px; }
+    height: 100%; min-height: 360px;
+    --sa-t: var(--ha-3dhome-safe-top, 0px); --sa-r: var(--ha-3dhome-safe-right, 0px); --sa-b: var(--ha-3dhome-safe-bottom, 0px); --sa-l: var(--ha-3dhome-safe-left, 0px); }
   canvas { display: block; width: 100% !important; height: 100% !important; }
   .ov { position: absolute; inset: 0; pointer-events: none; }
   .editing .ov { opacity: .45; } .editing .ov * { pointer-events: none !important; }
@@ -21,31 +22,31 @@ export const cardStyles = `
     border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #fff; }
   .door ha-icon { --mdc-icon-size: 70%; }
   .door.open { background: #c2483d; box-shadow: 0 0 0 3px rgba(194,72,61,.3); } .door.closed { background: rgba(40,90,60,.85); }
-  .weather { position: absolute; left: calc(2.5% + var(--ha-3dhome-inset-left, 0px)); top: 3.5%; color: #f2ebe0; pointer-events: auto;
+  .weather { position: absolute; left: calc(2.5% + var(--ha-3dhome-inset-left, 0px) + var(--sa-l)); top: calc(3.5% + var(--sa-t)); color: #f2ebe0; pointer-events: auto;
     display: grid; grid-template-columns: auto auto; column-gap: .6em; align-items: center; cursor: pointer; }
   .weather ha-icon { --mdc-icon-size: max(26px, 4cqw); color: #f5d27a; grid-row: span 2; }
   .weather .t { font-size: max(18px, 3.2cqw); font-weight: 600; line-height: 1; } .weather .s { font-size: max(9px, 1.1cqw); opacity: .8; }
   .pill, .bar button, .insp button, .lib button { background: rgba(20,18,16,.78); color: #f2ebe0; border: 1px solid rgba(255,255,255,.12);
     border-radius: 999px; padding: .38em .85em; font: 500 12px var(--ha-font-family-body, system-ui); cursor: pointer; white-space: nowrap; }
-  .nav { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 2px; padding: 3px; border-radius: 999px;
+  .nav { position: absolute; right: calc(12px + var(--sa-r)); bottom: calc(12px + var(--sa-b)); display: flex; gap: 2px; padding: 3px; border-radius: 999px;
     background: rgba(20,18,16,.72); border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(6px); }
   .nav button { background: none; border: 0; color: #f2ebe0; min-width: 32px; height: 32px; border-radius: 999px; cursor: pointer;
     font: 500 15px/1 var(--ha-font-family-body, system-ui); padding: 0 8px; }
   .nav button:hover { background: rgba(255,255,255,.1); } .nav button.on { background: #f2c76b; color: #1b1a18; }
   .nav .edbtn { font-size: 12px; border-left: 1px solid rgba(255,255,255,.12); border-radius: 0 999px 999px 0; padding: 0 12px; }
-  .rooms { position: absolute; left: 12px; bottom: 12px; right: 290px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+  .rooms { position: absolute; left: calc(12px + var(--sa-l)); bottom: calc(12px + var(--sa-b)); right: calc(290px + var(--sa-r)); display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
     mask-image: linear-gradient(90deg, #000 85%, transparent); padding-right: 24px; }
   .rooms::-webkit-scrollbar { display: none; }
   .rooms button { flex: none; background: rgba(20,18,16,.72); color: #f2ebe0; border: 1px solid rgba(255,255,255,.1); border-radius: 999px;
     padding: 7px 12px; font: 500 12px var(--ha-font-family-body, system-ui); cursor: pointer; backdrop-filter: blur(6px); }
   .rooms button:hover { background: rgba(60,54,46,.9); }
   .rooms button.on { background: #f2c76b; color: #1b1a18; border-color: #f2c76b; }
-  @container (max-width: 640px) { .rooms { right: 12px; bottom: 58px; } }
+  @container (max-width: 640px) { .rooms { right: calc(12px + var(--sa-r)); bottom: calc(58px + var(--sa-b)); } }
   .bar button:hover, .insp button:hover, .lib button:hover, .pill:hover { background: rgba(60,54,46,.9); }
   .bar button.on { background: #f2c76b; color: #1b1a18; border-color: #f2c76b; }
   .bar button.primary, .lib button.primary { background: #3f7d5a; border-color: #4f9a6f; }
   .bar button:disabled, .insp button:disabled { opacity: .4; cursor: default; }
-  .bar { position: absolute; left: 0; right: 0; margin: 0 auto; width: max-content; top: 10px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+  .bar { position: absolute; left: 0; right: 0; margin: 0 auto; width: max-content; top: calc(10px + var(--sa-t)); display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
     max-width: calc(100% - 20px); padding: 6px; border-radius: 16px; background: rgba(12,11,10,.55); backdrop-filter: blur(6px); }
   .bar .sep { width: 1px; background: rgba(255,255,255,.15); margin: 2px 2px; }
   .bar .top, .bar .tools { display: contents; } .bar .tools > * { order: 1; }
@@ -59,8 +60,8 @@ export const cardStyles = `
   .pop button:disabled { opacity: .4; cursor: default; background: none; }
   .menu { position: absolute; z-index: 5; display: grid; gap: 4px; padding: 6px; border-radius: 12px; background: #24211d; border: 1px solid rgba(255,255,255,.12); }
   .menu button { border-radius: 8px; text-align: left; }
-  .moremenu { right: 12px; bottom: 56px; }
-  .insp { position: absolute; left: 10px; top: 112px; width: min(290px, 46%); max-height: calc(100% - 180px); overflow: auto; color: #f2ebe0;
+  .moremenu { right: calc(12px + var(--sa-r)); bottom: calc(56px + var(--sa-b)); }
+  .insp { position: absolute; left: calc(10px + var(--sa-l)); top: calc(112px + var(--sa-t)); width: min(290px, 46%); max-height: calc(100% - 180px - var(--sa-t) - var(--sa-b)); overflow: auto; color: #f2ebe0;
     background: rgba(12,11,10,.78); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; padding: 10px 12px; font-size: 12px; }
   .insp h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; } .insp .sub { opacity: .65; margin-bottom: 8px; }
   .insp .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
@@ -71,9 +72,9 @@ export const cardStyles = `
   .insp textarea { height: 110px; resize: vertical; }
   .insp .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
   .insp .credit { margin-top: 8px; opacity: .7; font-size: 11px; }
-  .toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: rgba(12,11,10,.85); color: #f2ebe0; padding: 6px 12px;
+  .toast { position: absolute; left: 50%; bottom: calc(14px + var(--sa-b)); transform: translateX(-50%); background: rgba(12,11,10,.85); color: #f2ebe0; padding: 6px 12px;
     border-radius: 999px; font-size: 12px; pointer-events: none; transition: opacity .3s; }
-  .lib { position: absolute; inset: 3%; z-index: 6; display: flex; flex-direction: column; background: #1f1d1a; color: #f2ebe0; border-radius: 16px;
+  .lib { position: absolute; inset: calc(3% + var(--sa-t)) calc(3% + var(--sa-r)) calc(3% + var(--sa-b)) calc(3% + var(--sa-l)); z-index: 6; display: flex; flex-direction: column; background: #1f1d1a; color: #f2ebe0; border-radius: 16px;
     border: 1px solid rgba(255,255,255,.12); box-shadow: 0 10px 40px rgba(0,0,0,.5); font-size: 13px; overflow: hidden; }
   .lib header { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.08); }
   .lib header .ttl { font-weight: 600; flex: 1; }
@@ -89,8 +90,8 @@ export const cardStyles = `
   .lib .it .n { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lib .note { opacity: .7; font-size: 11px; margin: 8px 0; line-height: 1.4; }
   .chip.act ha-icon { color: #ffd27a; opacity: 1; }
-  .lookp { position: absolute; right: 10px; top: 112px; width: min(260px, calc(100% - 20px)); box-sizing: border-box; display: grid; gap: 10px; padding: 0 12px 12px; color: #f2ebe0;
-    background: rgba(12,11,10,.86); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; font-size: 12px; z-index: 4; max-height: calc(100% - 122px); overflow-y: auto; }
+  .lookp { position: absolute; right: calc(10px + var(--sa-r)); top: calc(112px + var(--sa-t)); width: min(260px, calc(100% - 20px)); box-sizing: border-box; display: grid; gap: 10px; padding: 0 12px 12px; color: #f2ebe0;
+    background: rgba(12,11,10,.86); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; font-size: 12px; z-index: 4; max-height: calc(100% - 122px - var(--sa-t) - var(--sa-b)); overflow-y: auto; }
   .lookp header { display: flex; align-items: center; margin: 0 -12px; padding: 8px 10px 8px 12px; border-bottom: 1px solid rgba(255,255,255,.08); }
   .lookp header .ttl { flex: 1; font-weight: 600; font-size: 13px; }
   .lookp header button { background: rgba(255,255,255,.06); color: #f2ebe0; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
@@ -107,7 +108,7 @@ export const cardStyles = `
   .ltune .n { font-weight: 600; } .ltune output { opacity: .75; font-variant-numeric: tabular-nums; }
   .ltune input { grid-column: 1 / -1; width: 100%; margin: 2px 0; accent-color: #f2c76b; }
   .ltune .d { grid-column: 1 / -1; opacity: .6; font-size: 11px; }
-  .ents { position: absolute; right: 10px; top: 112px; bottom: 64px; width: min(300px, 44%); display: flex; flex-direction: column; color: #f2ebe0;
+  .ents { position: absolute; right: calc(10px + var(--sa-r)); top: calc(112px + var(--sa-t)); bottom: calc(64px + var(--sa-b)); width: min(300px, 44%); display: flex; flex-direction: column; color: #f2ebe0;
     background: rgba(12,11,10,.86); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; font-size: 12px; overflow: hidden; z-index: 4; }
   .ents header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.08); }
   .ents header .ttl { flex: 1; font-weight: 600; font-size: 13px; }
@@ -135,14 +136,14 @@ export const cardStyles = `
   .insp.min > :not(h4) { display: none; } .insp.min h4 { margin: 0; }
   .insp details.tips summary { cursor: pointer; opacity: .7; margin-top: 4px; }
   @container (max-width: 640px) {
-    .bar { left: 8px; right: 8px; width: auto; transform: none; max-width: none; flex-direction: column; flex-wrap: nowrap; padding: 4px; border-radius: 12px; gap: 4px; }
+    .bar { left: calc(8px + var(--sa-l)); right: calc(8px + var(--sa-r)); width: auto; transform: none; max-width: none; flex-direction: column; flex-wrap: nowrap; padding: 4px; border-radius: 12px; gap: 4px; }
     .bar .top { display: flex; justify-content: space-between; gap: 4px; }
     .bar .acts { display: flex; gap: 4px; padding-left: 0; border-left: 0; }
     .bar .tools { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; } .bar .tools::-webkit-scrollbar { display: none; }
     .bar button { flex: none; padding: .5em .7em; font-size: 13px; }
     .bar .ico .lbl, .bar .modes button:not(.on) .lbl { display: none; }
-    .insp { top: auto; bottom: 108px; left: 8px; right: 8px; width: auto; max-height: 32%; padding: 8px 10px; }
-    .ents { top: auto; bottom: 108px; left: 8px; right: 8px; width: auto; height: 60%; }
+    .insp { top: auto; bottom: calc(108px + var(--sa-b)); left: calc(8px + var(--sa-l)); right: calc(8px + var(--sa-r)); width: auto; max-height: 32%; padding: 8px 10px; }
+    .ents { top: auto; bottom: calc(108px + var(--sa-b)); left: calc(8px + var(--sa-l)); right: calc(8px + var(--sa-r)); width: auto; height: 60%; }
     .ents .doms { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; } .ents .doms::-webkit-scrollbar { display: none; } .ents .doms button { flex: none; }
     .weather { display: none; }
   }
@@ -154,8 +155,8 @@ export const cardStyles = `
     background: rgba(255,255,255,.72); color: #1b1a18; font: 600 11px/1.25 var(--ha-font-family-body, system-ui); white-space: nowrap; }
   .rlabel small { font-weight: 500; opacity: .65; font-size: 10px; }
   @container (max-width: 640px) { .rlabel { font-size: 10px; padding: 2px 6px; } .rlabel small { display: none; } }
-  .editing .toast { bottom: 62px; }
-  @container (max-width: 640px) { .editing .toast { bottom: auto; top: 96px; max-width: calc(100% - 32px); white-space: normal; text-align: center; } }
+  .editing .toast { bottom: calc(62px + var(--sa-b)); }
+  @container (max-width: 640px) { .editing .toast { bottom: auto; top: calc(96px + var(--sa-t)); max-width: calc(100% - 32px); white-space: normal; text-align: center; } }
   .tool canvas { cursor: crosshair !important; }
   .tip { position: absolute; z-index: 8; pointer-events: none; transform: translate(14px, -140%); background: #f2c76b; color: #1b1a18;
     padding: 3px 9px; border-radius: 999px; font: 600 12px var(--ha-font-family-body, system-ui); white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
@@ -168,7 +169,7 @@ export const cardStyles = `
   .insp label.chk input { width: auto; }
   .insp input[type=range] { padding: 0; accent-color: #f2c76b; }
   .insp .row .primary, .insp button.primary { background: #3f7d5a; border-color: #4f9a6f; }
-  .rcards { position: absolute; right: 10px; top: 10px; width: min(340px, 42%); max-height: calc(100% - 76px); display: flex; flex-direction: column;
+  .rcards { position: absolute; right: calc(10px + var(--sa-r)); top: calc(10px + var(--sa-t)); width: min(340px, 42%); max-height: calc(100% - 76px - var(--sa-t) - var(--sa-b)); display: flex; flex-direction: column;
     z-index: 3; color: #f2ebe0; font-family: var(--ha-font-family-body, system-ui); }
   .rcards header { flex: none; display: flex; align-items: center; gap: 6px; align-self: flex-end; margin-bottom: 6px; padding: 4px 4px 4px 12px; border-radius: 999px;
     background: rgba(20,18,16,.72); border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(6px); font: 600 12px var(--ha-font-family-body, system-ui); cursor: pointer; user-select: none; }
@@ -191,8 +192,8 @@ export const cardStyles = `
   .rcards .rcbody > *, .rcp .rcprev > * { backdrop-filter: blur(6px); border-radius: var(--ha-card-border-radius, 12px); }
   .rcards.min .rcbody { display: none; }
   .editing .rcards { display: none; }
-  @container (max-width: 640px) { .rcards { left: 8px; right: 8px; top: 8px; width: auto; max-height: 44%; } }
-  .rcp { position: absolute; right: 10px; top: 112px; bottom: 64px; width: min(320px, 46%); display: flex; flex-direction: column; color: #f2ebe0; z-index: 4;
+  @container (max-width: 640px) { .rcards { left: calc(8px + var(--sa-l)); right: calc(8px + var(--sa-r)); top: calc(8px + var(--sa-t)); width: auto; max-height: 44%; } }
+  .rcp { position: absolute; right: calc(10px + var(--sa-r)); top: calc(112px + var(--sa-t)); bottom: calc(64px + var(--sa-b)); width: min(320px, 46%); display: flex; flex-direction: column; color: #f2ebe0; z-index: 4;
     background: rgba(12,11,10,.9); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; font-size: 12px; overflow: hidden; }
   .rcp header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.08); }
   .rcp header .ttl { flex: 1; font-weight: 600; font-size: 13px; }
@@ -211,7 +212,7 @@ export const cardStyles = `
   .rcp .rcrow .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .rcp .rcrow .id { opacity: .5; font-size: 10.5px; }
   .rcp .rcrow button { padding: 2px 7px; margin-left: 2px; }
   .rcp .rcprev { display: flex; flex-direction: column; gap: 8px; }
-  @container (max-width: 640px) { .rcp { top: auto; bottom: 108px; left: 8px; right: 8px; width: auto; height: 52%; } }
+  @container (max-width: 640px) { .rcp { top: auto; bottom: calc(108px + var(--sa-b)); left: calc(8px + var(--sa-l)); right: calc(8px + var(--sa-r)); width: auto; height: 52%; } }
   .nav button, .bar button, .insp button, .lib button, .ents button, .rcp button, .menu button, .rooms button, .lookp header button, .rcards header button {
     display: inline-flex; align-items: center; justify-content: center; gap: .4em; }
   .menu button { justify-content: flex-start; }
@@ -223,19 +224,20 @@ export const cardStyles = `
     display: grid; gap: 6px; padding: 16px 18px; border-radius: 14px; text-align: center; pointer-events: none; color: #f2ebe0;
     background: rgba(20,18,16,.78); border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(6px); font: 13px/1.45 var(--ha-font-family-body, system-ui); }
   .empty b { font-size: 15px; } .empty span { opacity: .8; } .empty ha-icon { --mdc-icon-size: 14px; margin: 0 2px 0 4px; }
-  .conn { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 7; display: flex; gap: 8px; align-items: center;
+  .conn { position: absolute; left: 50%; top: calc(10px + var(--sa-t)); transform: translateX(-50%); z-index: 7; display: flex; gap: 8px; align-items: center;
     padding: 6px 12px; border-radius: 999px; background: rgba(20,18,16,.85); color: #f2ebe0; border: 1px solid rgba(255,255,255,.12);
     font: 500 12px var(--ha-font-family-body, system-ui); pointer-events: none; white-space: nowrap; }
   .conn i { width: 8px; height: 8px; border-radius: 50%; background: #e0a050; animation: connp 1.4s ease-in-out infinite; }
   @keyframes connp { 50% { opacity: .3; } }
-  .editing .conn { top: 58px; }
+  .editing .conn { top: calc(58px + var(--sa-t)); }
   canvas, .ov { transition: filter .6s; } .offline canvas, .offline .ov { filter: saturate(.35) brightness(.8); }
+  .safe { position: absolute; inset: var(--sa-t) var(--sa-r) var(--sa-b) var(--sa-l); pointer-events: none; visibility: hidden; }
   .hide { display: none !important; }
 `;
 
 /** the card's markup: the map (canvas goes first in .wrap), its overlays, the room bar, room controls and the view buttons */
 export const CARD_HTML = `
-<ha-card><div class="wrap"><div class="ov"></div><div class="ed"></div><div class="conn hide" role="status"><i></i>Reconnecting to Home Assistant…</div>
+<ha-card><div class="wrap"><div class="safe"></div><div class="ov"></div><div class="ed"></div><div class="conn hide" role="status"><i></i>Reconnecting to Home Assistant…</div>
   <div class="rooms"></div><div class="rcards hide"><header><span class="ttl"></span><button data-m title="Hide controls">${ic("chevron-up")}</button></header><div class="rcbody"></div></div>
   <div class="nav">
     <button data-v="left" title="Rotate view left">${ic("rotate-left")}</button><button data-v="right" title="Rotate view right">${ic("rotate-right")}</button>
