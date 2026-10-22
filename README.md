@@ -22,7 +22,7 @@ The `ha_3dhome` integration adds a **3D Home page to the sidebar**, next to Map 
 
 A **3D Home** page now shows in the sidebar. You can add more than one (a holiday home, say); each keeps its own map. Change a page's title, icon or access later under the integration's **Configure**.
 
-To have Home Assistant open on the map, press the **pin** next to the view buttons. It applies to your user on every device, like the dashboard choice on your profile page (which then shows 3D Home). Press it again to go back.
+The first time a page shows your map it asks whether Home Assistant should open on it. Later, change that with **Open Home Assistant here** in the map's **⋮** menu. It applies to your user on every device, like the dashboard choice on your profile page (which then shows 3D Home).
 
 If you installed 3D Home earlier as a HACS **Dashboard**, remove that download and its resource.
 

@@ -59,6 +59,7 @@ export const cardStyles = `
   .pop button:disabled { opacity: .4; cursor: default; background: none; }
   .menu { position: absolute; z-index: 5; display: grid; gap: 4px; padding: 6px; border-radius: 12px; background: #24211d; border: 1px solid rgba(255,255,255,.12); }
   .menu button { border-radius: 8px; text-align: left; }
+  .moremenu { right: 12px; bottom: 56px; }
   .insp { position: absolute; left: 10px; top: 112px; width: min(290px, 46%); max-height: calc(100% - 180px); overflow: auto; color: #f2ebe0;
     background: rgba(12,11,10,.78); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; padding: 10px 12px; font-size: 12px; }
   .insp h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; } .insp .sub { opacity: .65; margin-bottom: 8px; }
@@ -239,5 +240,5 @@ export const CARD_HTML = `
   <div class="nav">
     <button data-v="left" title="Rotate view left">${ic("rotate-left")}</button><button data-v="right" title="Rotate view right">${ic("rotate-right")}</button>
     <button data-v="top" title="Top-down / angled">${ic("floor-plan")}</button><button data-v="out" title="Zoom out">${ic("minus")}</button><button data-v="in" title="Zoom in">${ic("plus")}</button>
-    <button data-v="home" title="Whole home">${ic("home-outline")}</button><button class="homebtn hide"></button><button class="edbtn" style="display:none" title="Edit the map">${ic("pencil-outline")}Edit</button>
-  </div></div></ha-card>`;
+    <button data-v="home" title="Whole home">${ic("home-outline")}</button><button class="morebtn hide" title="More">${ic("dots-vertical")}</button><button class="edbtn" style="display:none" title="Edit the map">${ic("pencil-outline")}Edit</button>
+  </div><div class="menu pop moremenu hide"><button class="homeitem"></button></div></div></ha-card>`;

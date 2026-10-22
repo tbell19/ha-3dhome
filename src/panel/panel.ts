@@ -38,8 +38,19 @@ interface PageView {
   card: MapCard;
   rev: number; // the revision the card shows (-1: nothing yet)
   waiting: Saved | null; // a save from elsewhere that arrived while someone was editing here
+  hasMap: boolean; // the config shown has something to show
+  homeAsked: boolean; // whether this page already checked if it should offer to be the page Home Assistant opens on
 }
 const VIEWS = new Map<string, PageView>(); // by config entry id
+
+/** what 3D Home keeps in each user's frontend data, under USER_KEY */
+interface OwnUserData {
+  home_asked?: string[]; // the pages (url paths) that already asked to be the page Home Assistant opens on
+}
+const USER_KEY = "ha_3dhome";
+
+/** a config with nothing to show yet */
+const isEmpty = (config: CardConfig) => !Object.keys(config.scene || {}).length && !config.lights?.length;
 
 /** the parts of a card config the panel decides itself, so they aren't stored */
 const PANEL_OWNED = ["type", "fill", "aspect_ratio", "dashboard", "card_id"] as const; // all but `type` were card options before v6
@@ -51,6 +62,7 @@ export class Home3DPanel extends HTMLElement {
   private _menu: (HTMLElement & { hass?: Hass; narrow?: boolean }) | null = null;
   private _unsub: Promise<() => Promise<void>> | null = null;
   private _imports: Promise<DashboardWithHome[]> | null = null;
+  private _home: HomePage | null = null;
 
   set hass(hass: Hass) {
     this._hass = hass;
@@ -85,6 +97,7 @@ export class Home3DPanel extends HTMLElement {
     if (!this.shadowRoot) this._render();
     if (!this._view) this._attach(this._panel.config.entry_id);
     this._follow();
+    if (this._view) this._offerHome(this._view);
   }
 
   private _stop() {
@@ -96,7 +109,7 @@ export class Home3DPanel extends HTMLElement {
 
   private _render() {
     const root = this.attachShadow({ mode: "open" });
-    root.innerHTML = `<style>${panelStyles}</style><div class="import hide"></div>`;
+    root.innerHTML = `<style>${panelStyles}</style><div class="import hide"></div><div class="offer hide"></div>`;
     this._menu = document.createElement("ha-menu-button");
     this._menu.className = "menu";
     this._menu.hass = this._hass ?? undefined;
@@ -107,21 +120,30 @@ export class Home3DPanel extends HTMLElement {
   private _attach(entryId: string) {
     let view = VIEWS.get(entryId);
     if (!view) {
-      view = { card: document.createElement("ha-3dhome-map") as MapCard, rev: -1, waiting: null };
+      view = {
+        card: document.createElement("ha-3dhome-map") as MapCard,
+        rev: -1,
+        waiting: null,
+        hasMap: false,
+        homeAsked: false,
+      };
       VIEWS.set(entryId, view);
     }
     this._view = view;
     view.card.layoutStore = this._store(view);
-    view.card.homePage = this._homePage(this._panel!.url_path);
+    view.card.homePage = this._home = this._homePage(this._panel!.url_path);
     view.card.hass = this._hass!;
     view.card.addEventListener("ha-3dhome-editing", this._editing);
     this.shadowRoot!.prepend(view.card);
   }
 
-  /** the editor closed: show a save from elsewhere that was held back meanwhile */
+  /** the editor opened: put away the offer to open Home Assistant here. It closed: show a save from elsewhere that was
+   * held back meanwhile */
   private _editing = (ev: Event) => {
     const view = this._view;
-    if (!view || (ev as CustomEvent<{ editing: boolean }>).detail.editing) return;
+    const editing = (ev as CustomEvent<{ editing: boolean }>).detail.editing;
+    if (editing) this.shadowRoot!.querySelector(".offer")!.classList.add("hide");
+    if (!view || editing) return;
     const saved = view.waiting;
     view.waiting = null;
     if (saved && saved.rev > view.rev) this._show(saved);
@@ -156,6 +178,8 @@ export class Home3DPanel extends HTMLElement {
     view.rev = saved.rev;
     view.card.setConfig(saved.config); // only the world is rebuilt when just the layout changed
     this._offerImport(saved.config);
+    view.hasMap = !isEmpty(saved.config);
+    this._offerHome(view);
   }
 
   /** the card config as stored: without what the panel sets itself */
@@ -204,13 +228,51 @@ export class Home3DPanel extends HTMLElement {
     };
   }
 
+  /** Asked once per user and page, the first time it shows a map: should Home Assistant open here? The answer is
+   * kept in the user's frontend data (key "ha_3dhome"), so another device doesn't ask again. Later the map's ⋮ menu
+   * changes it. */
+  private async _offerHome(view: PageView) {
+    const hass = this._hass;
+    const home = this._home;
+    const urlPath = this._panel!.url_path;
+    if (view.homeAsked || !view.hasMap || !hass?.userData || !home) return; // Home Assistant fills userData in before any page shows
+    view.homeAsked = true;
+    if (home.isHome(hass)) return;
+    const reply = await hass
+      .callWS<{ value: OwnUserData | null } | null>({ type: "frontend/get_user_data", key: USER_KEY })
+      .catch(() => null);
+    const value = reply?.value ?? {};
+    const asked = value.home_asked ?? [];
+    if (!reply || asked.includes(urlPath) || home.isHome(this._hass!) || view.card._edit) return;
+    const box = this.shadowRoot!.querySelector<HTMLElement>(".offer")!;
+    box.innerHTML = `<b>Open Home Assistant on this map?</b>
+      <span>It would show this page first, on all your devices. You can change it later in the ⋮ menu at the bottom right.</span>
+      <div class="row"><button data-a="yes">Open here</button><button data-a="no" class="quiet">No thanks</button></div>`;
+    box.classList.remove("hide");
+    box.querySelectorAll("button").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        box.classList.add("hide");
+        const hass = this._hass!;
+        try {
+          if (btn.dataset.a === "yes") await home.setHome(hass, true);
+          await hass.callWS({
+            type: "frontend/set_user_data",
+            key: USER_KEY,
+            value: { ...value, home_asked: [...asked, urlPath] },
+          });
+        } catch (e) {
+          console.error("3D Home: couldn't save the answer", e);
+        }
+      }),
+    );
+  }
+
   /* ----- importing a map from a dashboard ----- */
 
   /** an empty panel, opened by an administrator: offer the maps found on dashboards */
   private async _offerImport(config: CardConfig) {
     const box = this.shadowRoot!.querySelector<HTMLElement>(".import")!;
-    const empty = !Object.keys(config.scene || {}).length && !config.lights?.length;
-    if (!empty || !this._hass?.user?.is_admin) return box.classList.add("hide");
+    if (!isEmpty(config) || !this._hass?.user?.is_admin) return box.classList.add("hide");
     const found = await (this._imports ||= dashboardsWithHome(this._hass));
     if (!found.length || (this._view?.rev ?? 0) > 0) return;
     box.innerHTML = `<b>Bring in your map</b><span>These dashboards have a 3D Home map. Copy one here to keep editing it on this page.</span>`;

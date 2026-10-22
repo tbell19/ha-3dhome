@@ -179,7 +179,8 @@ export class Home3DCard extends HTMLElement {
   declare _ov: HTMLElement; // overlay layer for chips and labels
   declare _editorLayer: HTMLElement; // editor UI layer
   declare _edBtn: HTMLElement | null;
-  declare _homeBtn: HTMLElement | null; // the pin: open Home Assistant on this page
+  declare _moreBtn: HTMLElement | null; // ⋮ on the nav: the map's less used settings
+  declare _moreMenu: HTMLElement | null; // its menu (Open Home Assistant here)
   declare _conn: HTMLElement | null; // the "Reconnecting" pill
   declare _toastT: ReturnType<typeof setTimeout>;
 
@@ -402,26 +403,33 @@ export class Home3DCard extends HTMLElement {
     this._layoutStore = store;
   }
 
-  /** Whether Home Assistant opens on this page: the panel's, shown as the pin button. */
+  /** Whether Home Assistant opens on this page: the panel's, offered in the ⋮ menu. */
   set homePage(home: HomePage | null) {
     this._homePage = home;
     this._showHome();
   }
 
-  /** the pin button: shown when the panel says where the page is, lit while it's the user's default page */
+  /** the ⋮ button and its menu item: shown when the panel says where the page is, ticked while it's the user's
+   * default page */
   _showHome() {
-    const btn = this._homeBtn;
-    if (!btn) return;
+    const btn = this._moreBtn;
+    const item = this._moreMenu?.querySelector<HTMLElement>(".homeitem");
+    if (!btn || !item) return;
     const on = !!this._hass && !!this._homePage?.isHome(this._hass);
     btn.classList.toggle("hide", !this._homePage);
-    btn.classList.toggle("on", on);
-    btn.title = on ? "Home Assistant opens here. Press to undo" : "Open Home Assistant on this page";
-    btn.innerHTML = ic(on ? "pin" : "pin-outline");
+    item.innerHTML = `${ic(on ? "checkbox-marked" : "checkbox-blank-outline")}Open Home Assistant here`;
+  }
+
+  /** open or close the ⋮ menu (it closes on any press outside it) */
+  _toggleMore(open = this._moreMenu?.classList.contains("hide")) {
+    this._moreMenu?.classList.toggle("hide", !open);
+    this._moreBtn?.classList.toggle("on", !!open);
   }
 
   async _toggleHome() {
     const home = this._homePage;
     const hass = this._hass;
+    this._toggleMore(false);
     if (!home || !hass) return;
     const on = !home.isHome(hass);
     try {

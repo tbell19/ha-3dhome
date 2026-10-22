@@ -27,8 +27,14 @@ export class StartupPart {
     this._edBtn = root.querySelector<HTMLElement>(".edbtn");
     this._conn = root.querySelector<HTMLElement>(".conn");
     this._edBtn.addEventListener("click", () => this._openEditor());
-    this._homeBtn = root.querySelector<HTMLElement>(".homebtn");
-    this._homeBtn.addEventListener("click", () => this._toggleHome());
+    this._moreBtn = root.querySelector<HTMLElement>(".morebtn");
+    this._moreMenu = root.querySelector<HTMLElement>(".moremenu");
+    this._moreBtn.addEventListener("click", () => this._toggleMore());
+    this._moreMenu.querySelector(".homeitem").addEventListener("click", () => this._toggleHome());
+    wrap.addEventListener("pointerdown", (ev) => {
+      const t = ev.target as Node;
+      if (!this._moreMenu.contains(t) && !this._moreBtn.contains(t)) this._toggleMore(false);
+    });
 
     this._createRenderer(T, wrap);
     const { cam, controls } = this._createCamera(T, OrbitControls);

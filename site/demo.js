@@ -68,7 +68,7 @@ const STATES = {
 
 const GROUPS = { "light.study_fan": ["light.study_fan_a", "light.study_fan_b"] };   // light groups, as Home Assistant would have them
 const TOGGLE = { on: "off", off: "on", open: "closed", closed: "open", playing: "paused", paused: "playing" };
-let panel, cfg, rev = 1, states = structuredClone(STATES), userData = {};
+let panel, cfg, rev = 1, states = structuredClone(STATES), userData = {}, own = null;
 const followers = new Set(); // the panel's subscription to the stored map
 
 function hass() {
@@ -91,7 +91,11 @@ function hass() {
         toast("Saved in this browser. Reset puts the sample home back.");
         return { rev };
       }
-      if (m.type === "frontend/set_user_data") { userData = m.value; panel.hass = hass(); return null; } // the pin button
+      if (m.type === "frontend/set_user_data") { // the page Home Assistant opens on, and whether 3D Home asked
+        if (m.key === "ha_3dhome") own = m.value; else { userData = m.value; panel.hass = hass(); }
+        return null;
+      }
+      if (m.type === "frontend/get_user_data") return { value: m.key === "ha_3dhome" ? own : null };
       if (m.type === "lovelace/dashboards/list") return [];
       return null;
     },

@@ -8,7 +8,7 @@
  *
  * Checks: an empty panel offers the dashboard's map and copies it in, Save writes to the integration and not to a
  * dashboard, a save from another device appears without a new WebGL context, edits in progress aren't pulled away and
- * their Save reports the clash, the sidebar button on narrow screens, the pin that makes Home Assistant open on the page,
+ * their Save reports the clash, the sidebar button on narrow screens, the offer (asked once) and the ⋮ menu item that make Home Assistant open on the page,
  * nothing offered to non-admins.
  */
 const path = require("path");
@@ -60,7 +60,8 @@ window.makeHass=(admin)=>({states:{},user:{is_admin:admin},services:{},callServi
     if(m.type==='ha_3dhome/config/save'){const s=server[m.entry_id];server.saves.push(m);
       if(m.rev!==s.rev)throw {code:'conflict',message:'The map was saved from another device meanwhile. Cancel to see it, then edit again.'};
       s.config=m.config;s.rev++;server.push(m.entry_id);return {rev:s.rev}}
-    if(m.type==='frontend/set_user_data'){server.userData=m.value;return null}
+    if(m.type==='frontend/set_user_data'){if(m.key==='ha_3dhome')server.own=m.value;else server.userData=m.value;return null}
+    if(m.type==='frontend/get_user_data')return {value:m.key==='ha_3dhome'?server.own||null:null};
     if(m.type==='lovelace/dashboards/list')return [{url_path:'juniper',title:'Juniper House',mode:'storage'},{url_path:'energy-plus',title:'Energy'}];
     if(m.type==='lovelace/config')return m.url_path==='juniper'?JSON.parse(JSON.stringify(__dash)):{views:[{cards:[]}]};
     throw new Error('unexpected '+m.type)}});
@@ -196,29 +197,53 @@ window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-ma
   );
   check("…and still follows saves", await ev(`server.E1.subs.length===1`));
 
-  // the pin: Home Assistant opens on this page for the user (their default_panel), kept with their other settings
-  const pin = `card.shadowRoot.querySelector('.nav .homebtn')`;
+  // opening Home Assistant on this page (the user's default_panel): asked once, then in the map's ⋮ menu
+  const offer = `panel.shadowRoot.querySelector('.offer')`;
+  const more = `card.shadowRoot.querySelector('.nav .morebtn')`;
+  const item = `card.shadowRoot.querySelector('.moremenu .homeitem')`;
   // Home Assistant hands every panel a new hass once the user's settings change
   const userData = (data) => ev(`panel.hass=Object.assign(makeHass(true),{userData:${JSON.stringify(data)}})`);
+  check(
+    "nothing is asked before Home Assistant has the user's settings",
+    await ev(`${offer}.classList.contains('hide')`),
+  );
   await userData({ showEntityIdPicker: true });
-  await wait(100);
-  check("the map shows the pin, not lit", await ev(`!${pin}.classList.contains('hide') && !${pin}.classList.contains('on')`));
-  await ev(`${pin}.click()`);
+  check(
+    "a page with a map asks once whether Home Assistant should open on it",
+    await until(`!${offer}.classList.contains('hide')`),
+  );
+  await ev(`${offer}.querySelector('[data-a="yes"]').click()`);
   await wait(100);
   check(
-    "pressing it makes this page the user's default, keeping their other settings",
-    await ev(
-      `server.userData.default_panel==='3d-home' && server.userData.showEntityIdPicker===true && server.calls.includes('frontend/set_user_data')`,
-    ),
+    "Open here makes this page the user's default, keeping their other settings",
+    await ev(`server.userData.default_panel==='3d-home' && server.userData.showEntityIdPicker===true`),
+  );
+  check(
+    "…and remembers it asked, for the user",
+    await ev(`${offer}.classList.contains('hide') && server.own.home_asked.includes('3d-home')`),
   );
   await userData({ showEntityIdPicker: true, default_panel: "3d-home" });
-  check("…and it lights up", await until(`${pin}.classList.contains('on')`));
-  await ev(`${pin}.click()`);
+  check(
+    "the ⋮ menu shows it ticked",
+    await until(`!${more}.classList.contains('hide') && /checkbox-marked/.test(${item}.innerHTML)`),
+  );
+  await ev(`${more}.click()`);
+  check("⋮ opens the menu", await ev(`!card.shadowRoot.querySelector('.moremenu').classList.contains('hide')`));
+  await p.screenshot({ path: path.join(OUT, "panel-more-menu.png") });
+  await ev(`${item}.click()`);
   await wait(100);
   check(
-    "pressing it again goes back to the page Home Assistant picks",
-    await ev(`!('default_panel' in JSON.parse(JSON.stringify(server.userData))) && server.userData.showEntityIdPicker===true`),
+    "unticking goes back to the page Home Assistant picks, and closes the menu",
+    await ev(
+      `!('default_panel' in JSON.parse(JSON.stringify(server.userData))) && server.userData.showEntityIdPicker===true && card.shadowRoot.querySelector('.moremenu').classList.contains('hide')`,
+    ),
   );
+  await userData({ showEntityIdPicker: true });
+  // a new page element (another device, or a reload): already asked, so it doesn't ask again
+  await ev(`(()=>{const q=document.createElement('ha-3dhome-panel');panel.remove();q.hass=Object.assign(makeHass(true),{userData:{}});q.panel={url_path:'3d-home',config:{entry_id:'E1'}};
+    document.getElementById('host').append(q);window.panel=q})()`);
+  await wait(500);
+  check("it isn't asked again once answered", await ev(`${offer}.classList.contains('hide')`));
 
   // someone who isn't an administrator, on another empty panel
   await ev(`(()=>{const q=document.createElement('ha-3dhome-panel');q.hass=makeHass(false);q.panel={url_path:'other',config:{entry_id:'E2'}};
