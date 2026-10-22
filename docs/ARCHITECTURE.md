@@ -31,6 +31,7 @@ What loads when: opening the page fetches `ha-3dhome.js` (about 42 KB gzipped), 
 | `src/panel/panel.ts` | `class Home3DPanel` (`<ha-3dhome-panel>`): the sidebar page. Follows its stored config, hands the map a `LayoutStore`, offers to import a dashboard's map |
 | `src/card/card.ts` | `class Home3DCard`: every field (typed, with a comment), lifecycle (config, hass, connection, attach/detach, teardown) and `_rebuild()` |
 | `src/card/startup.ts` … `plan.ts` | One part per topic: startup (`_init` and its steps), camera, rooms, scene build, models, lights, picking (pointer input), live update and looks, the plan layer |
+| `src/card/batch.ts`, `ao-bake.ts` | Outside the editor: the static meshes merged into a few (`_batch`), and the corner shading baked into a map the materials read (`_bakeAO`) |
 | `src/card/styles.ts` | The shadow DOM's stylesheet and markup |
 | `src/card/editor-loader.ts` | `loadEditor()`: fetches the editor module on the first Edit press; `provideEditor()`: the editor module registers itself |
 | `src/editor-contract.ts` | Types only: `EditorHost` (what the editor may use of the card), `CardEditor` (what the card calls on the editor), `EditorModule` |
@@ -107,6 +108,10 @@ Editing state the card itself reads stays on the card: `_edit` (selection, undo 
    - **Edit mode:** visible coloured markers for lights (yellow), hotspots (blue), chips (green) and doors (red).
 4. **`_buildOverlays()`:** HTML chips, door dots and weather in `.ov`, each with a 3D anchor point that is projected every frame.
 5. **`_loadModels()`:** async load of Sweet Home 3D models (see below), replacing the translucent placeholder boxes.
+6. **`_scheduleBatch()`** (outside the editor, 300 ms after the last rebuild or model load):
+   - **`_batch()`** merges every static mesh (not lamps' glowing parts, door leaves, screens, sprites or anything transparent or invisible) into one mesh per material with `mergeGeometries`, baked into world space. Materials that differ only in colour share one white copy with `vertexColors`, the colour moved into the vertices. A mirrored model's triangles are turned back. Each merged mesh keeps its group's shadow flags and `customDepthMaterial` (floors stay out of the shadow maps). The sample home goes from 280 draw calls to 61.
+   - The originals stay in the scene, hidden: picking and `_roomAt` raycast them (the raycaster ignores visibility), and the see-through room fades them mesh by mesh, so `_updateFade` shows them while a room is framed (`_showBatch`).
+   - **`_bakeAO()`** then bakes the corner shading. A camera straight above draws the height of the topmost surface (hanging things, the roof, glass and glows left out) into a half-float map; a pass turns heights into shading (how high the surroundings rise in 16 directions out to 20 units), and a 5×5 blur softens it. Every lit material is patched once (`_patchAO`, `onBeforeCompile`, one program key) to darken its light by the map at its world position: floors directly, wall and furniture faces from the floor just in front of them, fading with height, and anything under a table or shelf by how close it is overhead. The GTAO pass then stays off outside the editor (`_draw`).
 
 ## Live update: `_update()`
 

@@ -72,6 +72,9 @@ HACS installs GitHub releases, so a version tag is what ships and `main` is the 
   - A lost WebGL context (phones do it to background pages) needs a redraw on `webglcontextrestored`, or a rebuild when it never comes back (`_ctxCheck`, v5.1). Connection state lives in `_connState` (`hass.connected` + `navigator.onLine`); reconnecting sets `_seen = null` so every entity is re-applied.
   - `hass` is applied on the next frame (`_applyHass`), and `_update()` runs only when an entity mentioned in the config changed. Tests that set `hass` must wait a frame (`!card._hassRaf`). A new feature that reads an entity from somewhere other than the card config must add it to `watchedEntities`.
 
+- **Outside the editor the scene is merged and the shading baked (v6.2.5)**
+  - `_batch()` hides the static meshes behind merged copies (`_batchBox`); the originals stay for picking, the see-through room (`_showBatch(false)`) and the editor (which rebuilds without merging). Something that changes after the build outside the editor (like lamps' glowing parts, door leaves and screens) must be left out of the merge in `_batch()`, or its changes won't show.
+  - The corner shading outside the editor is a baked map (`_bakeAO`) that patched materials read (`_patchAO`); the GTAO pass only runs in the editor. A new mesh type with a lit material gets patched on the next bake. Floors keep out of the shadow maps through `customDepthMaterial`, which merged meshes copy.
 - **Lighting and shadows**
   - Fixtures and overlays must not cast shadows (`_noCast`). Otherwise fans and bulbs shadow their own lights and the room goes dark.
   - Shadow maps are static (`shadowMap.autoUpdate=false`). Set `renderer.shadowMap.needsUpdate = true` after geometry changes.
