@@ -11,7 +11,7 @@
           "url_path": "Address"
         },
         "data_description": {
-          "url_path": "The page opens at /<address>, for example /3d-home."
+          "url_path": "The address the page opens at, for example 3d-home for /3d-home."
         }
       }
     },
