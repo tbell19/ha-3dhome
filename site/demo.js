@@ -68,12 +68,12 @@ const STATES = {
 
 const GROUPS = { "light.study_fan": ["light.study_fan_a", "light.study_fan_b"] };   // light groups, as Home Assistant would have them
 const TOGGLE = { on: "off", off: "on", open: "closed", closed: "open", playing: "paused", paused: "playing" };
-let panel, cfg, rev = 1, states = structuredClone(STATES);
+let panel, cfg, rev = 1, states = structuredClone(STATES), userData = {};
 const followers = new Set(); // the panel's subscription to the stored map
 
 function hass() {
   return {
-    states, user: { is_admin: true, name: "Demo" }, language: "en",
+    states, userData, user: { is_admin: true, name: "Demo" }, language: "en",
     config: { unit_system: { length: "mi", temperature: "°F" }, latitude: 40, longitude: -100, time_zone: "UTC" },
     services: { homeassistant: { toggle: {} }, light: { turn_on: {}, turn_off: {}, toggle: {} } },
     callService: async (domain, service, data) => {
@@ -91,6 +91,7 @@ function hass() {
         toast("Saved in this browser. Reset puts the sample home back.");
         return { rev };
       }
+      if (m.type === "frontend/set_user_data") { userData = m.value; panel.hass = hass(); return null; } // the pin button
       if (m.type === "lovelace/dashboards/list") return [];
       return null;
     },

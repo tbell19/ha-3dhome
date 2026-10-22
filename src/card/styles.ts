@@ -239,5 +239,5 @@ export const CARD_HTML = `
   <div class="nav">
     <button data-v="left" title="Rotate view left">${ic("rotate-left")}</button><button data-v="right" title="Rotate view right">${ic("rotate-right")}</button>
     <button data-v="top" title="Top-down / angled">${ic("floor-plan")}</button><button data-v="out" title="Zoom out">${ic("minus")}</button><button data-v="in" title="Zoom in">${ic("plus")}</button>
-    <button data-v="home" title="Whole home">${ic("home-outline")}</button><button class="edbtn" style="display:none" title="Edit the map">${ic("pencil-outline")}Edit</button>
+    <button data-v="home" title="Whole home">${ic("home-outline")}</button><button class="homebtn hide"></button><button class="edbtn" style="display:none" title="Edit the map">${ic("pencil-outline")}Edit</button>
   </div></div></ha-card>`;

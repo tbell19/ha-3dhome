@@ -6,7 +6,7 @@
  * hands the map a LayoutStore so Save writes there (ha_3dhome/config/save). A save keeps the map's WebGL scene and only
  * rebuilds what it shows.
  */
-import type { CardConfig, Hass, LayoutStore } from "../types";
+import type { CardConfig, Hass, HomePage, LayoutStore } from "../types";
 import { esc } from "../core/util";
 import { dashboardsWithHome, type DashboardWithHome } from "../core/lovelace";
 import { panelStyles } from "./styles";
@@ -27,6 +27,7 @@ interface Saved {
 interface MapCard extends HTMLElement {
   hass: Hass;
   layoutStore: LayoutStore | null;
+  homePage: HomePage | null;
   setConfig(config: CardConfig): void;
   readonly _edit: object | null; // set while someone is editing
 }
@@ -111,6 +112,7 @@ export class Home3DPanel extends HTMLElement {
     }
     this._view = view;
     view.card.layoutStore = this._store(view);
+    view.card.homePage = this._homePage(this._panel!.url_path);
     view.card.hass = this._hass!;
     view.card.addEventListener("ha-3dhome-editing", this._editing);
     this.shadowRoot!.prepend(view.card);
@@ -183,6 +185,23 @@ export class Home3DPanel extends HTMLElement {
       rev: Math.max(view.rev, 0),
     });
     view.rev = Math.max(view.rev, rev);
+  }
+
+  /* ----- opening Home Assistant on this page ----- */
+
+  /** The page Home Assistant opens on is the user's `default_panel` (frontend user data, key "core"), which any panel's
+   * url path may be. The profile page only lists dashboards, so the map offers it as its pin button. */
+  private _homePage(urlPath: string): HomePage {
+    return {
+      isHome: (hass) => hass.userData?.default_panel === urlPath,
+      setHome: async (hass, on) => {
+        await hass.callWS({
+          type: "frontend/set_user_data",
+          key: "core",
+          value: { ...hass.userData, default_panel: on ? urlPath : undefined }, // undefined: the page Home Assistant picks
+        });
+      },
+    };
   }
 
   /* ----- importing a map from a dashboard ----- */

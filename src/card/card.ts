@@ -10,6 +10,7 @@ import type { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import type {
   CardConfig,
+  HomePage,
   LayoutStore,
   Chip,
   DoorConfig,
@@ -146,6 +147,7 @@ export class Home3DCard extends HTMLElement {
   } | null;
   declare _seenCfg: CardConfig | null;
   declare _layoutStore: LayoutStore | null; // where Save writes (see layoutStore)
+  declare _homePage: HomePage | null; // whether HA opens on this page (see homePage)
 
   // lifecycle
   declare _ready: boolean;
@@ -177,6 +179,7 @@ export class Home3DCard extends HTMLElement {
   declare _ov: HTMLElement; // overlay layer for chips and labels
   declare _editorLayer: HTMLElement; // editor UI layer
   declare _edBtn: HTMLElement | null;
+  declare _homeBtn: HTMLElement | null; // the pin: open Home Assistant on this page
   declare _conn: HTMLElement | null; // the "Reconnecting" pill
   declare _toastT: ReturnType<typeof setTimeout>;
 
@@ -399,6 +402,37 @@ export class Home3DCard extends HTMLElement {
     this._layoutStore = store;
   }
 
+  /** Whether Home Assistant opens on this page: the panel's, shown as the pin button. */
+  set homePage(home: HomePage | null) {
+    this._homePage = home;
+    this._showHome();
+  }
+
+  /** the pin button: shown when the panel says where the page is, lit while it's the user's default page */
+  _showHome() {
+    const btn = this._homeBtn;
+    if (!btn) return;
+    const on = !!this._hass && !!this._homePage?.isHome(this._hass);
+    btn.classList.toggle("hide", !this._homePage);
+    btn.classList.toggle("on", on);
+    btn.title = on ? "Home Assistant opens here. Press to undo" : "Open Home Assistant on this page";
+    btn.innerHTML = ic(on ? "pin" : "pin-outline");
+  }
+
+  async _toggleHome() {
+    const home = this._homePage;
+    const hass = this._hass;
+    if (!home || !hass) return;
+    const on = !home.isHome(hass);
+    try {
+      await home.setHome(hass, on);
+      this._toast(on ? "Home Assistant now opens on this page" : "Home Assistant opens on its usual page again");
+    } catch (e) {
+      console.error("3D Home: couldn't change the default page", e);
+      this._toast("Couldn't change the page Home Assistant opens on");
+    }
+  }
+
   set hass(hass: Hass) {
     this._hass = hass;
     if (!this._loading && !this._ready) this._kick();
@@ -417,6 +451,7 @@ export class Home3DCard extends HTMLElement {
     this._connState(h);
     if (this._edit || this._hassChanged(h)) this._update();
     this._rcHass();
+    this._showHome();
     if (this._edBtn) this._edBtn.style.display = h.user?.is_admin && !this._edit && editorAvailable() ? "" : "none"; // the editor itself loads on the first press
   }
 

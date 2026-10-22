@@ -8,7 +8,8 @@
  *
  * Checks: an empty panel offers the dashboard's map and copies it in, Save writes to the integration and not to a
  * dashboard, a save from another device appears without a new WebGL context, edits in progress aren't pulled away and
- * their Save reports the clash, the sidebar button on narrow screens, nothing offered to non-admins.
+ * their Save reports the clash, the sidebar button on narrow screens, the pin that makes Home Assistant open on the page,
+ * nothing offered to non-admins.
  */
 const path = require("path");
 const { OUT, CODE, SAMPLE_HOME, launch, check, report } = require("./harness");
@@ -59,6 +60,7 @@ window.makeHass=(admin)=>({states:{},user:{is_admin:admin},services:{},callServi
     if(m.type==='ha_3dhome/config/save'){const s=server[m.entry_id];server.saves.push(m);
       if(m.rev!==s.rev)throw {code:'conflict',message:'The map was saved from another device meanwhile. Cancel to see it, then edit again.'};
       s.config=m.config;s.rev++;server.push(m.entry_id);return {rev:s.rev}}
+    if(m.type==='frontend/set_user_data'){server.userData=m.value;return null}
     if(m.type==='lovelace/dashboards/list')return [{url_path:'juniper',title:'Juniper House',mode:'storage'},{url_path:'energy-plus',title:'Energy'}];
     if(m.type==='lovelace/config')return m.url_path==='juniper'?JSON.parse(JSON.stringify(__dash)):{views:[{cards:[]}]};
     throw new Error('unexpected '+m.type)}});
@@ -193,6 +195,30 @@ window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-ma
     await ev(`panel.shadowRoot.querySelector('ha-3dhome-map')===card && card._renderer===__r && __ctx===${ctx0}`),
   );
   check("…and still follows saves", await ev(`server.E1.subs.length===1`));
+
+  // the pin: Home Assistant opens on this page for the user (their default_panel), kept with their other settings
+  const pin = `card.shadowRoot.querySelector('.nav .homebtn')`;
+  // Home Assistant hands every panel a new hass once the user's settings change
+  const userData = (data) => ev(`panel.hass=Object.assign(makeHass(true),{userData:${JSON.stringify(data)}})`);
+  await userData({ showEntityIdPicker: true });
+  await wait(100);
+  check("the map shows the pin, not lit", await ev(`!${pin}.classList.contains('hide') && !${pin}.classList.contains('on')`));
+  await ev(`${pin}.click()`);
+  await wait(100);
+  check(
+    "pressing it makes this page the user's default, keeping their other settings",
+    await ev(
+      `server.userData.default_panel==='3d-home' && server.userData.showEntityIdPicker===true && server.calls.includes('frontend/set_user_data')`,
+    ),
+  );
+  await userData({ showEntityIdPicker: true, default_panel: "3d-home" });
+  check("…and it lights up", await until(`${pin}.classList.contains('on')`));
+  await ev(`${pin}.click()`);
+  await wait(100);
+  check(
+    "pressing it again goes back to the page Home Assistant picks",
+    await ev(`!('default_panel' in JSON.parse(JSON.stringify(server.userData))) && server.userData.showEntityIdPicker===true`),
+  );
 
   // someone who isn't an administrator, on another empty panel
   await ev(`(()=>{const q=document.createElement('ha-3dhome-panel');q.hass=makeHass(false);q.panel={url_path:'other',config:{entry_id:'E2'}};

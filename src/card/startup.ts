@@ -27,6 +27,8 @@ export class StartupPart {
     this._edBtn = root.querySelector<HTMLElement>(".edbtn");
     this._conn = root.querySelector<HTMLElement>(".conn");
     this._edBtn.addEventListener("click", () => this._openEditor());
+    this._homeBtn = root.querySelector<HTMLElement>(".homebtn");
+    this._homeBtn.addEventListener("click", () => this._toggleHome());
 
     this._createRenderer(T, wrap);
     const { cam, controls } = this._createCamera(T, OrbitControls);
@@ -53,6 +55,7 @@ export class StartupPart {
     this._ready = true;
     this._connState();
     this._update();
+    this._showHome();
     if (this._hass?.user?.is_admin && editorAvailable()) this._edBtn.style.display = "";
     // an editor registered as its own resource may arrive later
     this._edReady = () => {

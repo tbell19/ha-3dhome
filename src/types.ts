@@ -41,6 +41,8 @@ export interface Hass {
   themes?: { darkMode?: boolean };
   locale?: { language?: string };
   language?: string;
+  /** the signed-in user's frontend settings (frontend/set_user_data, key "core"), kept current by Home Assistant */
+  userData?: { default_panel?: string; [k: string]: unknown };
   callService(domain: string, service: string, data?: Record<string, unknown>): Promise<unknown>;
   callWS<T = any>(msg: Record<string, unknown>): Promise<T>;
   fetchWithAuth?(url: string, init?: RequestInit): Promise<Response>;
@@ -356,4 +358,13 @@ export interface LayoutStore {
   readonly savedMessage: string;
   /** write the layout; resolves to the card config it now corresponds to, which the card takes as its own */
   save(layout: Layout, config: CardConfig): Promise<CardConfig>;
+}
+
+/** Whether Home Assistant opens on the map's page for the signed-in user. The panel hands it to its map
+ * (map.homePage), which shows it as the pin button. */
+export interface HomePage {
+  /** true when this page is the user's default page */
+  isHome(hass: Hass): boolean;
+  /** make this page the user's default page, or go back to the one Home Assistant picks */
+  setHome(hass: Hass, on: boolean): Promise<void>;
 }
