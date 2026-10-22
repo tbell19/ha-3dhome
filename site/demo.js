@@ -96,7 +96,6 @@ function hass() {
         return null;
       }
       if (m.type === "frontend/get_user_data") return { value: m.key === "ha_3dhome" ? own : null };
-      if (m.type === "lovelace/dashboards/list") return [];
       return null;
     },
     connection: {

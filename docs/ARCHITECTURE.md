@@ -27,8 +27,7 @@ What loads when: opening the page fetches `ha-3dhome.js` (about 42 KB gzipped), 
 | `src/core/plan-geometry.ts` | `segDir`, `wallExtensions`, `wallPieces`, `planJoints` |
 | `src/core/vec2.ts` | 2D vector helpers on plan points (`add`, `sub`, `dot`, `cross`, `perp`, `distance`, `lerp`) |
 | `src/core/surfaces.ts`, `fixtures.ts`, `sun.ts`, `entities.ts`, `sh3d.ts` | Textures, fixtures and string lights, sun position, entity icons and states, `parseProps`/`zipFind`/the `IDB` cache |
-| `src/core/lovelace.ts` | The panel's import from dashboards: `dashboardsWithHome` finds maps made with the 5.x card or strategy (and the ha-iso-home names) and brings them up to date |
-| `src/panel/panel.ts` | `class Home3DPanel` (`<ha-3dhome-panel>`): the sidebar page. Follows its stored config, hands the map a `LayoutStore`, offers to import a dashboard's map |
+| `src/panel/panel.ts` | `class Home3DPanel` (`<ha-3dhome-panel>`): the sidebar page. Follows its stored config, hands the map a `LayoutStore`, offers to be the page Home Assistant opens on |
 | `src/card/card.ts` | `class Home3DCard`: every field (typed, with a comment), lifecycle (config, hass, connection, attach/detach, teardown) and `_rebuild()` |
 | `src/card/startup.ts` … `plan.ts` | One part per topic: startup (`_init` and its steps), camera, rooms, scene build, models, lights, picking (pointer input), live update and looks, the plan layer |
 | `src/card/batch.ts`, `ao-bake.ts` | Outside the editor: the static meshes merged into a few (`_batch`), and the corner shading baked into a map the materials read (`_bakeAO`) |
@@ -246,6 +245,5 @@ Up to 5.x the map was also a Lovelace card and a dashboard strategy. A strategy 
 - It creates one `<ha-3dhome-map>` filling the page, forwards `hass` to it, and sets `card.layoutStore` so Save goes to the integration.
 - It subscribes to its config while it is attached. A pushed config the card isn't showing yet goes to `card.setConfig()`. The card compares it with its current config (`sameOptions`): when only the layout differs it calls `_applyLayout()`, which rebuilds the world in the running scene (same renderer, camera kept); a change of card options restarts the card as before.
 - A config pushed while someone edits is held until the editor closes (the card fires `ha-3dhome-editing`), and that edit's Save is refused by the revision check with a message saying why.
-- The stored config leaves out what the panel sets itself (`type`, `fill`, `dashboard`, `card_id`).
+- The integration registers the page with `handle_safe_area`, so Home Assistant doesn't pad it: the map fills the screen and the panel hands Home Assistant's `--safe-area-inset-*` values to it as `--ha-3dhome-safe-*`, which its controls add to their edge offsets.
 - On narrow screens Home Assistant hides the sidebar, so the panel shows Home Assistant's own `ha-menu-button` over the map's top-left corner (the card moves its weather badge aside through `--ha-3dhome-inset-left`).
-- An empty page opened by an admin looks for maps on dashboards (`dashboardsWithHome()`: every dashboard's config, strategy or card) and offers to copy one in, dropping item types the editor can't make (the first mockup's railings, glass and the like) and updating old string lights. The dashboard is left unchanged.

@@ -8,11 +8,13 @@ A live **3D map of your home** for Home Assistant, on its own page in the sideba
 
 Lights glow in their real colour and brightness. Door sensors, climate and presence show up as chips anchored in 3D. Media players can appear as TVs that show the album art or show artwork. Tapping a light toggles it; holding opens its details. Admins can switch into **edit mode** to draw walls, move furniture and entities, drop in any Home Assistant entity, or place furniture models from the free Sweet Home 3D libraries.
 
-The `ha_3dhome` integration adds a **3D Home page to the sidebar**, next to Map and Energy. The map is saved by the integration, and a save shows up straight away on every other screen that has it open. (Up to 5.x there was also a Lovelace card and a dashboard strategy; 6.0 keeps only the page, and the page can copy a map over from one of those dashboards.)
+The `ha_3dhome` integration adds a **3D Home page to the sidebar**, next to Map and Energy. The map is saved by the integration, and a save shows up straight away on every other screen that has it open.
 
 > **Status:** not released yet. The first release will be announced here; until then, HACS has nothing to install.
 
 ## Installing
+
+3D Home needs Home Assistant 2026.8 or later.
 
 ### HACS (recommended)
 
@@ -24,8 +26,6 @@ A **3D Home** page now shows in the sidebar. You can add more than one (a holida
 
 The first time a page shows your map it asks whether Home Assistant should open on it. Later, change that with **Open Home Assistant here** in the map's **⋮** menu. It applies to your user on every device, like the dashboard choice on your profile page (which then shows 3D Home).
 
-If you installed 3D Home earlier as a HACS **Dashboard**, remove that download and its resource.
-
 Updates show up in HACS when a new release is published (restart afterwards). Turn on **Show beta versions** for the repository to get pre-releases.
 
 ### Manual
@@ -35,8 +35,6 @@ Copy the `ha_3dhome` folder from `ha_3dhome.zip` in the [latest release](https:/
 ### Your first map
 
 **On the 3D Home page:** it opens on an empty map. Press **✎ Edit**, then **Floor plan**, to draw your walls and rooms (an uploaded photo of your floor plan works as a tracing image), then add your lights and sensors from the Add panel and **Save**.
-
-**Already have a map on a dashboard?** Maps made with the 5.x card or dashboard (`custom:ha-3dhome-card`, `custom:ha-3dhome`, or ha-iso-home's `custom:iso-home-3d-card` and `custom:iso-home`) still exist in those dashboards, but 6.0 no longer draws them there. An empty 3D Home page looks through your dashboards and offers to copy the map from any that have one, bringing it up to date on the way. The dashboard itself is left as it is; delete it in Settings → Dashboards once you don't need it.
 
 [examples/sample-home.json](examples/sample-home.json) is the demo's home, as an example of the map format ([docs/CONFIG.md](docs/CONFIG.md)).
 
@@ -75,7 +73,7 @@ npm test                    # desktop smoke test  -> tools/out/*.png
 npm run test:mobile         # phone viewport + touch gestures
 npm run build               # custom_components/ha_3dhome/frontend/*.js + size report
 npm run test:plan           # floor plan editor: drawing, doors/windows, joints, blueprint + scale
-npm run test:panel          # the sidebar page: import, saving, saves from other devices, edit clashes
+npm run test:panel          # the sidebar page: saving, saves from other devices, edit clashes
 npm run typecheck           # TypeScript, strict where the code allows
 npm run test:py             # the integration (pip install -r requirements_test.txt first)
 npm run test:leaks          # GPU/heap/WebGL-context growth over 3000 updates, edits, plan rebuilds, config churn

@@ -1,7 +1,7 @@
 /* Types for the card config (docs/CONFIG.md is the reference) and the parts of Home Assistant the card talks to.
  *
  * Items are deliberately loose: one interface per list, with every field any of its `type`s can have, because the
- * card and the editor treat items generically (move, rotate, resize) and the dashboard may hold older shapes.
+ * card and the editor treat items generically (move, rotate, resize).
  * Comments say which `type` a field belongs to.
  */
 
@@ -300,7 +300,6 @@ export type AnyItem =
 export type Looks = { light: number; ao: number; stage: number; bloom: number };
 
 export interface CardConfig {
-  type?: string;
   scene?: Scene;
   lights?: LightConfig[];
   hotspots?: Hotspot[];
@@ -326,7 +325,6 @@ export interface CardConfig {
   look?: false | Partial<Record<keyof Looks, number | boolean>>;
   idle_view?: { room?: string; after?: number };
   max_pixel_ratio?: number;
-  rooms?: unknown;
   [k: string]: unknown;
 }
 
@@ -357,7 +355,7 @@ export interface LayoutStore {
 }
 
 /** Whether Home Assistant opens on the map's page for the signed-in user. The panel hands it to its map
- * (map.homePage), which shows it as the pin button. */
+ * (map.homePage), which shows it in its ⋮ menu. */
 export interface HomePage {
   /** true when this page is the user's default page */
   isHome(hass: Hass): boolean;

@@ -44,6 +44,8 @@ async def test_config_flow_adds_a_panel(hass: HomeAssistant) -> None:
     assert panel.config["_panel_custom"]["name"] == "ha-3dhome-panel"
     assert panel.config["_panel_custom"]["module_url"].startswith("/ha_3dhome/ha-3dhome.js?v=")
     assert panel.config["entry_id"] == done["result"].entry_id
+    # the map draws edge to edge and keeps its own controls inside the safe areas
+    assert panel.config["_panel_custom"]["handle_safe_area"] is True
     # only the panel loads the map: other pages don't pay for it
     assert panel.config["_panel_custom"]["module_url"] not in hass.data[DATA_EXTRA_MODULE_URL].urls
 

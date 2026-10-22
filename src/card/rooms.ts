@@ -322,7 +322,7 @@ export class RoomsPart {
     };
     this._world.traverse((m) => {
       if (m.userData.wall) piece(m);
-    }); // legacy walls have no item key
+    }); // walls aren't items: test them piece by piece
     for (const [key, g] of this._items) {
       if (seen.has(g) || !"nbov".includes(key[0])) continue;
       seen.add(g);

@@ -7,15 +7,12 @@
  * rebuilds what it shows.
  */
 import type { CardConfig, Hass, HomePage, LayoutStore } from "../types";
-import { esc } from "../core/util";
-import { dashboardsWithHome, type DashboardWithHome } from "../core/lovelace";
 import { panelStyles } from "./styles";
 
 /** What Home Assistant passes in `panel` (the integration sets `config`). */
 interface PanelInfo {
   url_path: string;
-  /** _panel_custom.handle_safe_area: Home Assistant left the safe areas to the panel instead of padding it */
-  config: { entry_id: string; _panel_custom?: { handle_safe_area?: boolean } };
+  config: { entry_id: string };
 }
 
 /** What the integration sends on every save: the card config and its revision. */
@@ -53,16 +50,12 @@ const USER_KEY = "ha_3dhome";
 /** a config with nothing to show yet */
 const isEmpty = (config: CardConfig) => !Object.keys(config.scene || {}).length && !config.lights?.length;
 
-/** the parts of a card config the panel decides itself, so they aren't stored */
-const PANEL_OWNED = ["type", "fill", "aspect_ratio", "dashboard", "card_id"] as const; // all but `type` were card options before v6
-
 export class Home3DPanel extends HTMLElement {
   private _hass: Hass | null = null;
   private _panel: PanelInfo | null = null;
   private _view: PageView | null = null;
   private _menu: (HTMLElement & { hass?: Hass; narrow?: boolean }) | null = null;
   private _unsub: Promise<() => Promise<void>> | null = null;
-  private _imports: Promise<DashboardWithHome[]> | null = null;
   private _home: HomePage | null = null;
 
   set hass(hass: Hass) {
@@ -75,7 +68,6 @@ export class Home3DPanel extends HTMLElement {
   set panel(panel: PanelInfo) {
     if (this._panel && this._panel.config.entry_id !== panel.config.entry_id) this._stop();
     this._panel = panel;
-    this.toggleAttribute("edge-to-edge", !!panel.config._panel_custom?.handle_safe_area);
     this._start();
   }
 
@@ -111,7 +103,7 @@ export class Home3DPanel extends HTMLElement {
 
   private _render() {
     const root = this.attachShadow({ mode: "open" });
-    root.innerHTML = `<style>${panelStyles}</style><div class="import hide"></div><div class="offer hide"></div>`;
+    root.innerHTML = `<style>${panelStyles}</style><div class="offer hide"></div>`;
     this._menu = document.createElement("ha-menu-button");
     this._menu.className = "menu";
     this._menu.hass = this._hass ?? undefined;
@@ -179,16 +171,13 @@ export class Home3DPanel extends HTMLElement {
     const view = this._view!;
     view.rev = saved.rev;
     view.card.setConfig(saved.config); // only the world is rebuilt when just the layout changed
-    this._offerImport(saved.config);
     view.hasMap = !isEmpty(saved.config);
     this._offerHome(view);
   }
 
-  /** the card config as stored: without what the panel sets itself */
+  /** the card config as stored: plain JSON, without the keys the editor left undefined */
   private _stored(config: CardConfig): CardConfig {
-    const out: CardConfig = { ...config };
-    for (const k of PANEL_OWNED) delete out[k];
-    return JSON.parse(JSON.stringify(out)); // drops the keys the editor left undefined
+    return JSON.parse(JSON.stringify(config));
   }
 
   /** Save, as the card's editor sees it: write to the integration, starting from the revision being shown */
@@ -216,7 +205,7 @@ export class Home3DPanel extends HTMLElement {
   /* ----- opening Home Assistant on this page ----- */
 
   /** The page Home Assistant opens on is the user's `default_panel` (frontend user data, key "core"), which any panel's
-   * url path may be. The profile page only lists dashboards, so the map offers it as its pin button. */
+   * url path may be. The profile page only lists dashboards, so the map offers it in its ⋮ menu. */
   private _homePage(urlPath: string): HomePage {
     return {
       isHome: (hass) => hass.userData?.default_panel === urlPath,
@@ -267,38 +256,5 @@ export class Home3DPanel extends HTMLElement {
         }
       }),
     );
-  }
-
-  /* ----- importing a map from a dashboard ----- */
-
-  /** an empty panel, opened by an administrator: offer the maps found on dashboards */
-  private async _offerImport(config: CardConfig) {
-    const box = this.shadowRoot!.querySelector<HTMLElement>(".import")!;
-    if (!isEmpty(config) || !this._hass?.user?.is_admin) return box.classList.add("hide");
-    const found = await (this._imports ||= dashboardsWithHome(this._hass));
-    if (!found.length || (this._view?.rev ?? 0) > 0) return;
-    box.innerHTML = `<b>Bring in your map</b><span>These dashboards have a 3D Home map. Copy one here to keep editing it on this page.</span>`;
-    for (const d of found) {
-      const btn = document.createElement("button");
-      btn.textContent = `Copy from ${d.title}`;
-      btn.addEventListener("click", () => this._import(d, btn));
-      box.append(btn);
-    }
-    box.classList.remove("hide");
-  }
-
-  private async _import(d: DashboardWithHome, btn: HTMLButtonElement) {
-    const box = this.shadowRoot!.querySelector<HTMLElement>(".import")!;
-    btn.disabled = true;
-    try {
-      await this._write(this._view!, this._stored(d.config));
-      box.innerHTML = `<b>Copied</b><span>Your map from ${esc(d.title)} is here now. The dashboard is unchanged: delete it in Settings → Dashboards once you don't need it.</span><button>OK</button>`;
-      box.querySelector("button")!.addEventListener("click", () => box.classList.add("hide"));
-      box.classList.remove("hide");
-    } catch (e) {
-      console.error(e);
-      btn.disabled = false;
-      btn.textContent = "Copying failed. Try again";
-    }
   }
 }
