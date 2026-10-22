@@ -97,6 +97,12 @@ const MOBILE = process.argv.includes("--mobile");
     await ev(`card._items.get('b:14').visible === false && card._items.get('w:0').visible !== false`),
   );
   check(
+    "floors stay out of the shadow maps (no self-shadow stripes)",
+    await ev(
+      `card._floorMeshes.length > 0 && card._floorMeshes.every(m => m.customDepthMaterial && !m.customDepthMaterial.colorWrite && !m.customDistanceMaterial.colorWrite)`,
+    ),
+  );
+  check(
     "corner handles are shown",
     await ev(
       `card._jointMeshes.length === new Set(card._work.scene.wall_segs.flatMap(w=>[w.a.join(), w.b.join()])).size`,
