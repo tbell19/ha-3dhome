@@ -24,6 +24,9 @@ export class PlanPart {
     this._doorAnim = null;
     // room floors (r:i) — polygons; the room menu frames each room by its outline
     this._floorMeshes = [];
+    // floors stay out of the shadow maps: the soft (VSM) shadows draw every receiver into them, and a floor shadowing
+    // itself shows as dense stripes on some GPUs (iPhone), worst with the sun overhead in floor plan mode
+    const noShadow = (this._mats.__noShadow ||= new T.MeshDepthMaterial({ colorWrite: false, depthWrite: false }));
     (sc.floors || []).forEach((f, i) => {
       if (!(f.pts?.length >= 3)) return;
       this._begin("r:" + i, mean(f.pts), 0, G);
@@ -32,6 +35,7 @@ export class PlanPart {
       const m = new T.Mesh(geo, this._surfMat(f.fill || "#b3a58f", f.texture, { side: T.DoubleSide })); // ShapeGeometry UVs are already plan units
       m.position.y = f.name === "rug" ? 0.4 : 0.01 * i;
       m.receiveShadow = true;
+      m.customDepthMaterial = m.customDistanceMaterial = noShadow;
       m.userData.floor = true;
       m.userData.room = f.name;
       this._cur.add(m);
