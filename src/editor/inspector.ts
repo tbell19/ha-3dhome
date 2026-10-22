@@ -63,7 +63,7 @@ export class EditorInspector {
     const ang = this._itemAngle(k, it);
     let extra = "";
     if (k === "l") extra += this._lightTuneHTML(key, it);
-    if (k === "l" && it.kind !== "niche") {
+    if (k === "l") {
       const fx = FIXTURES[it.fixture] ? it.fixture : "none";
       extra += `<label style="margin-bottom:8px">Fixture<select data-fx>${Object.entries(FIXTURES)
         .map(([v, l]) => `<option value="${v}"${v === fx ? " selected" : ""}>${l}</option>`)
@@ -144,7 +144,7 @@ export class EditorInspector {
   _lightTuneRows(this: Editor, it: GenericItem): TuneRow[] {
     const aimed = it.gx != null && Math.hypot(it.gx - it.x, it.gy - it.y) > 12,
       spot = aimed || (!aimed && it.fixture === "can" && !it.points),
-      glow = !it.points && it.kind !== "niche";
+      glow = !it.points;
     const pct = (v: number) => Math.round(v * 100) + "%";
     const rows: TuneRow[] = [
       ["intensity", "Brightness", 0, 4, 0.05, 1, pct, "At the bulb's full brightness"],
@@ -587,15 +587,14 @@ export class EditorInspector {
           [R1(c[0] + 30), R1(c[1])],
         ];
         for (const f of ["x", "y", "gx", "gy", "gz"]) delete L[f];
-      } else if (fx !== "string" && L.points?.length && L.kind !== "niche") {
+      } else if (fx !== "string" && L.points?.length) {
         [L.x, L.y] = mean(L.points).map(R1);
         delete L.points;
         delete L.count;
         delete L.sag;
         delete L.spacing;
-        if (L.kind === "string") delete L.kind;
       }
-      if (fx === "string") L.kind = "string";
+      delete L.kind; // string lights used to be marked kind: "string" too
       if (fx === "none") delete L.fixture;
       else L.fixture = fx;
       const z = {

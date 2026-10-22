@@ -327,7 +327,7 @@ export class LivePart {
       this._update();
       this._requestRender();
     } catch (e: any) {
-      console.warn("ha-3dhome-card: effects unavailable", e);
+      console.warn("ha-3dhome: effects unavailable", e);
     } finally {
       if (this._ppLoading === gen) this._ppLoading = null;
     }
@@ -409,12 +409,6 @@ export class LivePart {
         for (const b of g.bulbs) {
           b.material.emissive.copy(color);
           b.material.emissiveIntensity = anyOn ? 2.2 : 0.05;
-        }
-      } else if (g.kind === "niche") {
-        g.light.intensity = level * 60 * boost * strength;
-        if (g.niche) {
-          g.niche.material.emissive.copy(color);
-          g.niche.material.emissiveIntensity = anyOn ? 0.7 : 0.02;
         }
       } else {
         const r = L.r ?? 40;

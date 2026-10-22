@@ -3,8 +3,6 @@
 import type { CardConfig, LayoutKey, Looks } from "../types";
 
 export const VERSION3D = "5.3.0";
-export const STRATEGY_NAME = "ha-3dhome";
-export const OLD_NAMES = { card: "iso-home-3d-card", strategy: "iso-home" }; // the project was called ha-iso-home before v5; both still work
 export const CDN = "https://cdn.jsdelivr.net/npm/";
 export const THREE_URL = CDN + "three@0.160.0/+esm";
 export const JSM = CDN + "three@0.160.0/examples/jsm/";

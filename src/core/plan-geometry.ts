@@ -1,7 +1,7 @@
-/* Floor plan geometry (pure functions): wall joints, wall pieces around openings, and the legacy wall format.
+/* Floor plan geometry (pure functions): wall directions, joints, and wall pieces around openings.
  */
-import type { LegacyWall, Opening, Pt, Scene, WallSeg } from "../types";
-import { R1, rotPt } from "./util.js";
+import type { Opening, Pt, WallSeg } from "../types";
+import { rotPt } from "./util.js";
 
 /*
  * wall segment  {a:[x,y], b:[x,y], t?, h?, low?, color?}   — centre line from a to b
@@ -115,56 +115,4 @@ export function planJoints(segs: WallSeg[]) {
     }),
   );
   return js;
-}
-/* the original axis-aligned walls ({axis, at, spans, doors}) → free segments + door openings; looks identical */
-export function legacyWalls(sc: Scene) {
-  const H = sc.wall_height ?? 46,
-    LIN = sc.lintel ?? 8,
-    LOW = sc.low ?? 8,
-    WT = sc.wall_thickness ?? 4,
-    segs: WallSeg[] = [],
-    opens: Opening[] = [];
-  const pt = (axis: string, at: number, v: number): Pt => (axis === "y" ? [at, v] : [v, at]);
-  const run = (w: LegacyWall, low: boolean) => {
-    const h = w.h ?? (low ? LOW : H);
-    const iv = [
-      ...(w.spans || []).map(([a, b]) => [Math.min(a, b), Math.max(a, b), 0]),
-      ...(low ? [] : (w.doors || []).map(([a, b]) => [Math.min(a, b), Math.max(a, b), 1])),
-    ].sort((p, q) => p[0] - q[0]);
-    let cur: number[] | null = null;
-    const flush = () => {
-      if (cur)
-        segs.push({
-          a: pt(w.axis, w.at, cur[0]),
-          b: pt(w.axis, w.at, cur[1]),
-          ...(h !== H ? { h } : {}),
-          ...(low ? { low: true } : {}),
-          ...(w.note ? { note: w.note } : {}),
-        });
-    };
-    for (const [a, b, door] of iv) {
-      if (door) {
-        const [x, y] = pt(w.axis, w.at, (a + b) / 2);
-        opens.push({
-          kind: "door",
-          x,
-          y,
-          w: R1(b - a),
-          d: WT + 2,
-          h: h - LIN,
-          z: 0,
-          ...(w.axis === "y" ? { rot: 90 } : {}),
-        });
-      }
-      if (cur && a <= cur[1] + 0.01) cur[1] = Math.max(cur[1], b);
-      else {
-        flush();
-        cur = [a, b];
-      }
-    }
-    flush();
-  };
-  for (const w of sc.walls || []) run(w, false);
-  for (const w of sc.front_walls || []) run(w, true);
-  return { segs, opens };
 }

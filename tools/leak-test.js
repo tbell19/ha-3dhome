@@ -1,4 +1,4 @@
-/* Leak test: drives the card the way a long-running dashboard does and reports resource growth.
+/* Leak test: drives the map the way a wall tablet left on all day does and reports resource growth.
  *
  *   node tools/leak-test.js [--dist] [--look]     --look turns every render look on (post-processing included)
  *
@@ -7,102 +7,52 @@
  *   2. 30 editor mutations + exit, then 60 floor-plan layer rebuilds + 10 wall edits                                       -> geometries / textures must return to baseline
  *   2c. edit / floor plan / tools / look panel / room focus, cycled x8 -> GPU objects, shaders and global listeners back to baseline
  *   2d. idle map renders nothing; a 200-change burst is applied once; changes to unshown entities skip the scene update
- *   3. setConfig() with an identical config x5 (HA re-renders)         -> must NOT rebuild (same renderer)
+ *   3. setConfig() with an identical config x5                          -> must NOT rebuild (same renderer)
  *   4. setConfig() with a changed config x5, and detach/reattach        -> old WebGL contexts must be released
  * Exit code is non-zero if a phase leaks.
  */
-const { chromium } = require("playwright");
-const fs = require("fs"),
-  path = require("path");
-const ROOT = path.join(__dirname, "..");
-const CODE = require("./bundle").bundle({ dist: process.argv.includes("--dist") }); // { core, editor }
-const js = (body) => ({ body, contentType: "application/javascript", headers: { "access-control-allow-origin": "*" } });
+const { SAMPLE_HOME, launch, panelPage, serve, check, report } = require("./harness");
+
 const LOOK = process.argv.includes("--look");
-const JSM = "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/";
-const esm = (rel) =>
-  fs
-    .readFileSync(path.join(ROOT, "node_modules/three/examples/jsm", rel), "utf8")
-    .replace(/from 'three'/g, "from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm'")
-    .replace(/from '(\.{1,2}\/[^']+)'/g, (_, r) => `from '${new URL(r, JSM + rel).href}/+esm'`);
-const results = [];
-const check = (name, ok, detail = "") => {
-  results.push(ok);
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`);
+const CONFIG = LOOK
+  ? { ...SAMPLE_HOME, night_mode: "always", look: { light: true, ao: true, stage: true, bloom: true } }
+  : SAMPLE_HOME;
+const STATES = {
+  "sun.sun": { state: "below_horizon", attributes: {} },
+  "weather.home": { state: "sunny", attributes: { temperature: 60 } },
+  "media_player.lounge_tv": { state: "playing", attributes: { media_title: "Track 0", media_artist: "Artist" } },
 };
+for (const L of SAMPLE_HOME.lights)
+  STATES[L.entity] = { state: "on", attributes: { brightness: 200, rgb_color: [255, 190, 130] } };
 
 (async () => {
-  const dash = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/fixtures/test-home.json"), "utf8"));
-  const exe =
-    process.env.CHROMIUM_PATH || (fs.existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined);
-  const browser = await chromium.launch({
-    executablePath: exe,
-    args: [
-      "--use-gl=angle",
-      "--use-angle=swiftshader",
-      "--enable-unsafe-swiftshader",
-      "--ignore-gpu-blocklist",
-      "--js-flags=--expose-gc",
-      "--enable-precise-memory-info",
-    ],
+  const {
+    browser,
+    page: p,
+    ev,
+  } = await launch({
+    viewport: { width: 480, height: 300 },
+    args: ["--js-flags=--expose-gc", "--enable-precise-memory-info"],
   });
-  const p = await browser.newPage({ viewport: { width: 480, height: 300 } });
-  p.on("pageerror", (e) => console.log("pageerror:", e.message));
-  await p.route("https://cdn.jsdelivr.net/**", (r) => {
-    const u = r.request().url();
-    if (
-      u.includes("/examples/jsm/postprocessing/") ||
-      u.includes("/examples/jsm/shaders/") ||
-      u.includes("/examples/jsm/math/")
-    )
-      return r.fulfill(js(esm(u.split("/examples/jsm/")[1].replace(/\/\+esm$/, ""))));
-    for (const [k, f] of [
-      ["OrbitControls", "controls/OrbitControls.js"],
-      ["TransformControls", "controls/TransformControls.js"],
-      ["OBJLoader", "loaders/OBJLoader.js"],
-      ["MTLLoader", "loaders/MTLLoader.js"],
-    ])
-      if (u.includes(k)) return r.fulfill(js(esm(f)));
-    if (u.includes("jszip"))
-      return r.fulfill(
-        js(
-          "var module={exports:{}};var exports=module.exports;" +
-            fs.readFileSync(path.join(ROOT, "node_modules/jszip/dist/jszip.min.js"), "utf8") +
-            "\nexport default module.exports;",
-        ),
-      );
-    return r.fulfill(js(fs.readFileSync(path.join(ROOT, "node_modules/three/build/three.module.js"), "utf8")));
-  });
-  const html = `<!doctype html><meta charset=utf-8><body style="margin:0"><div id=host></div>
-<script>customElements.define('ha-card',class extends HTMLElement{connectedCallback(){this.style.display='block'}});customElements.define('ha-icon',class extends HTMLElement{});
-// count WebGL contexts that are created and never lost
+  const html = panelPage({
+    config: CONFIG,
+    states: STATES,
+    head: `// count WebGL contexts that are created and never lost
 window.__ctx=[]; const _gc=HTMLCanvasElement.prototype.getContext;
 HTMLCanvasElement.prototype.getContext=function(t,...a){const c=_gc.call(this,t,...a); if(c&&/webgl/.test(t)&&!__ctx.includes(c))__ctx.push(c); return c};
-// count listeners left on window / document (they outlive the card)
+// count listeners left on window / document (they outlive the map)
 window.__lst=[]; const _ae=EventTarget.prototype.addEventListener, _re=EventTarget.prototype.removeEventListener;
 const _cap=(o)=>!!(o===true||(o&&o.capture));
 EventTarget.prototype.addEventListener=function(t,f,o){ if((this===window||this===document)&&!__lst.some(l=>l[0]===this&&l[1]===t&&l[2]===f&&l[3]===_cap(o))) __lst.push([this,t,f,_cap(o)]); return _ae.call(this,t,f,o); };
 EventTarget.prototype.removeEventListener=function(t,f,o){ const i=__lst.findIndex(l=>l[0]===this&&l[1]===t&&l[2]===f&&l[3]===_cap(o)); if(i>=0)__lst.splice(i,1); return _re.call(this,t,f,o); };
-</script>
-<script type=module>${CODE.editor}</script>
-<script type=module>${CODE.core}
-const __dash=${JSON.stringify(dash)};
-const __gen=await customElements.get('ll-strategy-dashboard-ha-3dhome').generate(__dash.strategy);
-window.__cfg=${LOOK ? `{...__gen.views[0].cards[0], night_mode:"always", look:{light:true,ao:true,stage:true,bloom:true}}` : "__gen.views[0].cards[0]"};
-const __card=document.createElement('ha-3dhome-card'); __card.setConfig(__cfg); document.getElementById('host').append(__card);
-const __st0={'sun.sun':{state:'below_horizon',attributes:{}},'weather.home':{state:'sunny',attributes:{temperature:60}}};
-for(const L of __cfg.lights) __st0[L.entity]={state:'on',attributes:{brightness:200,rgb_color:[255,190,130]}};
-__st0['media_player.lounge_tv']={state:'playing',attributes:{media_title:'Track 0',media_artist:'Artist'}};
-window.__states=__st0;
-__card.hass={states:__st0,user:{is_admin:true},callService:async()=>{},callWS:async()=>({}),connection:{subscribeEvents:async()=>()=>{}}};
-window.card=__card;</script>`;
-  await p.route("http://ha.test/**", (r) => r.fulfill({ body: html, contentType: "text/html" }));
-  await p.goto("http://ha.test/3d-home/3d");
+window.__states=${JSON.stringify(STATES)}; window.__cfg=${JSON.stringify(CONFIG)};`,
+  });
+  await serve(p, html);
   await p.waitForTimeout(5000);
   {
     await p.waitForFunction(() => !!window.card._composer, null, { timeout: 30000 });
     await p.waitForTimeout(1500);
   } // effects (on by default) load lazily: baseline after them
-  const ev = (s) => p.evaluate(s);
   const snap = () =>
     ev(`(async()=>{ for(let i=0;i<3;i++){ window.gc&&gc(); await new Promise(r=>setTimeout(r,50)); }
      card._requestRender(); await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));   // GPU memory counts what has been drawn
@@ -177,7 +127,9 @@ window.card=__card;</script>`;
     );
     await ev(`card._editor._setPlanMode(false)`);
     await p.waitForTimeout(200);
-    await ev(`card._editor._toggleLookPanel(); card._editor._toggleLookPanel(); card._editor._exitEdit(false)`);
+    await ev(
+      `const b=card.shadowRoot.querySelector('[data-a=look]'); b.click(); b.click(); card._editor._exitEdit(false)`,
+    );
     await p.waitForTimeout(300);
     await ev(`(()=>{ const r=card._rooms(); card._focusRoom(r[${i} % r.length]); })()`);
     await p.waitForTimeout(900);
@@ -235,9 +187,7 @@ window.card=__card;</script>`;
   check("card still renders after all that", await ev(`!!card._renderer && card._ready`));
 
   await browser.close();
-  const failed = results.filter((x) => !x).length;
-  console.log(`\n${results.length - failed}/${results.length} leak checks passed`);
-  process.exit(failed ? 1 : 0);
+  report("leak checks");
 })().catch((e) => {
   console.error(e);
   process.exit(1);

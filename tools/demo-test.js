@@ -68,9 +68,13 @@ const check = (name, ok, detail = "") => {
   p.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   try {
     await p.goto(`http://localhost:${port}/`);
-    await p.waitForFunction(() => document.querySelector("ha-3dhome-card")?._ready, null, { timeout: 30000 });
+    await p.waitForFunction(
+      () => document.querySelector("ha-3dhome-panel")?.shadowRoot?.querySelector("ha-3dhome-map")?._ready,
+      null,
+      { timeout: 30000 },
+    );
     await p.waitForTimeout(3000);
-    const card = "document.querySelector('ha-3dhome-card')";
+    const card = "document.querySelector('ha-3dhome-panel').shadowRoot.querySelector('ha-3dhome-map')";
     check(
       "map renders the sample home",
       await p.evaluate(`${card}._world?.children.length > 10 && !!${card}.shadowRoot.querySelector('canvas')`),

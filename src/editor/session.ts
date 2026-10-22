@@ -5,6 +5,7 @@ import type { GenericItem } from "../core/items";
 import type { EditState } from "../card/card";
 import type { Editor } from "./editor";
 import { KINDS, TC_URL, ic, jclone, roomTitle, segDir } from "./shared";
+import { toggleSidePanel, refreshSidePanels, isOpen, panelButtons } from "./side-panels";
 
 export class EditorSession {
   _list(this: Editor, k: string, create?: boolean): GenericItem[] {
@@ -75,7 +76,6 @@ export class EditorSession {
       room_cards: this.card._config.room_cards,
     });
     this.card._work = { ...this.card._config, ...this.card._work };
-    this._migrateWalls();
     this.card._edit = {
       sel: new Set(),
       undo: [],
@@ -224,14 +224,11 @@ export class EditorSession {
         this.card._edit.snap = !this.card._edit.snap;
         this._applySnap();
         this._syncBar();
-      } else if (a === "add") this._toggleEntityPanel();
+      } else if (a === "add") toggleSidePanel(this, "ents");
       else if (a === "models") this._openLibrary();
-      else if (a === "look") {
+      else if (a === "look" || a === "controls") {
         this._select([]);
-        this._toggleLookPanel();
-      } else if (a === "controls") {
-        this._select([]);
-        this._toggleRoomCardsPanel();
+        toggleSidePanel(this, panelButtons[a]);
       } else if (a === "dup") this._duplicate();
       else if (a === "del") this._delete();
       else if (a === "group") this._group(true);
@@ -317,9 +314,8 @@ export class EditorSession {
     for (const b of bar.querySelectorAll<HTMLElement>(".idle")) b.classList.toggle("hide", !!n);
     on("furnvis", e.showFurn);
     on("snap", e.snap);
-    this._syncLookPanel();
-    this._syncRoomCardsPanel();
-    on("controls", ed.querySelector<HTMLElement>(".rcp"));
+    for (const [button, panel] of Object.entries(panelButtons)) on(button, isOpen(this, panel));
+    refreshSidePanels(this);
     on("bp", e.primary?.[0] === "p" && n);
     dis("dup", !n);
     dis("ungroup", !n);

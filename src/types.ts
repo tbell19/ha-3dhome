@@ -123,16 +123,6 @@ export interface Blueprint {
   show?: boolean;
 }
 
-/** The pre-v4.7 axis-aligned walls: `{axis, at, spans, doors}`. */
-export interface LegacyWall {
-  axis: "x" | "y";
-  at: number;
-  spans?: Pt[];
-  doors?: Pt[];
-  h?: number;
-  note?: string;
-}
-
 /** An entry of `scene.objects` or `scene.overlays`. */
 export interface SceneItem {
   type: string;
@@ -144,11 +134,6 @@ export interface SceneItem {
   rz?: number;
   group?: string;
   size?: number | Pt3;
-  // doorpanel
-  axis?: "x" | "y";
-  at?: number;
-  span?: Pt;
-  fill?: Colour;
   // shelf
   box?: [number, number, number, number, number];
   shelves?: number[];
@@ -156,11 +141,6 @@ export interface SceneItem {
   // table (radius), fan (radius, ceiling)
   r?: number;
   ceiling?: number;
-  // plantwall
-  x1?: number;
-  x2?: number;
-  z1?: number;
-  z2?: number;
   // model
   name?: string;
   lib?: string;
@@ -182,20 +162,10 @@ export interface SceneItem {
   // pendant
   top?: number;
   // track, line
-  a?: number[];
-  b?: number[];
-  heads?: number[];
-  stroke?: Colour;
-  // sink, burners, bulbs
+  // sink, burners
   rect?: number[];
   faucet?: Pt;
   pts?: Pt[];
-  // glasswall, cornerglass, railing
-  y1?: number;
-  y2?: number;
-  posts?: number[];
-  handle?: number;
-  x_end?: number;
   [k: string]: unknown;
 }
 
@@ -218,8 +188,6 @@ export interface Scene {
   boxes?: BoxEntry[];
   objects?: SceneItem[];
   overlays?: SceneItem[];
-  walls?: LegacyWall[];
-  front_walls?: LegacyWall[];
   [k: string]: unknown;
 }
 
@@ -251,12 +219,10 @@ export interface LightConfig {
   fixture?: string;
   trim?: Colour;
   shade?: Colour;
-  kind?: "string" | "niche";
   points?: Pt[];
   count?: number;
   spacing?: number;
   sag?: number;
-  rect?: number[];
   size?: number; // scales the fixture model
   [k: string]: unknown;
 }
@@ -342,8 +308,6 @@ export interface CardConfig {
   outdoor_temperature?: string;
   sun_entity?: string;
   night_mode?: "always" | "never";
-  fill?: boolean;
-  aspect_ratio?: string;
   view_size?: number;
   pan_bounds?: [number, number, number, number];
   room_menu?: false | RoomMenuEntry[];
@@ -360,22 +324,12 @@ export interface CardConfig {
   look?: false | Partial<Record<keyof Looks, number | boolean>>;
   idle_view?: { room?: string; after?: number };
   max_pixel_ratio?: number;
-  dashboard?: string;
-  card_id?: string;
   three_url?: string;
   orbit_url?: string;
   jszip_url?: string;
   jsm_url?: string;
   rooms?: unknown;
   [k: string]: unknown;
-}
-
-/** The strategy config: the card config plus options for the generated dashboard. */
-export interface StrategyConfig extends CardConfig {
-  title?: string;
-  path?: string;
-  icon?: string;
-  extra_views?: Record<string, unknown>[];
 }
 
 /** One wall end: the wall's index in scene.wall_segs and which end. */
@@ -396,10 +350,9 @@ export type LayoutKey =
 /** A saved layout: what the editor changes, without the card's own options. */
 export type Layout = Pick<CardConfig, LayoutKey>;
 
-/** Where Save writes the layout. A card on a dashboard saves into the dashboard; the 3D Home panel hands its card a
- * store that saves through the integration instead (card.layoutStore). */
+/** Where Save writes the layout: the panel hands its map a store that saves through the integration (map.layoutStore). */
 export interface LayoutStore {
-  /** what the toast says once saved, e.g. "Saved to the dashboard" */
+  /** what the toast says once saved, e.g. "Saved" */
   readonly savedMessage: string;
   /** write the layout; resolves to the card config it now corresponds to, which the card takes as its own */
   save(layout: Layout, config: CardConfig): Promise<CardConfig>;

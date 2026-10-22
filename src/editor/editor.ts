@@ -33,9 +33,7 @@ export class Editor implements CardEditor {
   declare _ltuneOpen: boolean; // the light tuning panel is open
   declare _ltDrag: boolean;
   declare _lookDrag: boolean;
-  declare _entsRender: () => void; // redraws the entity panel's list
-  declare _libEl: HTMLElement; // the model library panel
-  declare _dl: Record<string, boolean>; // library downloads in progress
+  declare _downloads: Record<string, Promise<string | null>>; // library downloads in progress, by file
 
   // selection
   declare _pivotC: Pt; // the plan point the selection turns about

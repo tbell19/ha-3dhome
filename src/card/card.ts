@@ -1,4 +1,4 @@
-/* <ha-3dhome-card>: the custom element. This file holds its lifecycle (config, hass, connection state,
+/* <ha-3dhome-map>: the 3D map the panel shows. This file holds its lifecycle (config, hass, connection state,
  * attach/detach, teardown) and world rebuilds. The rest of the card is split by topic into the parts
  * below (startup.ts, camera.ts, …), whose methods are copied onto this class. The editor is a separate object.
  */
@@ -91,7 +91,7 @@ export interface Anchor {
 
 /** A light as built: one per fixture (bulbs at the same spot share it), with what _update() needs to drive it. */
 export interface LightGroup {
-  kind: "glow" | "string" | "niche";
+  kind: "glow" | "string";
   members: LightConfig[]; // the config entries of its bulbs
   keys: string[]; // their item keys ("l:3")
   L: LightConfig; // the first one, whose settings it uses
@@ -99,16 +99,11 @@ export interface LightGroup {
   light: THREE.PointLight | THREE.SpotLight;
   fixtures: AnyMesh[]; // meshes that glow when it is on
   bulbs?: AnyMesh[]; // string lights
-  niche?: AnyMesh | null;
   sprite?: THREE.Sprite; // the halo
   down?: boolean; // a can light, aimed straight down
   [k: string]: any; // live state kept by _update()
 }
 
-/* Cards that HA detached but haven't torn down yet, by dashboard + card_id. HA rebuilds a strategy dashboard's cards
- * whenever its config changes (every editor save), and the new element adopts the parked one instead of starting a
- * second WebGL scene from scratch: same camera, no reload, no flash. */
-const PARKED = new Map<string, Home3DCard>();
 /* a connection blip shorter than this (HA suspending a hidden tab, a Wi-Fi hand-over) doesn't show the offline pill */
 const CONN_GRACE = 2500;
 /* how long a lost WebGL context may stay lost on a visible page before the card rebuilds itself from scratch */
@@ -118,8 +113,6 @@ const sameOptions = (a: CardConfig, b: CardConfig) => {
   const options = (c: CardConfig) => stableJSON({ ...c, ...Object.fromEntries(LAYOUT_KEYS.map((k) => [k, null])) });
   return options(a) === options(b);
 };
-const cardIdent = (cfg: CardConfig) =>
-  `${cfg.dashboard || decodeURIComponent(location.pathname.split("/")[1] || "lovelace")}|${cfg.card_id || ""}`;
 
 /* The card's methods live in its parts (one file per topic) and are copied onto the prototype below. The editor is a
  * separate object (src/editor/editor.ts), created when Edit is first pressed, that the card talks to through CardEditor
@@ -139,9 +132,8 @@ export class Home3DCard extends HTMLElement {
   /* `declare` adds types only: no field is created, so nothing changes at runtime. */
 
   // config and Home Assistant
-  declare _config: CardConfig; // the card config as Home Assistant gave it
+  declare _config: CardConfig; // the config as the panel gave it (the integration's stored config)
   declare _cfgJSON: string; // its stableJSON, to spot identical configs
-  declare _ident: string; // dashboard + card_id, the key in PARKED
   declare _hass: Hass;
   declare _hassRaf: number | null; // the frame that applies the latest hass
   declare _watch: string[]; // entities the config mentions (watchedEntities)
@@ -153,8 +145,7 @@ export class Home3DCard extends HTMLElement {
     states: Map<string, HassEntity>;
   } | null;
   declare _seenCfg: CardConfig | null;
-  declare _inner: Home3DCard | null; // set when this element is only a shell around an adopted card
-  declare _layoutStore: LayoutStore | null; // where Save writes (see layoutStore); the dashboard when not set
+  declare _layoutStore: LayoutStore | null; // where Save writes (see layoutStore)
 
   // lifecycle
   declare _ready: boolean;
@@ -232,8 +223,6 @@ export class Home3DCard extends HTMLElement {
   declare _fixtures: { x: number; y: number; mesh: AnyMesh }[]; // glowing parts of objects and overlays, for lights to claim
   declare _screens: Screen[];
   declare _floorMeshes: THREE.Mesh[];
-  declare _bulbs: AnyMesh[] | null; // the `bulbs` overlay (older string lights)
-  declare _niche: AnyMesh | null; // the plant wall's lit panel
   declare _doorLeaves: DoorLeaf[];
   declare _doorAnim: object | null; // the running door animation
   declare _stage: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | null; // the drop shadow under the house
@@ -295,16 +284,13 @@ export class Home3DCard extends HTMLElement {
   declare _tcUsed: boolean;
   declare _cycleHinted: boolean;
   setConfig(config: CardConfig): void {
-    if (this._inner) return this._inner.setConfig(config); // a shell around an adopted card
-    // HA hands cards a fresh (but often identical) config whenever it re-renders — e.g. strategy dashboards are
-    // regenerated on every entity/device/area registry change. Rebuilding the whole WebGL scene each time leaked
-    // contexts, so ignore no-op updates and fully tear down before a real rebuild.
+    // An identical config changes nothing. One that differs only in its layout (a save here or on another device) is
+    // rebuilt in the running scene; anything else gets a full teardown first, so no WebGL context is left behind.
     const json = stableJSON(config || {});
     if (json === this._cfgJSON && (this._ready || this._loading)) return;
     const layoutOnly = this._ready && !this._edit && sameOptions(this._config, config || {});
     this._cfgJSON = json;
     this._config = config || {};
-    this._ident = cardIdent(this._config);
     if (layoutOnly) return this._applyLayout(); // a new layout (saved here or on another device): keep the renderer
     this._teardown();
     this._kick();
@@ -318,25 +304,12 @@ export class Home3DCard extends HTMLElement {
     this._requestRender();
   }
 
-  /* start up, a tick later: HA may attach this card before it detaches the one it replaces, which we'd rather adopt */
+  /* start up a tick later, once hass and the config have both arrived */
   _kick() {
-    if (this._kickT || this._inner) return;
+    if (this._kickT) return;
     this._kickT = setTimeout(() => {
       this._kickT = null;
-      if (!this.isConnected || !this._hass || !this._config || this._ready || this._loading || this._inner) return;
-      const old = PARKED.get(this._ident);
-      if (old && old !== this && !old.isConnected && old._ready && old._ident === this._ident) {
-        PARKED.delete(this._ident);
-        clearTimeout(old._idleT);
-        this._inner = old;
-        const root = this.shadowRoot || this.attachShadow({ mode: "open" });
-        root.innerHTML = "<style>:host { display: block; }</style>";
-        root.append(old);
-        old.hass = this._hass;
-        old.layoutStore = this._layoutStore;
-        old.setConfig(this._config); // usually identical, so nothing is rebuilt
-        return;
-      }
+      if (!this.isConnected || !this._hass || !this._config || this._ready || this._loading) return;
       this._loading = true;
       this._init().catch((e) => this._fail(e));
     }, 0);
@@ -421,25 +394,12 @@ export class Home3DCard extends HTMLElement {
     if (this.shadowRoot) this.shadowRoot.innerHTML = "";
   }
 
-  getCardSize() {
-    return 12;
-  }
-
-  getGridOptions() {
-    return { columns: "full", rows: "auto" };
-  }
-
-  /** Where Save writes. The 3D Home panel sets it; a card on a dashboard leaves it unset and saves into the dashboard. */
+  /** Where Save writes: the panel's store, which saves through the integration. */
   set layoutStore(store: LayoutStore | null) {
     this._layoutStore = store;
-    if (this._inner) this._inner.layoutStore = store;
   }
 
   set hass(hass: Hass) {
-    if (this._inner) {
-      this._inner.hass = hass;
-      return;
-    }
     this._hass = hass;
     if (!this._loading && !this._ready) this._kick();
     // HA hands over a new hass for every state change anywhere in the house, often dozens in a burst. Apply them once
@@ -578,26 +538,17 @@ export class Home3DCard extends HTMLElement {
   }
 
   disconnectedCallback() {
-    if (this._inner) return; // the adopted card parks itself
     this._ro?.disconnect();
-    // HA detaches cards when you switch views / dashboards and may never reattach this instance:
-    // free the GPU after a grace period (unless there are unsaved edits). Meanwhile a replacement card may adopt it.
-    if (this._ready && this._ident) PARKED.set(this._ident, this);
+    // Leaving the page detaches the map. The panel keeps it for when you come back, but if that takes more than 30 s
+    // the GPU memory is given back (unless there are unsaved edits) and the map starts again on return.
     clearTimeout(this._idleT);
     this._idleT = setTimeout(() => {
-      if (this.isConnected) return;
-      if (PARKED.get(this._ident) === this) PARKED.delete(this._ident);
-      if (!this._edit?.dirty) this._teardown();
+      if (!this.isConnected && !this._edit?.dirty) this._teardown();
     }, 30000);
   }
 
   connectedCallback() {
-    if (this._inner) {
-      if (!this._inner.isConnected && this.shadowRoot) this.shadowRoot.append(this._inner);
-      return;
-    }
     clearTimeout(this._idleT);
-    if (PARKED.get(this._ident) === this) PARKED.delete(this._ident);
     if (this._ro && this._wrap) this._ro.observe(this._wrap);
     else this._kick();
   }
@@ -622,7 +573,7 @@ export class Home3DCard extends HTMLElement {
   }
 
   _fail(e: any) {
-    console.error("ha-3dhome-card", e);
+    console.error("ha-3dhome", e);
     const root = this.shadowRoot || this.attachShadow({ mode: "open" });
     root.innerHTML = `<ha-card><div style="padding:16px">3D map failed to load: ${esc((e && e.message) || e)}</div></ha-card>`;
   }
@@ -637,8 +588,6 @@ export class Home3DCard extends HTMLElement {
     this._fixtures = [];
     this._screens = [];
     this._floorMeshes = [];
-    this._bulbs = null;
-    this._niche = null;
     this._cur = null;
     this._xf = null;
     const sc = this._cfg().scene || {};
@@ -664,9 +613,7 @@ export class Home3DCard extends HTMLElement {
   _showEmpty() {
     const cfg = this._cfg(),
       sc = cfg.scene || {};
-    const empty =
-      !this._edit &&
-      ![sc.wall_segs, sc.walls, sc.front_walls, sc.floors, sc.boxes, sc.objects, cfg.lights].some((a) => a?.length);
+    const empty = !this._edit && ![sc.wall_segs, sc.floors, sc.boxes, sc.objects, cfg.lights].some((a) => a?.length);
     let el = this._wrap?.querySelector<HTMLElement>(".empty");
     if (!empty) return el?.remove();
     if (!el) {
@@ -676,7 +623,7 @@ export class Home3DCard extends HTMLElement {
     }
     el.innerHTML = `<b>Your 3D home is empty</b><span>${
       this._hass?.user?.is_admin
-        ? `Press ${ic("pencil-outline")}Edit, then Floor plan, to draw your walls and rooms. Save keeps them ${this._layoutStore ? "here" : "in this dashboard"}.`
+        ? `Press ${ic("pencil-outline")}Edit, then Floor plan, to draw your walls and rooms. Save keeps them here.`
         : "Ask an administrator to draw the floor plan with the Edit button."
     }</span>`;
   }

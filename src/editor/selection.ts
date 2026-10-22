@@ -6,6 +6,7 @@ import type { GenericItem } from "../core/items";
 import type { EditState } from "../card/card";
 import type { Editor } from "./editor";
 import { CX, CY, PLAN, R1, ROTATABLE, itemCenter, jclone, mapPts, mean, rotPt, shiftItem } from "./shared";
+import { closeSidePanel } from "./side-panels";
 
 export class EditorSelection {
   /* ----- selection ----- */
@@ -46,34 +47,13 @@ export class EditorSelection {
         test = near(x, y, (it.r ?? 22) / 2 + 4);
         break;
       }
-      case "track": {
-        const a = w(it.a[0], it.a[1]),
-          b = w(it.b[0], it.b[1]);
-        test = (x, y) => {
-          const dx = b[0] - a[0],
-            dy = b[1] - a[1],
-            L2 = dx * dx + dy * dy || 1;
-          const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L2));
-          return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy) < 8;
-        };
-        break;
-      }
-      case "plantwall":
-        test = (x, y) => x > it.x1 - 4 && x < it.x2 + 4 && Math.abs(y - it.y) < 12;
-        break;
-      case "bulbs":
-      case "railing": {
-        const out: string[] = [];
-        this._list("l").forEach((L, i) => L.kind === "string" && out.push("l:" + i));
-        return out;
-      }
       default:
         return [];
     }
     const out: string[] = [];
     this._list("l").forEach((L, i) => {
       const p = itemCenter("l", L);
-      if (L.kind !== "string" && test(p[0], p[1])) out.push("l:" + i);
+      if (L.fixture !== "string" && test(p[0], p[1])) out.push("l:" + i);
     });
     this._list("h").forEach((H, i) => {
       if (test(H.x, H.y)) out.push("h:" + i);
@@ -119,8 +99,8 @@ export class EditorSelection {
     this.buildRoomHandles();
     this.buildStringHandles();
     if (e.sel.size) {
-      this.card._ed.querySelector<HTMLElement>(".lookp") && this._toggleLookPanel();
-      this.card._ed.querySelector<HTMLElement>(".rcp") && this._toggleRoomCardsPanel();
+      closeSidePanel(this, "lookp"); // they sit where the inspector shows
+      closeSidePanel(this, "rcp");
     }
     this.renderInspector();
     this._syncBar();
@@ -344,10 +324,7 @@ export class EditorSelection {
           return [a + P2.x - P.x, b + P2.z - P.z];
         });
         if (PLAN.has(k)) continue;
-        if (it.rect) {
-          it.rect[2] = R1(it.rect[2] + P2.y - P.y);
-          it.rect[3] = R1(it.rect[3] + P2.y - P.y);
-        } else it.z = R1(Math.max(0, P2.y));
+        it.z = R1(Math.max(0, P2.y));
       }
     }
   }
@@ -362,10 +339,7 @@ export class EditorSelection {
         continue;
       }
       mapPts(it, (x, y) => [x + dx, y + dy]);
-      if (dz && it.rect) {
-        it.rect[2] = R1(it.rect[2] + dz);
-        it.rect[3] = R1(it.rect[3] + dz);
-      } else if (dz) it.z = R1(Math.max(0, itemCenter(k, it)[2] + dz));
+      if (dz) it.z = R1(Math.max(0, itemCenter(k, it)[2] + dz));
     }
   }
 

@@ -132,7 +132,6 @@ export class LightsPart {
       l = rec.light as THREE.PointLight & Partial<THREE.SpotLight>,
       r = L.r ?? 40;
     if (rec.kind === "string") l.distance = Math.max(140, stringLen(L.points || []) * 0.9) * (r / 40);
-    else if (rec.kind === "niche") l.distance = 90 * (r / 40);
     else l.distance = r * (l.isSpotLight ? 3.2 : 2.6);
     l.decay = L.decay ?? (rec.kind === "glow" ? 1.1 : 1.2);
     if (l.isSpotLight) {
@@ -170,8 +169,8 @@ export class LightsPart {
     // group co-located bulbs into one physical light per fixture
     const groups = new Map<string, Pick<LightGroup, "kind" | "members" | "keys" | "L">>();
     (cfg.lights || []).forEach((L, i) => {
-      if (L.kind === "string" || L.fixture === "string" || L.kind === "niche") {
-        groups.set("e" + i, { kind: L.fixture === "string" ? "string" : L.kind!, members: [L], keys: ["l:" + i], L });
+      if (L.fixture === "string") {
+        groups.set("e" + i, { kind: "string", members: [L], keys: ["l:" + i], L });
         return;
       }
       const key = `${Math.round(L.x)}:${Math.round(L.y)}:${Math.round(L.z ?? 40)}`;
@@ -194,12 +193,7 @@ export class LightsPart {
           [mx, my] = pts.length ? mean(pts) : [CX, CY];
         rec.light = new T.PointLight(0xffd59a, 0, 140, 1.2);
         rec.light.position.set(mx - CX, (L.z ?? 17) + 4, my - CY);
-        rec.bulbs = L.fixture === "string" ? this._buildFixture(L, grp) : this._bulbs || [];
-      } else if (g.kind === "niche") {
-        const [x1, x2, z1, z2, Y] = L.rect;
-        rec.light = new T.PointLight(0xe2ffec, 0, 90, 1.2);
-        rec.light.position.set((x1 + x2) / 2 - CX, (z1 + z2) / 2, Y + 10 - CY);
-        rec.niche = this._niche;
+        rec.bulbs = this._buildFixture(L, grp);
       } else {
         const aimed = L.gx != null && Math.hypot(L.gx - L.x, L.gy - L.y) > 12,
           down = !aimed && L.fixture === "can"; // can lights shine straight down
@@ -367,12 +361,6 @@ export class LightsPart {
         continue;
       const [ax, ay] = rotPt(1, 0, 0, 0, o.rot || 0);
       aps.push({ x: o.x, y: o.y, ax, ay, w: o.w, z: o.z || 0, h: o.h ?? H });
-    }
-    for (const v of sc.overlays || []) {
-      if (v.type === "glasswall")
-        aps.push({ x: v.x, y: (v.y1 + v.y2) / 2, ax: 0, ay: 1, w: Math.abs(v.y2 - v.y1), z: 0, h: H });
-      else if (v.type === "cornerglass")
-        aps.push({ x: (v.x1 + v.x2) / 2, y: v.y, ax: 1, ay: 0, w: Math.abs(v.x2 - v.x1), z: 0, h: H });
     }
     aps.sort((a, b) => b.w - a.w);
     for (const a of aps.slice(0, cfg.max_window_lights ?? 10)) {

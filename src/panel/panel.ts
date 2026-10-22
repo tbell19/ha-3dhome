@@ -1,12 +1,10 @@
 /* <ha-3dhome-panel>: the 3D Home page in Home Assistant's sidebar, added by the ha_3dhome integration
  * (custom_components/ha_3dhome).
  *
- * Home Assistant gives a panel the same `hass` updates a card gets, but no dashboard around it: the panel shows one
- * <ha-3dhome-card> filling the page. Its config lives in the integration's storage rather than in a dashboard. The
- * panel follows it over the websocket (ha_3dhome/config/subscribe), so a save on one device shows up on every other
- * one, and hands the card a LayoutStore so Save writes there (ha_3dhome/config/save).
- *
- * Unlike a dashboard, saving doesn't regenerate anything: the card keeps its WebGL scene and just rebuilds the world.
+ * The panel shows one <ha-3dhome-map> filling the page. Its config lives in the integration's storage. The panel
+ * follows it over the websocket (ha_3dhome/config/subscribe), so a save on one device shows up on every other one, and
+ * hands the map a LayoutStore so Save writes there (ha_3dhome/config/save). A save keeps the map's WebGL scene and only
+ * rebuilds what it shows.
  */
 import type { CardConfig, Hass, LayoutStore } from "../types";
 import { esc } from "../core/util";
@@ -25,7 +23,7 @@ interface Saved {
   rev: number;
 }
 
-/** What the panel uses of its <ha-3dhome-card>. */
+/** What the panel uses of its <ha-3dhome-map>. */
 interface MapCard extends HTMLElement {
   hass: Hass;
   layoutStore: LayoutStore | null;
@@ -43,7 +41,7 @@ interface PageView {
 const VIEWS = new Map<string, PageView>(); // by config entry id
 
 /** the parts of a card config the panel decides itself, so they aren't stored */
-const PANEL_OWNED = ["type", "fill", "dashboard", "card_id"] as const;
+const PANEL_OWNED = ["type", "fill", "dashboard", "card_id"] as const; // the last three were card options before v6
 
 export class Home3DPanel extends HTMLElement {
   private _hass: Hass | null = null;
@@ -108,7 +106,7 @@ export class Home3DPanel extends HTMLElement {
   private _attach(entryId: string) {
     let view = VIEWS.get(entryId);
     if (!view) {
-      view = { card: document.createElement("ha-3dhome-card") as MapCard, rev: -1, waiting: null };
+      view = { card: document.createElement("ha-3dhome-map") as MapCard, rev: -1, waiting: null };
       VIEWS.set(entryId, view);
     }
     this._view = view;
@@ -154,13 +152,8 @@ export class Home3DPanel extends HTMLElement {
   private _show(saved: Saved) {
     const view = this._view!;
     view.rev = saved.rev;
-    view.card.setConfig(this._cardConfig(saved.config)); // only the world is rebuilt when just the layout changed
+    view.card.setConfig(saved.config); // only the world is rebuilt when just the layout changed
     this._offerImport(saved.config);
-  }
-
-  /** the stored config as the card's config: full page, and named after the panel (the card's parking key) */
-  private _cardConfig(config: CardConfig): CardConfig {
-    return { ...config, type: "custom:ha-3dhome-card", fill: true, dashboard: this._panel!.url_path };
   }
 
   /** the card config as stored: without what the panel sets itself */
@@ -177,7 +170,7 @@ export class Home3DPanel extends HTMLElement {
       save: async (layout, config) => {
         const next = this._stored({ ...config, ...layout });
         await this._write(view, next);
-        return this._cardConfig(next);
+        return next;
       },
     };
   }

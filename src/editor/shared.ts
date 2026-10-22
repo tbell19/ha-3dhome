@@ -4,7 +4,6 @@ import type { EditorApi } from "../editor-api";
 
 const H = window.__ha3dhome as EditorApi; // checked by ha-3dhome-editor.ts before this module loads
 export const {
-  strategyCard,
   stableJSON,
   inPoly,
   ACTIVE,
@@ -19,10 +18,6 @@ export const {
   ROOM_FILLS,
   ROTATABLE,
   SF,
-  STRATEGY_TYPES,
-  CARD_TYPES,
-  findCard,
-  STRUCT_TYPES,
   SURFACES,
   DOOR_STYLES,
   FIXTURES,
@@ -36,7 +31,6 @@ export const {
   itemZ,
   scaleItem,
   jclone,
-  legacyWalls,
   lookOf,
   AMBIENT,
   mapPts,

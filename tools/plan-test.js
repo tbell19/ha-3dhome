@@ -1,93 +1,33 @@
-/* Floor-plan editor test: wall migration, wall drawing, joints, doors/windows (negative boxes), blueprint + scale.
+/* Floor-plan editor test: wall drawing, joints, doors/windows (negative boxes), blueprint + scale.
  *
- *   node tools/plan-test.js [--dist]          (npm run test:plan)
+ *   node tools/plan-test.js [--dist] [--mobile]          (npm run test:plan)
  *
- * Same harness as smoke-test.js: the real dashboard layout, a fake hass, Three.js from node_modules, SwiftShader.
+ * Same harness as smoke-test.js (tools/harness.js): the panel on the sample home, a fake hass, SwiftShader.
  * Screenshots go to tools/out/plan-*.png. Exit code is non-zero if any check fails.
  */
-const { chromium } = require("playwright");
 const fs = require("fs"),
   path = require("path");
 const { build: buildMockLib } = require("./mock/build-mock-lib");
+const { OUT, launch, panelPage, serve, check, report } = require("./harness");
 
-const ROOT = path.join(__dirname, "..");
 const MOBILE = process.argv.includes("--mobile");
-const CODE = require("./bundle").bundle({ dist: process.argv.includes("--dist") }); // { core, editor }
-const OUT = path.join(__dirname, "out");
-fs.mkdirSync(OUT, { recursive: true });
-const results = [];
-const check = (name, ok, detail = "") => {
-  results.push(ok);
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`);
-};
-const js = (body) => ({ body, contentType: "application/javascript", headers: { "access-control-allow-origin": "*" } });
-const esm = (rel) =>
-  fs
-    .readFileSync(path.join(ROOT, "node_modules/three/examples/jsm", rel), "utf8")
-    .replace(/from 'three'/g, "from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm'");
 
 (async () => {
   const libZip = await buildMockLib();
-  const dash = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/fixtures/test-home.json"), "utf8"));
-  const legacyDoors = dash.strategy.scene.walls.reduce((n, w) => n + (w.doors || []).length, 0),
-    legacyRuns = dash.strategy.scene.walls.length + dash.strategy.scene.front_walls.length;
-  const exe =
-    process.env.CHROMIUM_PATH || (fs.existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined);
-  const browser = await chromium.launch({
-    executablePath: exe,
-    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+  const { browser, page: p, errors, ev, wait } = await launch({ mobile: MOBILE });
+  const html = panelPage({
+    states: { "sun.sun": { state: "above_horizon", attributes: {} } },
+    hass: `{config:{unit_system:{length:'mi'}},
+      fetchWithAuth:async(url,init)=>{ if(url==='/api/image/upload'&&init.body.get('file')){uploads++;return new Response(JSON.stringify({id:'bp1'}),{status:200})} return new Response('',{status:404}) }}`,
+    head: `window.uploads=0;`,
   });
-  const p = await browser.newPage(
-    MOBILE
-      ? { viewport: { width: 390, height: 800 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }
-      : { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 },
-  );
-  const errors = [];
-  p.on("pageerror", (e) => {
-    errors.push(e.message);
-    console.log("pageerror:", e.message);
-  });
-  await p.route("https://cdn.jsdelivr.net/**", (r) => {
-    const u = r.request().url();
-    for (const [k, f] of [
-      ["OrbitControls", "controls/OrbitControls.js"],
-      ["TransformControls", "controls/TransformControls.js"],
-      ["OBJLoader", "loaders/OBJLoader.js"],
-      ["MTLLoader", "loaders/MTLLoader.js"],
-    ])
-      if (u.includes(k)) return r.fulfill(js(esm(f)));
-    return r.fulfill(js(fs.readFileSync(path.join(ROOT, "node_modules/three/build/three.module.js"), "utf8")));
-  });
-  const html = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1"><body style="margin:0;background:#111"><div id=host></div>
-<script>customElements.define('ha-card',class extends HTMLElement{connectedCallback(){this.style.display='block'}});customElements.define('ha-icon',class extends HTMLElement{});</script>
-<script type=module>${CODE.editor}</script>
-<script type=module>${CODE.core}
-const __dash=${JSON.stringify(dash)};
-window.saved=null; window.uploads=0;
-const __gen=await customElements.get('ll-strategy-dashboard-ha-3dhome').generate(__dash.strategy);
-window.genCfg=__gen.views[0].cards[0];
-const __card=document.createElement('ha-3dhome-card'); __card.setConfig(genCfg); document.getElementById('host').append(__card);
-__card.hass={states:{'sun.sun':{state:'above_horizon',attributes:{}}},user:{is_admin:true},config:{unit_system:{length:'mi'}},
-  callService:async()=>{},connection:{subscribeEvents:async()=>()=>{}},
-  fetchWithAuth:async(url,init)=>{ if(url==='/api/image/upload'&&init.body.get('file')){uploads++;return new Response(JSON.stringify({id:'bp1'}),{status:200})} return new Response('',{status:404}) },
-  callWS:async(m)=>{if(m.type==='lovelace/config')return JSON.parse(JSON.stringify(__dash));if(m.type==='lovelace/config/save'){window.saved=m.config;return null}}};
-window.card=__card;
-window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src='data:image/png;base64,'+s});
-  const [A,B]=await Promise.all([ld(a),ld(b)]);const c=document.createElement('canvas');c.width=A.width;c.height=A.height;const g=c.getContext('2d');
-  g.drawImage(A,0,0);const da=g.getImageData(0,0,c.width,c.height).data;g.drawImage(B,0,0);const db=g.getImageData(0,0,c.width,c.height).data;
-  let n=0;for(let i=0;i<da.length;i+=4){if(Math.abs(da[i]-db[i])+Math.abs(da[i+1]-db[i+1])+Math.abs(da[i+2]-db[i+2])>60)n++}return n/(da.length/4)};
-</script>`;
-  await p.route("http://ha.test/**", (r) => {
-    const u = r.request().url();
+  await serve(p, html, (r, u) => {
     if (u.includes("/api/image/serve/bp1/original"))
       return r.fulfill({
         body: fs.readFileSync(path.join(path.dirname(libZip), "art_wide.png")),
         contentType: "image/png",
       });
-    return r.fulfill({ body: html, contentType: "text/html" });
   });
-  const ev = (s) => p.evaluate(s);
-  const wait = (ms) => p.waitForTimeout(ms);
   const screen = (x, y, z = 0) =>
     ev(`(()=>{const v=new card.T.Vector3(${x}-296,${z},${y}-391).project(card._cam);
     const r=card._renderer.domElement.getBoundingClientRect();return [r.left+(v.x+1)/2*r.width, r.top+(1-v.y)/2*r.height]})()`);
@@ -102,7 +42,6 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
     return b.toString("base64");
   };
 
-  await p.goto("http://ha.test/3d-home/3d");
   await wait(6000);
   if (MOBILE) {
     // phone: taps draw walls; toolbar scrolls; toast sits under the bar
@@ -139,30 +78,9 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
     await shot("plan-mobile.png");
     check("no page errors", errors.length === 0, errors.join(" | "));
     await browser.close();
-    const failed = results.filter((x) => !x).length;
-    console.log(`\n${results.length - failed}/${results.length} floor plan checks passed (mobile).`);
-    process.exit(failed ? 1 : 0);
+    report("floor plan checks", " (mobile)");
   }
-  const before = await shot("plan-0-legacy.png");
-
-  // 1. migration: entering edit converts the old axis walls; saving + reloading looks the same
-  await ev(`card._openEditor()`);
-  await wait(1200);
-  const m = await ev(
-    `({segs:card._work.scene.wall_segs.length, opens:card._work.scene.openings.length, legacy:!!card._work.scene.walls})`,
-  );
-  check(
-    "old walls convert to wall segments + door openings",
-    m.segs >= legacyRuns && m.opens === legacyDoors && !m.legacy,
-    JSON.stringify(m),
-  );
-  await ev(`card._editor._save()`);
-  await wait(800);
-  await ev(`card.setConfig({...genCfg, ...window.saved.strategy, type:'custom:ha-3dhome-card', fill:true})`);
-  await wait(5000);
-  const migrated = await shot("plan-1-migrated.png");
-  const diff = await ev(`imgDiff(${JSON.stringify(before)}, ${JSON.stringify(migrated)})`);
-  check("converted walls render (almost) identically", diff < 0.01, `${(diff * 100).toFixed(2)}% of pixels differ`);
+  const o0 = await ev(`card._config.scene.openings.length`);
 
   // 2. floor plan mode
   await ev(`card._openEditor()`);
@@ -461,14 +379,13 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
   await ev(`card._editor._save()`);
   await wait(800);
   const st = await ev(
-    `({segs:saved.strategy.scene.wall_segs.length, opens:saved.strategy.scene.openings.length, bp:saved.strategy.scene.blueprints.length, legacy:!!saved.strategy.scene.walls})`,
+    `({segs:server.config.scene.wall_segs.length, opens:server.config.scene.openings.length, bp:server.config.scene.blueprints.length})`,
   );
   check(
-    "save stores walls, openings and the blueprint in the strategy",
-    st.segs === n0 + 2 && st.opens === legacyDoors + 2 && st.bp === 1 && !st.legacy,
+    "save stores walls, openings and the blueprint",
+    st.segs === n0 + 2 && st.opens === o0 + 2 && st.bp === 1,
     JSON.stringify(st),
   );
-  await ev(`card.setConfig({...genCfg, ...window.saved.strategy, type:'custom:ha-3dhome-card', fill:true})`);
   await wait(5000);
   await shot("plan-5-saved.png");
   check(
@@ -641,11 +558,11 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
   await wait(1500);
 
   // 9. door leaves follow a sensor
-  const di = await ev(`window.saved.strategy.scene.openings.findIndex(o=>o.style==='panel')`);
+  const di = await ev(`server.config.scene.openings.findIndex(o=>o.style==='panel')`);
   check("new doors get a solid door", di >= 0);
-  await ev(`(()=>{const st=JSON.parse(JSON.stringify(window.saved.strategy)); st.scene.openings[${di}].entity='binary_sensor.test_door';
+  await ev(`(()=>{const st=JSON.parse(JSON.stringify(server.config)); st.scene.openings[${di}].entity='binary_sensor.test_door';
     for (const [k, style] of [['sliding',1],['double',2],['barn',3],['garage',4]]) { const o=st.scene.openings.find(o=>o.kind==='door'&&!o.style); if (o) o.style=k; }
-    card.setConfig({...genCfg, ...st, type:'custom:ha-3dhome-card', fill:true})})()`);
+    server.saveFrom(st)})()`);
   await wait(4000);
   const shut = await ev(`card._doorLeaves.map(d=>d.t)`);
   await ev(
@@ -674,11 +591,7 @@ window.imgDiff=async(a,b)=>{const ld=(s)=>new Promise(r=>{const i=new Image();i.
   check("no page errors", errors.length === 0, errors.join(" | "));
 
   await browser.close();
-  const failed = results.filter((x) => !x).length;
-  console.log(
-    `\n${results.length - failed}/${results.length} floor plan checks passed. Screenshots in tools/out/plan-*.png`,
-  );
-  process.exit(failed ? 1 : 0);
+  report("floor plan checks", " Screenshots in tools/out/plan-*.png");
 })().catch((e) => {
   console.error(e);
   process.exit(1);

@@ -1,9 +1,8 @@
 /* Look panel: a strength slider per render look, and where the map goes when nobody touches it.
- * The editor keeps the values in card._work; this component only shows them, so after any change (a slider, undo, a
- * save from another device) the editor renders it again and Preact updates what changed.
+ * The values live in card._work; the editor's setLook and setIdleView change them, one undo step each.
  */
-import { render } from "preact";
 import type { Editor } from "./editor";
+import { closeSidePanel } from "./side-panels";
 import { AMBIENT, IDLE_AFTER, lookOf } from "./shared.js";
 
 export type LookName = "ambient" | "light" | "ao" | "stage" | "bloom";
@@ -18,7 +17,7 @@ const LOOKS: { name: LookName; title: string; hint: string }[] = [
 
 const asPercent = (strength: number) => (strength ? `${Math.round(strength * 100)}%` : "Off");
 
-function LookPanel({ editor }: { editor: Editor }) {
+export function LookPanel({ editor }: { editor: Editor }) {
   const layout = editor.card._work;
   const strength = { ...lookOf(layout), ambient: layout.ambient ?? AMBIENT };
   const idleSeconds = Number(layout.idle_view?.after) || 0;
@@ -31,7 +30,7 @@ function LookPanel({ editor }: { editor: Editor }) {
     <>
       <header>
         <span class="ttl">Look</span>
-        <button title="Close" onClick={() => editor._toggleLookPanel()}>
+        <button title="Close" onClick={() => closeSidePanel(editor, "lookp")}>
           <ha-icon icon="mdi:close" />
         </button>
       </header>
@@ -83,8 +82,3 @@ function LookPanel({ editor }: { editor: Editor }) {
     </>
   );
 }
-
-/** Draws the Look panel into `host`, or updates it when it is already there. */
-export const renderLookPanel = (host: HTMLElement, editor: Editor) => render(<LookPanel editor={editor} />, host);
-/** Takes the Look panel out of `host` again, so Preact lets go of it. */
-export const clearLookPanel = (host: HTMLElement) => render(null, host);

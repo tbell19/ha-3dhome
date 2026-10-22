@@ -166,7 +166,7 @@ export class ModelsPart {
         return { node: obj, size, center, min: box.min.clone() };
       })();
       p.catch((e) => {
-        console.warn("ha-3dhome-card model", key, e);
+        console.warn("ha-3dhome model", key, e);
         MODELCACHE.delete(key);
       });
       MODELCACHE.set(key, p);

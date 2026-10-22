@@ -11,7 +11,7 @@ import { rotPt } from "../core/util";
 import { bArr, itemCenter, SIZED, sizeOf, sizeAnchor } from "../core/items";
 import { DOOR_STYLES, OPEN_STATES } from "../core/fixtures";
 import { SURFACES, paintSurface, type SurfaceCanvas } from "../core/surfaces";
-import { segDir, wallExtensions, wallPieces, legacyWalls } from "../core/plan-geometry";
+import { segDir, wallExtensions, wallPieces } from "../core/plan-geometry";
 
 export class ScenePart {
   /* The house has no visible roof, so the sun would light every room from above. An invisible roof over the rooms, plus
@@ -23,13 +23,8 @@ export class ScenePart {
     const T = this.T,
       WT = sc.wall_thickness ?? 4,
       G = new T.Group();
-    let segs = sc.wall_segs || [],
+    const segs = sc.wall_segs || [],
       opens = sc.openings || [];
-    if (sc.walls || sc.front_walls) {
-      const lw = legacyWalls(sc);
-      segs = [...segs, ...lw.segs];
-      opens = [...opens, ...lw.opens];
-    }
     const H = Math.max(sc.wall_height ?? 46, ...segs.filter((w) => !w.low).map((w) => w.h ?? 0)) + 0.5,
       TOP = H + 1.5; // over the tallest wall
     const mat = (this._mats.__roof ||= new T.MeshBasicMaterial({
@@ -482,30 +477,9 @@ export class ScenePart {
   }
 
   _buildScene(this: Home3DCard, sc: Scene) {
-    const H = sc.wall_height ?? 46,
-      LIN = sc.lintel ?? 8,
-      WT = sc.wall_thickness ?? 4,
-      LOW = sc.low ?? 8;
-    const wallCol = (sc.wall_colors || ["#e9dcc8"])[0],
-      wallMat = this._surfMat(wallCol, sc.wall_texture);
     const pal = sc.palette || {};
     const col = (c: Colour | Colour[]) => (typeof c === "string" ? (pal[c] || ["#888"])[0] : c[0]);
-    // walls
-    const wall = (axis: string, at: number, a: number, b: number, h: number, z: number) => {
-      const m =
-        axis === "y"
-          ? this._box(at - WT / 2, at + WT / 2, a, b, z, h, wallMat)
-          : this._box(a, b, at - WT / 2, at + WT / 2, z, h, wallMat);
-      this._planUV(m.geometry, m.position.x, m.position.y, m.position.z);
-      m.userData.wall = true;
-    };
-    for (const w of sc.walls || []) {
-      const h = w.h ?? H;
-      for (const [a, b] of w.spans || []) wall(w.axis, w.at, a, b, h, 0);
-      for (const [a, b] of w.doors || []) wall(w.axis, w.at, a, b, LIN, h - LIN);
-    }
-    for (const w of sc.front_walls || []) for (const [a, b] of w.spans) wall(w.axis, w.at, a, b, w.h ?? LOW, 0);
-    // free wall segments, openings, blueprint underlay (the editable floor plan)
+    // wall segments, openings, blueprint underlay (the editable floor plan)
     this._buildPlanLayer(sc);
     // boxes
     (sc.boxes || []).forEach((e, i) => {
@@ -533,10 +507,10 @@ export class ScenePart {
         sizeAnchor(o),
         [o.rx || 0, o.rz || 0],
       );
-      this._buildObject(o, H, LIN);
+      this._buildObject(o);
       this._endItem();
     });
-    // overlays (fixtures, glass, railings) never block light
+    // overlays (sinks, burners, pendants, fans) never block light
     this._noCast = true;
     (sc.overlays || []).forEach((o, i) => {
       const c = itemCenter("v", o);
@@ -545,16 +519,14 @@ export class ScenePart {
           o.rx || 0,
           o.rz || 0,
         ]);
-      this._buildOverlay(o, H, LOW);
+      this._buildOverlay(o);
       this._endItem();
     });
     this._noCast = false;
   }
 
-  _buildObject(this: Home3DCard, o: SceneItem, H: number, LIN: number) {
-    if (o.type === "doorpanel")
-      this._box(o.at - 0.6, o.at + 2.4, o.span[0], o.span[1], 0, H - LIN, o.fill || "#3a2a1e");
-    else if (o.type === "shelf") {
+  _buildObject(this: Home3DCard, o: SceneItem) {
+    if (o.type === "shelf") {
       const [x1, x2, y1, y2, h] = o.box;
       const c = (o.colors || ["#2c2622"])[0];
       this._box(x1, x2, y2 - 1.5, y2, 0, h, c);
@@ -582,38 +554,6 @@ export class ScenePart {
         [0, -1, 14, 4],
       ])
         this._sphere(o.x + dx, o.y + dy, z + dz, r, "#4f7a45");
-    } else if (o.type === "plantwall") {
-      const { x1, x2, z1, z2, y } = o;
-      this._box(x1 - 2, x2 + 2, y - 1, y + 3, z1 - 1.5, 1.5, "#f4f2ee");
-      this._niche = this._box(x1, x2, y - 1.2, y - 0.2, z1, z2 - z1, this._emissive("#f7f6f1"));
-      const sx = (x: number) => x1 + ((x - 246) * (x2 - x1)) / 54,
-        sz = (z: number) => z1 + ((z - 13) * (z2 - z1)) / 28;
-      for (const [a, b, z] of [
-        [248, 270, 21],
-        [280, 299, 21],
-        [248, 262, 29],
-        [276, 299, 29],
-        [248, 262, 36],
-        [284, 298, 36],
-      ])
-        this._box(sx(a), sx(b), y - 0.2, y + 3.5, sz(z) - 0.8, 0.8, "#a5835c");
-      for (const [x, z, r] of [
-        [252, 13, 3],
-        [262, 13, 2.2],
-        [270, 13, 2.5],
-        [286, 13, 2.2],
-        [293, 13, 2.3],
-        [254, 21, 2.2],
-        [266, 21, 1.8],
-        [284, 21, 2.5],
-        [292, 21, 1.9],
-        [252, 29, 1.9],
-        [258, 29, 1.7],
-        [282, 29, 1.6],
-        [290, 29, 2],
-      ])
-        this._sphere(sx(x), y + 1.8, sz(z) + r, r, "#4f8a46");
-      this._fixture((x1 + x2) / 2, y, this._sphere((x1 + x2) / 2, y + 1, z2 - 1.5, 1.6, this._emissive("#fffbe8")));
     } else if (o.type === "screen") {
       // 16:9 screen showing the entity's artwork / snapshot (drawn into a canvas texture in _drawScreen)
       const T = this.T,
@@ -654,7 +594,7 @@ export class ScenePart {
     }
   }
 
-  _buildOverlay(this: Home3DCard, o: SceneItem, H: number, LOW: number) {
+  _buildOverlay(this: Home3DCard, o: SceneItem) {
     const T = this.T;
     if (o.type === "sink") {
       const [x1, x2, y1, y2] = o.rect;
@@ -667,38 +607,9 @@ export class ScenePart {
         m.position.set(x - CX, o.z + 0.3, y - CY);
         this._add(m, false);
       }
-    else if (o.type === "line") {
-      const [ax, ay, az] = o.a,
-        [bx, by, bz] = o.b,
-        len = Math.hypot(bx - ax, by - ay, bz - az);
-      const m = new T.Mesh(
-        new T.CylinderGeometry((o.w || 0.6) / 2, (o.w || 0.6) / 2, len, 6),
-        this._mat(o.stroke || "#777"),
-      );
-      m.position.set((ax + bx) / 2 - CX, (az + bz) / 2, (ay + by) / 2 - CY);
-      m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), new T.Vector3(bx - ax, bz - az, by - ay).normalize());
-      this._add(m, false);
-    } else if (o.type === "pendant") {
+    else if (o.type === "pendant") {
       this._cyl(o.x, o.y, o.z + 6, 0.25, (o.top ?? 62) - o.z - 6, "#3a3a3a", 6);
       this._fixture(o.x, o.y, this._cyl(o.x, o.y, o.z, 2.8, 6, this._emissive("#fff1cf"), 16));
-    } else if (o.type === "track") {
-      const [ax, ay] = o.a,
-        [bx, by] = o.b;
-      this._box(
-        Math.min(ax, bx) - 0.8,
-        Math.max(ax, bx) + 0.8,
-        Math.min(ay, by) - 0.8,
-        Math.max(ay, by) + 0.8,
-        o.z,
-        1.2,
-        "#2a2a2a",
-      );
-      for (const t of o.heads || [0.15, 0.5, 0.85]) {
-        const x = ax + (bx - ax) * t,
-          y = ay + (by - ay) * t;
-        this._cyl(x, y, o.z - 3, 0.3, 3, "#2a2a2a", 6);
-        this._fixture(x, y, this._cyl(x, y, o.z - 6, 1.8, 3.5, this._emissive("#fff4d6"), 12, 1.2));
-      }
     } else if (o.type === "fan") {
       const z = o.z ?? 44,
         r = o.r ?? 22;
@@ -712,32 +623,6 @@ export class ScenePart {
         this._add(m);
       }
       this._fixture(o.x, o.y, this._sphere(o.x, o.y, z - 0.5, 3.6, this._emissive("#fff3d0")));
-    } else if (o.type === "glasswall") {
-      const Hh = o.h ?? H,
-        glass = this._mat("#a9cfe6", { transparent: true, opacity: 0.18, depthWrite: false });
-      const g = this._box(o.x - 0.3, o.x + 0.3, o.y1, o.y2, 0, Hh, glass);
-      g.castShadow = false;
-      for (const y of o.posts) this._box(o.x - 0.8, o.x + 0.8, y - 0.8, y + 0.8, 0, Hh, "#3b3f43");
-      this._box(o.x - 0.8, o.x + 0.8, o.y1, o.y2, Hh - 1.2, 1.2, "#3b3f43");
-      this._box(o.x - 0.8, o.x + 0.8, o.y1, o.y2, 0, 1, "#3b3f43");
-    } else if (o.type === "cornerglass") {
-      const g = this._box(
-        o.x1,
-        o.x2,
-        o.y - 0.3,
-        o.y + 0.3,
-        0,
-        LOW + 2,
-        this._mat("#a9cfe6", { transparent: true, opacity: 0.3, depthWrite: false }),
-      );
-      g.castShadow = false;
-    } else if (o.type === "railing") {
-      for (let y = o.y1 + 5; y <= o.y2; y += 12) this._cyl(o.x, y, 0, 0.4, o.h, "#d9cdb8", 6);
-      for (let x = o.x_end + 6; x < o.x; x += 12) this._cyl(x, o.y2, 0, 0.4, o.h, "#d9cdb8", 6);
-      this._box(o.x - 0.8, o.x + 0.8, o.y1, o.y2, o.h, 1, "#d9cdb8");
-      this._box(o.x_end, o.x, o.y2 - 0.8, o.y2 + 0.8, o.h, 1, "#d9cdb8");
-    } else if (o.type === "bulbs") {
-      this._bulbs = o.pts.map(([x, y]) => this._sphere(x, y, o.z, 1, this._emissive("#fff1c4")));
     }
   }
 }

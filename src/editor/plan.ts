@@ -3,22 +3,7 @@
 import type { Pt, SceneItem, WallEnd, WallSeg, Opening } from "../types";
 import type { GenericItem } from "../core/items";
 import type { Editor } from "./editor";
-import {
-  CX,
-  CY,
-  PLAN,
-  R1,
-  ROOM_FILLS,
-  STRUCT_TYPES,
-  SURFACES,
-  DOOR_STYLES,
-  esc,
-  ic,
-  jclone,
-  legacyWalls,
-  polyArea,
-  segDir,
-} from "./shared.js";
+import { CX, CY, PLAN, R1, ROOM_FILLS, SURFACES, DOOR_STYLES, esc, ic, jclone, polyArea, segDir } from "./shared.js";
 
 /** What snapPoint snaps against: `from` is the previous point (angle snapping), `exclude` the wall ends being dragged,
  * `room` the room corner being dragged. */
@@ -60,20 +45,8 @@ export class EditorPlan {
     const hide = !!this.card._plan && !this.card._edit?.showFurn;
     for (const [k, g] of this.card._items) {
       if (PLAN.has(k[0])) continue;
-      let vis = !hide;
-      if (hide && (k[0] === "o" || k[0] === "v")) vis = STRUCT_TYPES.has(this.item(k)?.type);
-      g.visible = vis;
+      g.visible = !hide;
     }
-  }
-
-  _migrateWalls(this: Editor) {
-    const sc = (this.card._work.scene ||= {});
-    if (!sc.walls?.length && !sc.front_walls?.length) return;
-    const { segs, opens } = legacyWalls(sc);
-    sc.wall_segs = [...(sc.wall_segs || []), ...segs];
-    sc.openings = [...(sc.openings || []), ...opens];
-    delete sc.walls;
-    delete sc.front_walls;
   }
 
   _setPlanMode(this: Editor, on: boolean) {

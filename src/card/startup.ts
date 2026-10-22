@@ -20,7 +20,7 @@ export class StartupPart {
       return;
     } // torn down / detached meanwhile
     const root = this.shadowRoot || this.attachShadow({ mode: "open" });
-    root.innerHTML = `<style>${cardStyles(cfg)}</style>${CARD_HTML}`;
+    root.innerHTML = `<style>${cardStyles}</style>${CARD_HTML}`;
     const wrap = (this._wrap = root.querySelector<HTMLElement>(".wrap"));
     this._ov = root.querySelector<HTMLElement>(".ov");
     this._ed = root.querySelector<HTMLElement>(".ed");

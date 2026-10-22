@@ -43,8 +43,8 @@ async def test_config_flow_adds_a_panel(hass: HomeAssistant) -> None:
     assert panel.config["_panel_custom"]["name"] == "ha-3dhome-panel"
     assert panel.config["_panel_custom"]["module_url"].startswith("/ha_3dhome/ha-3dhome.js?v=")
     assert panel.config["entry_id"] == done["result"].entry_id
-    # the card is loaded on every page too, so it works on dashboards without a resource
-    assert panel.config["_panel_custom"]["module_url"] in hass.data[DATA_EXTRA_MODULE_URL].urls
+    # only the panel loads the map: other pages don't pay for it
+    assert panel.config["_panel_custom"]["module_url"] not in hass.data[DATA_EXTRA_MODULE_URL].urls
 
 
 async def test_options_rename_the_panel(hass: HomeAssistant) -> None:
