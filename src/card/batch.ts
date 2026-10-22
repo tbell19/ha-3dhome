@@ -121,7 +121,6 @@ export class BatchPart {
         (mat as THREE.MeshLambertMaterial).color.setRGB(1, 1, 1);
         (mat as THREE.MeshLambertMaterial).vertexColors = true;
         mat.userData.batchCopy = true;
-        delete mat.userData.aoPatched; // a copy doesn't keep the original's shader hook (_bakeAO patches it)
       }
       const mm = new T.Mesh(geo, mat);
       mm.castShadow = gr.mesh.castShadow;
@@ -143,7 +142,6 @@ export class BatchPart {
     this._batched = [...hidden];
     this._batchOn = true;
     this._renderer.shadowMap.needsUpdate = true;
-    this._bakeAO();
     this._requestRender();
   }
 
@@ -218,7 +216,7 @@ function reverseWinding(geo: THREE.BufferGeometry) {
 /** → a key shared by materials that differ only in colour, or null when the colour can't move into the vertices */
 function tintKey(mat: THREE.Material): string | null {
   const m = mat as any;
-  const hooked = m.onBeforeCompile !== mat.constructor.prototype.onBeforeCompile && !m.userData.aoPatched;
+  const hooked = m.onBeforeCompile !== mat.constructor.prototype.onBeforeCompile;
   if (!m.color?.isColor || m.vertexColors || hooked) return null;
   const parts = SAME.map((k) => (m[k]?.isColor ? m[k].getHex() : m[k]));
   for (const k of [...MAPS, "emissive", "specular"]) parts.push(m[k]?.uuid ?? (m[k]?.isColor ? m[k].getHex() : null));
