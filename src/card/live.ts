@@ -245,6 +245,7 @@ export class LivePart {
       this._aoPass.enabled = L.ao > 0;
       this._aoPass.blendIntensity = L.ao;
     }
+    this._aoLevel = L.ao;
     if (this._bloomPass) {
       this._bloomPass.enabled = bloom;
       this._bloomPass.strength = 0.9 * L.bloom;
@@ -284,6 +285,33 @@ export class LivePart {
     return untone(s ? bg.lerp(new T.Color(0x141311), s) : bg); // the stage spotlight is a mesh (_stageSpot), so this stays flat
   }
 
+  /* → true when the last ambient occlusion still fits the next frame: the same camera, canvas, world and see-through
+   * room, with no shadow update pending (shadow maps are redrawn exactly when the geometry changes) and no door moving.
+   * Never while editing, where a drag moves things without a shadow update. Call it before the frame renders, which
+   * clears the shadow flag. */
+  _aoUnchanged(this: Home3DCard) {
+    const c = this._cam;
+    const r = this._renderer;
+    c.updateMatrixWorld(); // the render would; the controls only moved it
+    const now = [...c.matrixWorld.elements, ...c.projectionMatrix.elements, r.domElement.width, r.domElement.height];
+    const key = (this._aoKey ||= new Float64Array(now.length));
+    let same =
+      this._aoWorld === this._world &&
+      this._aoFade === this._fadeSig &&
+      !this._edit &&
+      !this._doorAnim &&
+      !r.shadowMap.needsUpdate;
+    // damping's last steps add up to well under a pixel, so changes below these tolerances count as the same view
+    for (let i = 0; i < now.length; i++)
+      if (Math.abs(key[i] - now[i]) > (i < 16 ? 1e-3 * Math.max(1, Math.abs(now[i])) : 1e-4 * Math.abs(now[i]))) {
+        key[i] = now[i];
+        same = false;
+      }
+    this._aoWorld = this._world;
+    this._aoFade = this._fadeSig;
+    return same;
+  }
+
   async _loadPost(this: Home3DCard) {
     const gen = this._gen;
     const cfg = this._config;
@@ -320,6 +348,25 @@ export class LivePart {
             o.visible = false;
         });
       };
+      // Ambient occlusion depends only on the geometry and the camera, so a frame where just the lights changed (a lamp
+      // switching, many bulbs fading at once) reuses the last result and only darkens the new picture with it.
+      const fullRender = ao.render.bind(ao);
+      ao.render = (
+        renderer: THREE.WebGLRenderer,
+        writeBuffer: THREE.WebGLRenderTarget,
+        readBuffer: THREE.WebGLRenderTarget,
+        ...rest: unknown[]
+      ) => {
+        if (!this._aoReuse) return fullRender(renderer, writeBuffer, readBuffer, ...rest);
+        const out = ao.renderToScreen ? null : writeBuffer;
+        ao.copyMaterial.uniforms.tDiffuse.value = readBuffer.texture;
+        ao.copyMaterial.blending = T.NoBlending;
+        ao.renderPass(renderer, ao.copyMaterial, out);
+        ao.blendMaterial.uniforms.intensity.value = ao.blendIntensity;
+        ao.blendMaterial.uniforms.tDiffuse.value = ao.pdRenderTarget.texture;
+        ao.renderPass(renderer, ao.blendMaterial, out);
+      };
+      this._aoKey = null;
       comp.addPass(ao);
       comp.addPass((this._bloomPass = new UnrealBloomPass(new T.Vector2(256, 256), 0.45, 0.55, 0.72)));
       comp.addPass(new OutputPass());

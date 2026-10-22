@@ -12,6 +12,9 @@ export interface CameraGoal {
 }
 import { CX, CY } from "../core/constants";
 
+const SETTLE_MS = 150; // how long the view stays still before ambient occlusion comes back
+const FADE_MS = 200; // and how long it takes to fade in
+
 export class CameraPart {
   _resize(this: Home3DCard) {
     const w = this._wrap.clientWidth;
@@ -166,11 +169,48 @@ export class CameraPart {
       for (const hp of this._helpers || []) hp.update();
       this._scaleHandles();
       this._updateFade();
-      if (this._usePP) this._composer.render();
-      else this._renderer.render(this._scene, this._cam);
+      const fading = this._draw(moving && this._seenMove());
       this._placeOverlays();
-      if (moving) this._requestRender();
+      if (moving || fading) this._requestRender();
     });
+  }
+
+  /* → true when the view moved by half a pixel or more since the last frame drawn. Damping eases a drag out over about a
+   * second, and only the start of that is visible. */
+  _seenMove(this: Home3DCard) {
+    const T = this.T;
+    const c = this._cam;
+    const k = (this._drawK ||= { p: new T.Vector3(), q: new T.Quaternion(), z: 0 });
+    const px = (this._renderer.domElement.height || 1) / ((c.top - c.bottom) / c.zoom || 1); // pixels per plan unit
+    const turn = 2 * Math.acos(Math.min(1, Math.abs(k.q.dot(c.quaternion)))) * 300; // the plan is about 600 across
+    const shift = k.p.distanceTo(c.position) + turn + Math.abs(1 - k.z / c.zoom) * 300;
+    k.p.copy(c.position);
+    k.q.copy(c.quaternion);
+    k.z = c.zoom;
+    return shift * px >= 0.5;
+  }
+
+  /* Draws one frame. Ambient occlusion is the costliest pass (a second render of the scene plus a full-screen blur), so it
+   * sits out while the view moves and fades back in once the view has been still for SETTLE_MS. → true while it fades in */
+  _draw(this: Home3DCard, moving: boolean) {
+    const ao = this._usePP ? this._aoPass : null;
+    const level = ao ? this._aoLevel || 0 : 0;
+    const now = performance.now();
+    if (moving) this._movedAt = now;
+    const still = now - (this._movedAt || 0);
+    const k = level > 0 ? Math.min(1, Math.max(0, (still - SETTLE_MS) / FADE_MS)) : 0;
+    if (ao) {
+      ao.enabled = k > 0;
+      ao.blendIntensity = level * k;
+      this._aoReuse = k > 0 && this._aoUnchanged();
+    }
+    if (this._usePP && (k > 0 || this._bloomPass?.enabled)) this._composer.render();
+    else this._renderer.render(this._scene, this._cam); // nothing left for the composer to add
+    if (!level || k >= 1 || moving) return false;
+    if (still >= SETTLE_MS) return true;
+    clearTimeout(this._settleT);
+    this._settleT = setTimeout(() => this._requestRender(), SETTLE_MS - still);
+    return false;
   }
 
   /* ---------- camera ---------- */
