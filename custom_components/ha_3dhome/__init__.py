@@ -7,7 +7,6 @@ websocket.py). Home Assistant loads the files only when the panel is opened, so 
 
 from __future__ import annotations
 
-import inspect
 from pathlib import Path
 
 from homeassistant.components import frontend, panel_custom
@@ -37,16 +36,6 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
-# Home Assistant pads a custom panel by the device's safe areas (status bar, home bar) unless the panel opts out. The map
-# opts out where it can, so it can draw edge to edge and keep only its controls inside the safe areas (older versions
-# have neither the padding nor the option).
-SAFE_AREA_OPTION = (
-    {"handle_safe_area": True}
-    if "handle_safe_area" in inspect.signature(panel_custom.async_register_panel).parameters
-    else {}
-)
-
-
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Serve the map's files and register the websocket commands (once per start)."""
     hass.data.setdefault(DOMAIN, {})
@@ -71,7 +60,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         module_url=await _module_url(hass),
         require_admin=options.get(CONF_REQUIRE_ADMIN, False),
         config={"entry_id": entry.entry_id},
-        **SAFE_AREA_OPTION,
+        # Home Assistant would pad the page by the device's safe areas (status bar, home bar): the map draws edge to edge
+        # and keeps only its controls inside them
+        handle_safe_area=True,
     )
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True

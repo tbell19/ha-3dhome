@@ -183,7 +183,3 @@ HTML pills anchored in 3D at `x, y, z`. `size` (v4.12, default `1`) scales the p
 ## Doors
 
 `{ "entity": "binary_sensor.…_contact", "name", "x", "y", "z", "size"?, "icon_open"?, "icon_closed"? }`. The dot is red when open and green when closed.
-
-## Maps from 5.x dashboards
-
-Up to 5.x the map could live in a dashboard, as the `custom:ha-3dhome-card` card or the `custom:ha-3dhome` strategy (or ha-iso-home's `custom:iso-home-3d-card` and `custom:iso-home`). An empty 3D Home page offers to copy such a map in. On the way it drops the card-only options (`type`, `fill`, `aspect_ratio`, `dashboard`, `card_id`) and the item types only the first hand-made mockup used (`doorpanel`, `plantwall`, `track`, `line`, `glasswall`, `cornerglass`, `railing`, `bulbs`, `frontwalls` and niche lights), and turns `kind: "string"` lights into `fixture: "string"`. Walls in the pre-4.7 `walls` / `front_walls` format are no longer read; open such a map once in 5.x and save it to convert it.

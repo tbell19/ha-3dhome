@@ -8,7 +8,7 @@ Read this first. It is the hand-off between sessions: what lives where, how to c
 
 - `custom_components/ha_3dhome/` (Python): serves the frontend folder at `/ha_3dhome/` (entries with `?v=<version>`, `lib/` files content-hashed, `.gz` copies alongside), adds one sidebar page per config entry (`panel_custom`, element `ha-3dhome-panel`) and keeps each page's card config plus a revision in `.storage` (`store.py`), followed and saved over the websocket (`websocket.py`: `ha_3dhome/config/subscribe`, `ha_3dhome/config/save`, which refuses a save from an older revision). Tests: `tests/` (`npm run test:py`).
 - `src/ha-3dhome.ts` (core entry → `ha-3dhome.js`): registers the panel and the map element inside it (`ha-3dhome-map`), publishes shared helpers on `window.__ha3dhome` (`src/editor-api.ts`) and tells `src/card/editor-loader.ts` where the editor lives (next to itself).
-  - `src/panel/`: `<ha-3dhome-panel>`. It shows one map, follows the stored config, gives the map a `LayoutStore` (`card.layoutStore`) so Save goes to the integration, holds pushed configs while someone edits, and offers to copy a map from a 5.x dashboard into an empty page (`src/core/lovelace.ts`, which also drops what the editor can't make).
+  - `src/panel/`: `<ha-3dhome-panel>`. It shows one map, follows the stored config, gives the map a `LayoutStore` (`card.layoutStore`) so Save goes to the integration, and holds pushed configs while someone edits.
   - `src/types.ts`: the config schema as types. `src/core/`: constants and pure helpers (items, plan geometry on `vec2`, surfaces, fixtures, sun, entities, Sweet Home 3D parsing).
   - `src/card/`: the map (class `Home3DCard`, element `ha-3dhome-map`; "card" is its historical name). `card.ts` declares every field and holds the lifecycle; one part class per topic (`startup`, `camera`, `rooms`, `scene`, `models`, `lights`, `picking`, `live`, `plan`) is copied onto its prototype. Part methods take `this: Home3DCard`, and an interface merge in `card.ts` types them all as one class. `styles.ts` is the shadow DOM's CSS and markup.
 - `src/ha-3dhome-editor.ts` (editor entry → `ha-3dhome-editor.js`): loaded the first time ✎ Edit is pressed (`_openEditor` → `loadEditor()`). It registers the `Editor` class (`src/editor/editor.ts`, its parts in `src/editor/`) with the core, which makes one per card (`card._editor`). The editor reaches the card only as `this.card.…` through `EditorHost`, and the card calls it only through `CardEditor` (both in `src/editor-contract.ts`): add a new crossing there. The parts read the core's helpers through `src/editor/shared.ts`.
@@ -101,9 +101,9 @@ HACS installs GitHub releases, so a version tag is what ships and `main` is the 
 - Checks: render, room menu, edit mode, group select, fan + light attachment, mouse drag and undo, entity-panel drag-drop, Show as → Screen, library browse and place, save to the integration, a save from another device.
 - `--mobile` checks touch: one-finger pan vs move-selected, tap-select, pinch cancelling a drag.
 
-`npm run test:panel` covers the panel itself (subscribe pushes, save checks the revision): import from a 5.x dashboard (and bringing it up to date), Save to the integration, a save from another device in the running scene, an edit clash, the narrow sidebar button, non-admins.
+`npm run test:panel` covers the panel itself (subscribe pushes, save checks the revision): an empty page, Save to the integration, a save from another device in the running scene, an edit clash, the narrow sidebar button, the safe areas, the offer to open Home Assistant on the page, non-admins.
 
-`npm run test:py` runs the integration's tests with `pytest-homeassistant-custom-component` (a real Home Assistant core): config and options flow, the panel registration, subscribe/save/conflict, admin-only saving, removal. `requirements_test.txt` also pins `home-assistant-frontend`: the `frontend` component imports `hass_frontend`, and without it every test fails with "No module named hass_frontend".
+`npm run test:py` runs the integration's tests with `pytest-homeassistant-custom-component` (a real Home Assistant core): config and options flow, the panel registration, subscribe/save/conflict, admin-only saving, removal. `requirements_test.txt` also pins `home-assistant-frontend`: the `frontend` component imports `hass_frontend`, and without it every test fails with "No module named hass_frontend". The pinned Home Assistant needs Python 3.14 (`uv python install 3.14` in the cloud sandbox, then `PYTHON=` that interpreter).
 
 The browser tests use `/opt/pw-browsers/chromium` when present, or `CHROMIUM_PATH`. Never run `playwright install` in the cloud sandbox.
 
@@ -116,7 +116,7 @@ The browser tests use `/opt/pw-browsers/chromium` when present, or `CHROMIUM_PAT
 
 ## Home Assistant APIs the integration leans on
 
-`panel_custom.async_register_panel`, `frontend.async_remove_panel`, `hass.http.async_register_static_paths` (2024.7+), `helpers.storage.Store`, `websocket_api` (`websocket_command`, `require_admin`, `connection.subscriptions`) and the dispatcher. The options flow uses the 2024.12+ style (no `config_entry` passed in), hence `hacs.json` → `homeassistant: 2024.12.0`.
+`panel_custom.async_register_panel`, `frontend.async_remove_panel`, `hass.http.async_register_static_paths` (2024.7+), `helpers.storage.Store`, `websocket_api` (`websocket_command`, `require_admin`, `connection.subscriptions`) and the dispatcher. The panel registers with `handle_safe_area=True` (2026.8+), hence `hacs.json` → `homeassistant: 2026.8.0`. Nothing has been released yet, so there is no backwards-compatibility code: no migrations, old names or fallbacks for older Home Assistant versions. Keep it that way until the first release.
 
 ## Demo site
 

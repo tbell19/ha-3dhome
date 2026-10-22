@@ -1,44 +1,17 @@
 /* Panel test: the 3D Home sidebar page (<ha-3dhome-panel>) the way the ha_3dhome integration shows it.
  *
  * A fake hass plays the integration's side in the page: ha_3dhome/config/subscribe pushes the stored config and every
- * later save, ha_3dhome/config/save checks the revision it started from. The sample home sits on a dashboard, ready to
- * be imported.
+ * later save, ha_3dhome/config/save checks the revision it started from.
  *
  *   npm run test:panel [-- --dist]
  *
- * Checks: an empty panel offers the dashboard's map and copies it in, Save writes to the integration and not to a
+ * Checks: an empty panel shows the how-to-start hint and then the stored map, Save writes to the integration and not to a
  * dashboard, a save from another device appears without a new WebGL context, edits in progress aren't pulled away and
  * their Save reports the clash, the sidebar button on narrow screens, the offer (asked once) and the ⋮ menu item that make Home Assistant open on the page,
- * nothing offered to non-admins.
+ * no Edit for non-admins.
  */
 const path = require("path");
 const { OUT, SAMPLE_HOME, launch, scripts, serve, check, report } = require("./harness");
-
-/* the sample home as an old (pre-v6) dashboard held it: in the iso-home strategy, with a railing and an old-style
- * string light, which the import leaves out and brings up to date */
-const OLD_DASHBOARD = {
-  strategy: {
-    type: "custom:iso-home",
-    title: "Home",
-    ...SAMPLE_HOME,
-    scene: {
-      ...SAMPLE_HOME.scene,
-      overlays: [...SAMPLE_HOME.scene.overlays, { type: "railing", x: 500, x_end: 450, y1: 500, y2: 540, h: 20 }],
-    },
-    lights: [
-      ...SAMPLE_HOME.lights,
-      {
-        entity: "light.old_string",
-        kind: "string",
-        z: 37,
-        points: [
-          [200, 400],
-          [300, 400],
-        ],
-      },
-    ],
-  },
-};
 
 (async () => {
   const { browser, page: p, errors, ev, wait, until } = await launch({ viewport: { width: 1100, height: 700 } });
@@ -52,7 +25,6 @@ HTMLCanvasElement.prototype.getContext=function(t,...a){const c=_gc.call(this,t,
 window.server={E1:{config:{},rev:0,subs:[]},E2:{config:{},rev:0,subs:[]},saves:[],calls:[],
   push(id){const s=this[id];for(const cb of s.subs)cb(JSON.parse(JSON.stringify({config:s.config,rev:s.rev})))},
   saveFrom(id,config){const s=this[id];s.config=config;s.rev++;this.push(id)}};
-const __dash=${JSON.stringify(OLD_DASHBOARD)};
 window.makeHass=(admin)=>({states:{},user:{is_admin:admin},services:{},callService:async()=>{},
   connection:{subscribeEvents:async()=>()=>{},
     subscribeMessage:async(cb,m)=>{const s=server[m.entry_id];s.subs.push(cb);setTimeout(()=>server.push(m.entry_id),0);return async()=>{s.subs.splice(s.subs.indexOf(cb),1)}}},
@@ -62,8 +34,6 @@ window.makeHass=(admin)=>({states:{},user:{is_admin:admin},services:{},callServi
       s.config=m.config;s.rev++;server.push(m.entry_id);return {rev:s.rev}}
     if(m.type==='frontend/set_user_data'){if(m.key==='ha_3dhome')server.own=m.value;else server.userData=m.value;return null}
     if(m.type==='frontend/get_user_data')return {value:m.key==='ha_3dhome'?server.own||null:null};
-    if(m.type==='lovelace/dashboards/list')return [{url_path:'juniper',title:'Juniper House',mode:'storage'},{url_path:'energy-plus',title:'Energy'}];
-    if(m.type==='lovelace/config')return m.url_path==='juniper'?JSON.parse(JSON.stringify(__dash)):{views:[{cards:[]}]};
     throw new Error('unexpected '+m.type)}});
 </script>
 ${scripts()}
@@ -74,7 +44,6 @@ document.getElementById('host').append(__panel);
 window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-map');</script>`;
 
   const rooms = () => ev(`[...card.shadowRoot.querySelectorAll('.rooms button')].map(b=>b.textContent)`);
-  const importBox = `panel.shadowRoot.querySelector('.import')`;
 
   await serve(p, html);
   check("the panel element is registered", await ev(`!!customElements.get('ha-3dhome-panel')`));
@@ -83,37 +52,17 @@ window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-ma
     "the hint says Save keeps the map here",
     await ev(`card.shadowRoot.querySelector('.empty').textContent.includes('Save keeps them here')`),
   );
-  check(
-    "it offers the map found on a dashboard",
-    await until(`!${importBox}.classList.contains('hide')`),
-    await ev(`${importBox}.textContent`),
-  );
-  check(
-    "only dashboards that have a map are offered",
-    (await ev(`[...${importBox}.querySelectorAll('button')].map(b=>b.textContent).join()`)) ===
-      "Copy from Juniper House",
-  );
   await p.screenshot({ path: path.join(OUT, "panel-empty.png") });
-  await ev(`${importBox}.querySelector('button').click()`);
-  check("copying stores the map in the integration", await until(`server.E1.rev===1 && !!server.E1.config.scene`));
   check(
-    "the stored config leaves out what the panel sets itself",
-    await ev(`!('type' in server.E1.config) && !('fill' in server.E1.config) && !('dashboard' in server.E1.config)`),
+    "an empty panel doesn't look through dashboards",
+    await ev(`!server.calls.some((t) => t.startsWith('lovelace/'))`),
   );
+  await ev(`server.saveFrom('E1', ${JSON.stringify(SAMPLE_HOME)})`);
   check(
-    "the copied map shows",
+    "the stored map shows",
     await until(`card.shadowRoot.querySelectorAll('.rooms button').length>=8`),
     (await rooms()).join(),
   );
-  check(
-    "the copy is brought up to date (retired pieces left out, old string lights converted)",
-    await ev(
-      `!server.E1.config.scene.overlays.some(o=>o.type==='railing') && server.E1.config.lights.at(-1).fixture==='string' && !('kind' in server.E1.config.lights.at(-1)) && !('title' in server.E1.config)`,
-    ),
-  );
-  check("it says where the map came from", await ev(`${importBox}.textContent.includes('Juniper House')`));
-  await ev(`${importBox}.querySelector('button').click()`);
-  check("the note can be closed", await ev(`${importBox}.classList.contains('hide')`));
   await wait(500);
   await p.screenshot({ path: path.join(OUT, "panel-map.png") });
 
@@ -186,17 +135,16 @@ window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-ma
   );
   await p.screenshot({ path: path.join(OUT, "panel-narrow.png") });
 
-  // safe areas: where Home Assistant leaves them to the panel, the map fills the screen and only its controls move in
+  // safe areas: Home Assistant leaves them to the panel, so the map fills the screen and only its controls move in
   const edge = (q) =>
     `(()=>{const r=card.shadowRoot.querySelector('${q}').getBoundingClientRect();return [r.top,r.bottom]})()`;
   const rooms0 = await ev(edge(".rooms"));
   await ev(`document.documentElement.style.setProperty('--safe-area-inset-top','40px');
-    document.documentElement.style.setProperty('--safe-area-inset-bottom','30px');
-    panel.panel={url_path:'3d-home',config:{entry_id:'E1',_panel_custom:{handle_safe_area:true}}}`);
+    document.documentElement.style.setProperty('--safe-area-inset-bottom','30px')`);
   await wait(300);
   check(
     "edge to edge: the map fills the screen",
-    await ev(`panel.hasAttribute('edge-to-edge') && Math.abs(card.getBoundingClientRect().height-innerHeight)<1`),
+    await ev(`Math.abs(card.getBoundingClientRect().height-innerHeight)<1`),
   );
   const rooms1 = await ev(edge(".rooms"));
   check("edge to edge: the room bar clears the bottom inset", Math.abs(rooms0[1] - 30 - rooms1[1]) < 1, rooms1.join());
@@ -214,8 +162,7 @@ window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-ma
   await ev(`card._editor._exitEdit(false)`);
   await until(`!card._edit`);
   await ev(`document.documentElement.style.removeProperty('--safe-area-inset-top');
-    document.documentElement.style.removeProperty('--safe-area-inset-bottom');
-    panel.panel={url_path:'3d-home',config:{entry_id:'E1'}}`);
+    document.documentElement.style.removeProperty('--safe-area-inset-bottom')`);
   await wait(300);
 
   // Home Assistant may make a new panel element for the same page: the map moves over, scene and all
@@ -281,11 +228,7 @@ window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-ma
     q.style.cssText='position:fixed;left:0;top:0;width:400px;height:300px';document.body.append(q);window.panel2=q})()`);
   await wait(1500);
   check(
-    "non-admins get no import offer",
-    await ev(`panel2.shadowRoot.querySelector('.import').classList.contains('hide')`),
-  );
-  check(
-    "…and no Edit button",
+    "non-admins get no Edit button",
     await ev(
       `(()=>{const b=panel2.shadowRoot.querySelector('ha-3dhome-map').shadowRoot?.querySelector('.edbtn');return !b||b.style.display==='none'})()`,
     ),

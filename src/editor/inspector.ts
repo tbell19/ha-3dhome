@@ -397,7 +397,6 @@ export class EditorInspector {
         delete L.sag;
         delete L.spacing;
       }
-      delete L.kind; // string lights used to be marked kind: "string" too
       if (fx === "none") delete L.fixture;
       else L.fixture = fx;
       const z = {
