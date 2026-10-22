@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>3D Home demo</title>
-<meta name="description" content="A live 3D floor plan card for Home Assistant, running on a pretend home in your browser.">
+<meta name="description" content="A live 3D floor plan for Home Assistant, running on a pretend home in your browser.">
 <style>
   :root { color-scheme: dark; --bg: #0f1114; --panel: #1a1d22; --line: #2c3037; --text: #e8e6e1; --dim: #a3a7ad; --accent: #ffd27a; }
   * { box-sizing: border-box; }
@@ -19,7 +19,7 @@
   button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
   main { flex: 1; min-height: 420px; position: relative; }
   #host { position: absolute; inset: 0; }
-  #host ha-3dhome-card { display: block; height: 100%; }
+  #host ha-3dhome-panel { display: block; height: 100%; }
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #262a31; border: 1px solid var(--line); padding: 8px 14px; border-radius: 10px; font-size: 13px; z-index: 10; }
   dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 18px; width: min(340px, calc(100vw - 32px)); }
   dialog::backdrop { background: #0008; }

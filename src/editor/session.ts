@@ -4,7 +4,10 @@ import type { Scene, WallSeg } from "../types";
 import type { GenericItem } from "../core/items";
 import type { EditState } from "../card/card";
 import type { Editor } from "./editor";
-import { KINDS, TC_URL, ic, jclone, roomTitle, segDir } from "./shared";
+import { render } from "preact";
+import { KINDS, TC_URL, jclone, roomTitle, segDir } from "./shared";
+import { closeSidePanels, toggleSidePanel, refreshSidePanels, panelButtons } from "./side-panels";
+import { showToolbar } from "./toolbar";
 
 export class EditorSession {
   _list(this: Editor, k: string, create?: boolean): GenericItem[] {
@@ -31,14 +34,14 @@ export class EditorSession {
   }
 
   item(this: Editor, key: string): GenericItem {
-    const [k, i] = key.split(":");
-    return this._list(k)[+i];
+    const [kind, i] = key.split(":");
+    return this._list(kind)[+i];
   }
 
   _setBoxObj(this: Editor, key: string): GenericItem {
-    const [k, i] = key.split(":");
-    const l = this._list(k);
-    if (k === "b" && Array.isArray(l[+i])) l[+i] = { b: l[+i] };
+    const [kind, i] = key.split(":");
+    const l = this._list(kind);
+    if (kind === "b" && Array.isArray(l[+i])) l[+i] = { b: l[+i] };
     return l[+i];
   }
 
@@ -49,18 +52,18 @@ export class EditorSession {
   }
 
   _label(this: Editor, key: string) {
-    const [k] = key.split(":"),
-      it = this.item(key);
-    if (!it) return key;
-    if (k === "b") return "Box" + (it.group ? ` · ${it.group}` : "");
-    if (k === "o" || k === "v")
-      return (it.type === "model" ? it.name || "Model" : it.type) + (it.group ? ` · ${it.group}` : "");
-    if (k === "w") return `Wall · ${this.card._fmtLen(segDir(it as WallSeg)[2])}`;
-    if (k === "n") return (<Record<string, string>>{ door: "Door", window: "Window" })[it.kind] || "Cut-out";
-    if (k === "p") return "Blueprint";
-    if (k === "r") return `Room · ${roomTitle(it.name || "unnamed")}`;
-    const ent = it.entity ? this.card._hass?.states[it.entity]?.attributes?.friendly_name || it.entity : "";
-    return `${KINDS[k][0].toUpperCase() + KINDS[k].slice(1)}${ent ? " · " + ent : it.label ? " · " + it.label : ""}`;
+    const [kind] = key.split(":");
+    const item = this.item(key);
+    if (!item) return key;
+    if (kind === "b") return "Box" + (item.group ? ` · ${item.group}` : "");
+    if (kind === "o" || kind === "v")
+      return (item.type === "model" ? item.name || "Model" : item.type) + (item.group ? ` · ${item.group}` : "");
+    if (kind === "w") return `Wall · ${this.card._fmtLen(segDir(item as WallSeg)[2])}`;
+    if (kind === "n") return (<Record<string, string>>{ door: "Door", window: "Window" })[item.kind] || "Cut-out";
+    if (kind === "p") return "Blueprint";
+    if (kind === "r") return `Room · ${roomTitle(item.name || "unnamed")}`;
+    const ent = item.entity ? this.card._hass?.states[item.entity]?.attributes?.friendly_name || item.entity : "";
+    return `${KINDS[kind][0].toUpperCase() + KINDS[kind].slice(1)}${ent ? " · " + ent : item.label ? " · " + item.label : ""}`;
   }
 
   async enter(this: Editor) {
@@ -75,7 +78,6 @@ export class EditorSession {
       room_cards: this.card._config.room_cards,
     });
     this.card._work = { ...this.card._config, ...this.card._work };
-    this._migrateWalls();
     this.card._edit = {
       sel: new Set(),
       undo: [],
@@ -141,7 +143,7 @@ export class EditorSession {
     this.card._work = null;
     this.card._controls.enabled = true;
     this.card._wrap.classList.remove("editing", "plan", "tool");
-    this.card._ed.innerHTML = "";
+    this._clearEditorUI();
     this.card._edBtn.style.display = this.card._hass?.user?.is_admin ? "" : "none";
     this.card._applyLayout(); // the saved config, or the one from before editing
     this.card.dispatchEvent(new CustomEvent("ha-3dhome-editing", { detail: { editing: false } }));
@@ -154,102 +156,29 @@ export class EditorSession {
     this.card._tc.setScaleSnap(s ? 0.05 : null);
   }
 
-  /* The toolbar: a top row (mode switch, undo/redo, Cancel, Save) and a row of tools for what is selected. Item tools
-   * (`.selo`) show only with a selection and scene tools (`.idle`) only without one; the rest sit in the Draw and More
-   * menus. On a phone the rows stack and only `.ico` buttons drop their label. */
+  /* The editor's layer over the map: the toolbar (toolbar.tsx) and the inspector (inspector-panel.tsx). Switching
+   * between Furniture and Floor plan draws it again and closes the side panels. */
   _renderEditorUI(this: Editor) {
-    const ed = this.card._ed,
-      plan = !!this.card._plan;
-    const b = (a: string, icon: string, label: string, title: string, cls = "") =>
-      `<button data-a="${a}"${cls ? ` class="${cls}"` : ""}${title ? ` title="${title}"` : ""}>${ic(icon)}<span class="lbl">${label}</span></button>`;
-    const menu = (m: string, icon: string, label: string, title: string, cls = "") =>
-      `<button data-m="${m}"${cls ? ` class="${cls}"` : ""} title="${title}">${ic(icon)}<span class="lbl">${label}</span>${ic("menu-down")}</button>`;
-    const modes = `<span class="seg modes">${b("m-furn", "sofa-outline", "Furniture", "Edit furniture and devices")}${b("m-plan", "floor-plan", "Floor plan", "Edit walls, doors, windows and the blueprint")}</span>`;
-    const acts = `<span class="acts">${b("undo", "undo", "Undo", "Undo (Ctrl+Z)", "ico")}${b("redo", "redo", "Redo", "Redo (Ctrl+Shift+Z)", "ico")}
-      <button data-a="cancel">Cancel</button><button data-a="save" class="primary">Save</button></span>`;
-    const tools = plan
-      ? b("t-select", "cursor-default-outline", "Select", "Select and move (V)") +
-        b("rotate", "rotate-right", "Rotate", "Rotate (R)", "selo") +
-        menu("draw", "pencil-ruler", "Draw", "Draw walls, doors, windows and rooms") +
-        b("bp", "image-outline", "Blueprint", "Blueprint image to trace over", "idle") +
-        b("del", "delete-outline", "Delete", "Delete (Del)", "selo ico") +
-        menu("more", "dots-horizontal", "More", "More options")
-      : b("add", "plus", "Add", "Add entities, boxes or models", "idle") +
-        b("look", "palette-outline", "Look", "Lighting, effects and idle view", "idle") +
-        b("controls", "tune-variant", "Controls", "Cards shown for each room", "idle") +
-        b("translate", "cursor-move", "Move", "Move (W)", "selo") +
-        b("rotate", "rotate-right", "Rotate", "Rotate (E)", "selo") +
-        b("scale", "resize", "Scale", "Scale (R)", "selo") +
-        b("del", "delete-outline", "Delete", "Delete (Del)", "selo ico") +
-        menu("more", "dots-horizontal", "More", "More options", "selo");
-    const pops = plan
-      ? `<div class="menu pop hide" data-pop="draw">${b("t-wall", "wall", "Walls", "Draw walls (W)")}${b("t-door", "door", "Door", "Add a door to a wall (D)")}${b("t-window", "window-closed-variant", "Window", "Add a window to a wall")}${b("t-room", "vector-polygon", "Room", "Draw a room outline")}</div>
-        <div class="menu pop hide" data-pop="more">${b("furnvis", "eye-outline", "Show furniture", "Show furniture while editing the plan")}${b("snap", "magnet", "Snap to corners and angles", "Snap to grid, corners and 15° angles")}</div>`
-      : `<div class="menu pop hide" data-pop="more">${b("dup", "content-copy", "Duplicate", "Duplicate (Ctrl+D)")}${b("group", "group", "Group", "Group the selected items")}${b("ungroup", "ungroup", "Ungroup", "Ungroup")}
-        ${b("space", "earth", "Global axes", "Gizmo axes: the world's, or the selected item's own (X)")}${b("snap", "magnet", "Snap to grid", "Snap to grid / 15° / 5%")}</div>`;
-    ed.innerHTML = `<div class="tb">
-      <div class="bar"><div class="top">${modes}${acts}</div><div class="tools">${tools}</div></div>${pops}</div>
-      <div class="insp"></div>`;
-    ed.querySelector<HTMLElement>(".tb").addEventListener("click", (ev) => {
-      const mb = (ev.target as HTMLElement).closest<HTMLElement>("[data-m]");
-      if (mb) return this._togglePop(mb.dataset.m, mb);
-      const bt = (ev.target as HTMLElement).closest<HTMLElement>("[data-a]");
-      if (!bt) return;
-      const a = bt.dataset.a;
-      this._togglePop(null);
-      if (a === "m-furn" || a === "m-plan") this._setPlanMode(a === "m-plan");
-      else if (a === "translate" || a === "rotate" || a === "scale" || a === "t-select") {
-        this._setMode(a === "t-select" ? "translate" : a);
-        if (this.card._plan && this.card._tool !== "select") this._setTool("select");
-        else this._syncBar();
-      } else if (a === "space") {
-        this.card._edit.space = this.card._edit.space === "local" ? "world" : "local";
-        this._placePivot();
-        this._syncBar();
-      } else if (a === "t-wall" || a === "t-door" || a === "t-window" || a === "t-room") {
-        const t = a.slice(2);
-        this._setTool(this.card._tool === t ? "select" : t);
-      } else if (a === "bp") {
-        const n = this._list("p").length;
-        if (n) {
-          this._setTool("select");
-          this._select(["p:0"]);
-        } else this._pickBlueprintFile();
-      } else if (a === "furnvis") {
-        this.card._edit.showFurn = !this.card._edit.showFurn;
-        this.applyPlanVis();
-        this._syncBar();
-        this.card._requestRender();
-      } else if (a === "snap") {
-        this.card._edit.snap = !this.card._edit.snap;
-        this._applySnap();
-        this._syncBar();
-      } else if (a === "add") this._toggleEntityPanel();
-      else if (a === "models") this._openLibrary();
-      else if (a === "look") {
-        this._select([]);
-        this._toggleLookPanel();
-      } else if (a === "controls") {
-        this._select([]);
-        this._toggleRoomCardsPanel();
-      } else if (a === "dup") this._duplicate();
-      else if (a === "del") this._delete();
-      else if (a === "group") this._group(true);
-      else if (a === "ungroup") this._group(false);
-      else if (a === "undo") this._undo(false);
-      else if (a === "redo") this._undo(true);
-      else if (a === "cancel") this._exitEdit(true);
-      else if (a === "save") this._save();
-    });
-    const wrap = this.card._wrap as HTMLElement & { _popWired?: boolean };
-    if (!wrap._popWired) {
+    const layer = this.card._editorLayer;
+    closeSidePanels(this);
+    this.closeLibrary();
+    this._menu = null;
+    if (!layer.querySelector(":scope > .tb")) {
+      const toolbar = document.createElement("div");
+      const inspector = document.createElement("div");
+      toolbar.className = "tb";
+      inspector.className = "insp";
+      layer.append(toolbar, inspector);
+    }
+    const wrap = this.card._wrap as HTMLElement & { _menuWired?: boolean };
+    if (!wrap._menuWired) {
       // a press anywhere outside an open menu closes it
-      wrap._popWired = true;
+      wrap._menuWired = true;
       wrap.addEventListener(
         "pointerdown",
         (ev) => {
           const path = ev.composedPath() as HTMLElement[];
-          if (!path.some((n) => n.classList?.contains("pop") || n.dataset?.m)) this._togglePop?.(null);
+          if (!path.some((n) => n.classList?.contains("pop") || n.dataset?.m)) this.closeMenu?.();
         },
         { capture: true },
       );
@@ -257,77 +186,107 @@ export class EditorSession {
     this._syncBar();
   }
 
-  /* Opens the Draw or More menu under its button (or closes it when it's already open); null closes any open menu. */
-  _togglePop(this: Editor, name: string | null, btn?: HTMLElement) {
-    const ed = this.card._ed;
-    if (!ed) return;
-    for (const p of ed.querySelectorAll<HTMLElement>(".pop")) {
-      const open = p.dataset.pop === name && p.classList.contains("hide");
-      p.classList.toggle("hide", !open);
-      ed.querySelector<HTMLElement>(`[data-m="${p.dataset.pop}"]`)?.classList.toggle("open", open);
-      if (!open || !btn) continue;
-      const wr = this.card._wrap.getBoundingClientRect(),
-        br = btn.getBoundingClientRect(),
-        bar = ed.querySelector<HTMLElement>(".bar").getBoundingClientRect();
-      p.style.top = bar.bottom - wr.top + 6 + "px";
-      p.style.left = Math.max(8, Math.min(br.left - wr.left, wr.width - p.offsetWidth - 8)) + "px";
-    }
+  /** Takes the editor's layer down when leaving edit mode, so every component cleans up. */
+  _clearEditorUI(this: Editor) {
+    closeSidePanels(this);
+    this.closeLibrary();
+    for (const host of this.card._editorLayer.querySelectorAll<HTMLElement>(":scope > .tb, :scope > .insp"))
+      render(null, host);
+    this.card._editorLayer.innerHTML = "";
   }
 
+  /** Opens the Draw or More menu under its button, or closes it when it is already open. */
+  toggleMenu(this: Editor, name: string, button: HTMLElement) {
+    this._menu = this._menu?.name === name ? null : { name, button };
+    this._syncBar();
+  }
+
+  closeMenu(this: Editor) {
+    if (!this._menu) return;
+    this._menu = null;
+    this._syncBar();
+  }
+
+  /** Draws the toolbar and the open side panels again from the editor's state. */
   _syncBar(this: Editor) {
-    const ed = this.card._ed,
-      bar = ed?.querySelector<HTMLElement>(".bar");
-    if (!bar) return;
-    const e = this.card._edit,
-      q = (a: string) => ed.querySelector<HTMLButtonElement>(`.tb [data-a="${a}"]`),
-      on = (a: string, v: unknown) => q(a)?.classList.toggle("on", !!v),
-      dis = (a: string, v: unknown) => {
-        const b = q(a);
-        if (b) b.disabled = !!v;
-      };
-    const sel = !this.card._plan || this.card._tool === "select",
-      n = e.sel.size;
-    on("m-furn", !this.card._plan);
-    on("m-plan", this.card._plan);
-    on("translate", e.mode === "translate");
-    on("t-select", sel && e.mode !== "rotate");
-    on("rotate", sel && e.mode === "rotate");
-    on("scale", e.mode === "scale");
-    on("space", e.space === "local");
-    const sp = q("space");
-    if (sp)
-      sp.innerHTML =
-        e.space === "local"
-          ? `${ic("compass-outline")}<span class="lbl">Own axes</span>`
-          : `${ic("earth")}<span class="lbl">Global axes</span>`;
-    const tools: Record<string, [string, string]> = {
-      wall: ["wall", "Walls"],
-      door: ["door", "Door"],
-      window: ["window-closed-variant", "Window"],
-      room: ["vector-polygon", "Room"],
-    };
-    for (const t in tools) on("t-" + t, this.card._tool === t);
-    const dm = ed.querySelector<HTMLElement>('[data-m="draw"]');
-    if (dm) {
-      const [icon, label] = tools[this.card._tool] || ["pencil-ruler", "Draw"];
-      dm.classList.toggle("on", !!tools[this.card._tool]);
-      dm.innerHTML = `${ic(icon)}<span class="lbl">${label}</span>${ic("menu-down")}`;
-    }
-    for (const b of bar.querySelectorAll<HTMLElement>(".selo")) b.classList.toggle("hide", !n);
-    for (const b of bar.querySelectorAll<HTMLElement>(".idle")) b.classList.toggle("hide", !!n);
-    on("furnvis", e.showFurn);
-    on("snap", e.snap);
-    this._syncLookPanel();
-    this._syncRoomCardsPanel();
-    on("controls", ed.querySelector<HTMLElement>(".rcp"));
-    on("bp", e.primary?.[0] === "p" && n);
-    dis("dup", !n);
-    dis("ungroup", !n);
-    dis("group", n < 2);
-    dis("undo", !e.undo.length);
-    dis("redo", !e.redo.length);
-    q("save").textContent = e.dirty ? "Save •" : "Save";
+    const toolbar = this.card._editorLayer?.querySelector<HTMLElement>(":scope > .tb");
+    if (!toolbar || !this.card._edit) return;
+    showToolbar(this, toolbar);
+    refreshSidePanels(this);
     this.card._wrap.classList.toggle("tool", !!this.card._plan && this.card._tool !== "select");
+  }
+
+  toolbarAction(this: Editor, action: string) {
+    const edit = this.card._edit;
+    this._menu = null;
+    switch (action) {
+      case "m-furn":
+      case "m-plan":
+        this._setPlanMode(action === "m-plan");
+        break;
+      case "translate":
+      case "rotate":
+      case "scale":
+      case "t-select":
+        this._setMode(action === "t-select" ? "translate" : action);
+        if (this.card._plan && this.card._tool !== "select") this._setTool("select");
+        break;
+      case "space":
+        edit.space = edit.space === "local" ? "world" : "local";
+        this._placePivot();
+        break;
+      case "t-wall":
+      case "t-door":
+      case "t-window":
+      case "t-room": {
+        const tool = action.slice(2);
+        this._setTool(this.card._tool === tool ? "select" : tool);
+        break;
+      }
+      case "bp":
+        if (this._list("p").length) {
+          this._setTool("select");
+          this._select(["p:0"]);
+        } else this._pickBlueprintFile();
+        break;
+      case "furnvis":
+        edit.showFurn = !edit.showFurn;
+        this.applyPlanVis();
+        this.card._requestRender();
+        break;
+      case "snap":
+        edit.snap = !edit.snap;
+        this._applySnap();
+        break;
+      case "add":
+        toggleSidePanel(this, "ents");
+        break;
+      case "look":
+      case "controls":
+        this._select([]);
+        toggleSidePanel(this, panelButtons[action]);
+        break;
+      case "dup":
+        this._duplicate();
+        break;
+      case "del":
+        this._delete();
+        break;
+      case "group":
+      case "ungroup":
+        this._group(action === "group");
+        break;
+      case "undo":
+      case "redo":
+        this._undo(action === "redo");
+        break;
+      case "cancel":
+        return this._exitEdit(true);
+      case "save":
+        this._save();
+        break;
+    }
+    this._syncBar();
   }
 
   _onKey(this: Editor, ev: KeyboardEvent) {
@@ -368,8 +327,8 @@ export class EditorSession {
     };
     if (arrows[ev.key] && sel.length) {
       ev.preventDefault();
-      const [dx, dy] = this.card._screenDir(...arrows[ev.key]),
-        step = ev.shiftKey ? 10 : 1;
+      const [dx, dy] = this.card._screenDir(...arrows[ev.key]);
+      const step = ev.shiftKey ? 10 : 1;
       this._mutate(() => {
         this._applyMove(sel, dx * step, dy * step);
         return sel;
@@ -401,7 +360,7 @@ export class EditorSession {
       return;
     }
     if (!this.card._plan && !mod && ev.key.toLowerCase() === "x") {
-      this.card._ed.querySelector<HTMLElement>('[data-a="space"]')?.click();
+      this.card._editorLayer.querySelector<HTMLElement>('[data-a="space"]')?.click();
       return;
     }
     if (ev.key === "Delete" || ev.key === "Backspace") {
@@ -416,8 +375,8 @@ export class EditorSession {
       ev.preventDefault();
       this._duplicate();
     } else if (ev.key === "Escape") this._select([]);
-    else if (ev.key === "r" && !mod) this.card._ed.querySelector<HTMLElement>('[data-a="rotate"]')?.click();
+    else if (ev.key === "r" && !mod) this.card._editorLayer.querySelector<HTMLElement>('[data-a="rotate"]')?.click();
     else if ((ev.key === "g" || ev.key === "t") && !mod)
-      this.card._ed.querySelector<HTMLElement>('[data-a="translate"]')?.click();
+      this.card._editorLayer.querySelector<HTMLElement>('[data-a="translate"]')?.click();
   }
 }

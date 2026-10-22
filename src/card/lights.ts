@@ -14,8 +14,8 @@ export class LightsPart {
     if (this._glowTex) return this._glowTex;
     const c = document.createElement("canvas");
     c.width = c.height = 64;
-    const g = c.getContext("2d")!,
-      r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    const g = c.getContext("2d")!;
+    const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
     r.addColorStop(0, "rgba(255,255,255,1)");
     r.addColorStop(0.25, "rgba(255,255,255,.55)");
     r.addColorStop(1, "rgba(255,255,255,0)");
@@ -26,9 +26,9 @@ export class LightsPart {
 
   _buildCompass(this: Home3DCard, north: number) {
     // editing only: a flat north arrow beside the house
-    const T = this.T,
-      G = new T.Group(),
-      noPick = () => {};
+    const T = this.T;
+    const G = new T.Group();
+    const noPick = () => {};
     const tri = (pts: Pt[], color: Colour) => {
       const geo = new T.ShapeGeometry(new T.Shape(pts.map(([x, y]) => new T.Vector2(x, y))));
       geo.rotateX(Math.PI / 2);
@@ -96,10 +96,10 @@ export class LightsPart {
 
   /* Where the sun is: editor preview hour, then sun.sun's azimuth/elevation, then computed from HA's home location. */
   _sunPos(this: Home3DCard) {
-    const h = this._hass,
-      cfg = this._cfg(),
-      lat = h?.config?.latitude,
-      lon = h?.config?.longitude;
+    const h = this._hass;
+    const cfg = this._cfg();
+    const lat = h?.config?.latitude;
+    const lon = h?.config?.longitude;
     if (this._sunPreview != null && lat != null && lon != null) {
       const d = new Date();
       d.setHours(0, 0, 0, 0);
@@ -114,8 +114,8 @@ export class LightsPart {
   }
 
   _placeSun(this: Home3DCard, az: number, el: number, north: number) {
-    const [x, y, z] = sunVector(az, el, north),
-      D = 650;
+    const [x, y, z] = sunVector(az, el, north);
+    const D = 650;
     this._sun.target.position.set(0, 0, 0);
     this._sun.position.set(x * D, y * D, z * D);
     const key = `${Math.round(az * 2)}:${Math.round(el * 2)}:${north}`;
@@ -128,11 +128,10 @@ export class LightsPart {
   /* per-light tuning that needs no rebuild: reach (`r`), falloff (`decay`), beam width (`angle`, degrees) and edge (`soft`)
    * for spot lights, and the glow sprite size (`halo`). Brightness and saturation are applied in _update(). */
   _tuneLight(this: Home3DCard, rec: LightGroup) {
-    const L = rec.L,
-      l = rec.light as THREE.PointLight & Partial<THREE.SpotLight>,
-      r = L.r ?? 40;
+    const L = rec.L;
+    const l = rec.light as THREE.PointLight & Partial<THREE.SpotLight>;
+    const r = L.r ?? 40;
     if (rec.kind === "string") l.distance = Math.max(140, stringLen(L.points || []) * 0.9) * (r / 40);
-    else if (rec.kind === "niche") l.distance = 90 * (r / 40);
     else l.distance = r * (l.isSpotLight ? 3.2 : 2.6);
     l.decay = L.decay ?? (rec.kind === "glow" ? 1.1 : 1.2);
     if (l.isSpotLight) {
@@ -143,9 +142,9 @@ export class LightsPart {
   }
 
   _buildLights(this: Home3DCard) {
-    const T = this.T,
-      cfg = this._cfg(),
-      W = this._world;
+    const T = this.T;
+    const cfg = this._cfg();
+    const W = this._world;
     this._amb = new T.AmbientLight(0xffffff, 0.6);
     W.add(this._amb);
     this._hemi = new T.HemisphereLight(0xdfe8ff, 0x3a2f25, 0.4);
@@ -170,8 +169,8 @@ export class LightsPart {
     // group co-located bulbs into one physical light per fixture
     const groups = new Map<string, Pick<LightGroup, "kind" | "members" | "keys" | "L">>();
     (cfg.lights || []).forEach((L, i) => {
-      if (L.kind === "string" || L.fixture === "string" || L.kind === "niche") {
-        groups.set("e" + i, { kind: L.fixture === "string" ? "string" : L.kind!, members: [L], keys: ["l:" + i], L });
+      if (L.fixture === "string") {
+        groups.set("e" + i, { kind: "string", members: [L], keys: ["l:" + i], L });
         return;
       }
       const key = `${Math.round(L.x)}:${Math.round(L.y)}:${Math.round(L.z ?? 40)}`;
@@ -182,29 +181,24 @@ export class LightsPart {
     let shadowBudget = cfg.max_shadow_lights ?? 8;
     const ranked = [...groups.values()].sort((a, b) => (b.L.r ?? 40) - (a.L.r ?? 40));
     this._lightGroups = ranked.map((g) => {
-      const L = g.L,
-        rec = { ...g, fixtures: [] } as unknown as LightGroup; // the rest is filled in below
+      const L = g.L;
+      const rec = { ...g, fixtures: [] } as unknown as LightGroup; // the rest is filled in below
       const grp = new T.Group();
       grp.userData.key = g.keys[0];
       W.add(grp);
       for (const k of g.keys) this._items.set(k, grp);
       rec.group = grp;
       if (g.kind === "string") {
-        const pts = L.points || [],
-          [mx, my] = pts.length ? mean(pts) : [CX, CY];
+        const pts = L.points || [];
+        const [mx, my] = pts.length ? mean(pts) : [CX, CY];
         rec.light = new T.PointLight(0xffd59a, 0, 140, 1.2);
         rec.light.position.set(mx - CX, (L.z ?? 17) + 4, my - CY);
-        rec.bulbs = L.fixture === "string" ? this._buildFixture(L, grp) : this._bulbs || [];
-      } else if (g.kind === "niche") {
-        const [x1, x2, z1, z2, Y] = L.rect;
-        rec.light = new T.PointLight(0xe2ffec, 0, 90, 1.2);
-        rec.light.position.set((x1 + x2) / 2 - CX, (z1 + z2) / 2, Y + 10 - CY);
-        rec.niche = this._niche;
+        rec.bulbs = this._buildFixture(L, grp);
       } else {
-        const aimed = L.gx != null && Math.hypot(L.gx - L.x, L.gy - L.y) > 12,
-          down = !aimed && L.fixture === "can"; // can lights shine straight down
-        const r = L.r ?? 40,
-          z = L.z ?? 40;
+        const aimed = L.gx != null && Math.hypot(L.gx - L.x, L.gy - L.y) > 12;
+        const down = !aimed && L.fixture === "can"; // can lights shine straight down
+        const r = L.r ?? 40;
+        const z = L.z ?? 40;
         if (aimed || down) {
           rec.light = new T.SpotLight(0xffffff, 0, r * 3.2, down ? 0.9 : 0.75, 0.8, 1.1);
           rec.down = down;
@@ -248,24 +242,24 @@ export class LightsPart {
   /* a light's own fixture model (`L.fixture`), built into the light's group so it moves with it. Returns the meshes that
    * glow (emissive) when the light is on. Fixtures never cast shadows, or they would shadow their own light. */
   _buildFixture(this: Home3DCard, L: LightConfig, grp: THREE.Group): AnyMesh[] {
-    const T = this.T,
-      f = L.fixture;
+    const T = this.T;
+    const f = L.fixture;
     if (!f || !FIXTURES[f] || f === "none") return [];
     const fix = new T.Group();
     fix.userData.fixture = true;
     grp.add(fix);
-    const cur = this._cur,
-      nc = this._noCast;
+    const cur = this._cur;
+    const nc = this._noCast;
     this._cur = fix;
     this._noCast = true;
-    const H = this._cfg().scene?.wall_height ?? 46,
-      x = L.x,
-      y = L.y,
-      z = L.z ?? 40,
-      lit: AnyMesh[] = [],
-      glow = (c = "#fff1cf") => this._emissive(c);
-    const metal = L.trim || "#2a2a2a",
-      s = L.size! > 0 ? L.size! : 1; // `size` scales the fixture about the bulb; cords still reach the ceiling
+    const H = this._cfg().scene?.wall_height ?? 46;
+    const x = L.x;
+    const y = L.y;
+    const z = L.z ?? 40;
+    const lit: AnyMesh[] = [];
+    const glow = (c = "#fff1cf") => this._emissive(c);
+    const metal = L.trim || "#2a2a2a";
+    const s = L.size! > 0 ? L.size! : 1; // `size` scales the fixture about the bulb; cords still reach the ceiling
     if (f === "can") {
       this._cyl(x, y, z - 0.4 * s, 2.8 * s, 0.4 * s, "#e4e0d8", 20);
       lit.push(this._cyl(x, y, z - 0.5 * s, 2 * s, 0.2 * s, glow(), 20));
@@ -288,9 +282,9 @@ export class LightsPart {
       this._cyl(x, y, z - 9 * s, 2 * s, 6 * s, L.shade || "#cfcfcf", 14, 1.4 * s);
       lit.push(this._cyl(x, y, z - 3 * s, 4.5 * s, 6 * s, glow("#fbf3e2"), 20, 3.6 * s));
     } else if (f === "string") {
-      const pts = L.points || [],
-        mat = glow("#fff1c4"),
-        cord = this._mat("#2b2b2b");
+      const pts = L.points || [];
+      const mat = glow("#fff1c4");
+      const cord = this._mat("#2b2b2b");
       const seg = (a: number[], b: number[]) => {
         // a cord piece between two [x, y, z] points
         const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
@@ -304,13 +298,13 @@ export class LightsPart {
         this._add(m, false);
       };
       for (let i = 1; i < pts.length; i++) {
-        const a = pts[i - 1],
-          b = pts[i],
-          sag = spanSag(L, Math.hypot(b[0] - a[0], b[1] - a[1]));
+        const a = pts[i - 1];
+        const b = pts[i];
+        const sag = spanSag(L, Math.hypot(b[0] - a[0], b[1] - a[1]));
         let prev = [a[0], a[1], z];
         for (let k = 1; k <= 12; k++) {
-          const t = k / 12,
-            p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, z - sag * 4 * t * (1 - t)];
+          const t = k / 12;
+          const p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, z - sag * 4 * t * (1 - t)];
           seg(prev, p);
           prev = p;
         }
@@ -348,8 +342,8 @@ export class LightsPart {
    * Each window, glass door or glass wall between a roofed room and the outside gets a soft, shadowless spot light
    * aimed into the room, scaled by daylight in _update (`window_light` multiplies it; `daylight: false` on an opening skips it). */
   _buildSkyLights(this: Home3DCard, cfg: CardConfig) {
-    const T = this.T,
-      sc = cfg.scene || {};
+    const T = this.T;
+    const sc = cfg.scene || {};
     this._skyLights = [];
     if (this._plan || cfg.window_light === 0) return;
     const rooms = (sc.floors || []).filter(
@@ -357,8 +351,8 @@ export class LightsPart {
         f.pts?.length >= 3 && f.name !== "rug" && f.roof !== false && (f.roof === true || !OUTDOOR.test(f.name || "")),
     );
     const indoor = (x: number, y: number) => rooms.some((f) => inPoly(x, y, f.pts));
-    const H = sc.wall_height ?? 46,
-      aps: { x: number; y: number; ax: number; ay: number; w: number; z: number; h: number }[] = [];
+    const H = sc.wall_height ?? 46;
+    const aps: { x: number; y: number; ax: number; ay: number; w: number; z: number; h: number }[] = [];
     for (const o of sc.openings || []) {
       if (
         o.daylight === false ||
@@ -368,25 +362,19 @@ export class LightsPart {
       const [ax, ay] = rotPt(1, 0, 0, 0, o.rot || 0);
       aps.push({ x: o.x, y: o.y, ax, ay, w: o.w, z: o.z || 0, h: o.h ?? H });
     }
-    for (const v of sc.overlays || []) {
-      if (v.type === "glasswall")
-        aps.push({ x: v.x, y: (v.y1 + v.y2) / 2, ax: 0, ay: 1, w: Math.abs(v.y2 - v.y1), z: 0, h: H });
-      else if (v.type === "cornerglass")
-        aps.push({ x: (v.x1 + v.x2) / 2, y: v.y, ax: 1, ay: 0, w: Math.abs(v.x2 - v.x1), z: 0, h: H });
-    }
     aps.sort((a, b) => b.w - a.w);
     for (const a of aps.slice(0, cfg.max_window_lights ?? 10)) {
       let [nx, ny] = [-a.ay, a.ax]; // pick the normal that points from outside into a room
-      const p = 10,
-        inA = indoor(a.x + nx * p, a.y + ny * p),
-        inB = indoor(a.x - nx * p, a.y - ny * p);
+      const p = 10;
+      const inA = indoor(a.x + nx * p, a.y + ny * p);
+      const inB = indoor(a.x - nx * p, a.y - ny * p);
       if (inA === inB) continue; // interior partition, or nowhere near a room
       if (!inA) {
         nx = -nx;
         ny = -ny;
       }
-      const reach = Math.min(90, Math.max(30, a.w * 0.8)),
-        top = Math.min(a.z + a.h, H) - 4;
+      const reach = Math.min(90, Math.max(30, a.w * 0.8));
+      const top = Math.min(a.z + a.h, H) - 4;
       const L = new T.SpotLight(
         0xe4ecff,
         0,

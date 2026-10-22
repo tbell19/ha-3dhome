@@ -1,38 +1,40 @@
-/* Floor plan geometry (pure functions): wall joints, wall pieces around openings, and the legacy wall format.
+/* Floor plan geometry (pure functions): wall directions, how far wall ends reach into corners, the solid pieces of a
+ * wall around its doors and windows, and the joints where wall ends meet.
+ *
+ *   wall segment  {a:[x,y], b:[x,y], t?, h?, low?, color?}   centre line from a to b
+ *   opening       {kind, x, y, w, d, h, z, rot}              a "negative box" cut out of every wall it overlaps
  */
-import type { LegacyWall, Opening, Pt, Scene, WallSeg } from "../types";
-import { R1, rotPt } from "./util.js";
+import type { Opening, Pt, WallSeg } from "../types";
+import { rotPt } from "./util.js";
+import { cross, distance, dot, perp, sub } from "./vec2.js";
 
-/*
- * wall segment  {a:[x,y], b:[x,y], t?, h?, low?, color?}   — centre line from a to b
- * opening       {kind, x, y, w, d, h, z, rot}              — a "negative box" cut out of every wall it overlaps
- * blueprint     {src, x, y, w, h, rot, opacity, locked?, show?} */
+const ENDS = ["a", "b"] as const;
+
 /** a wall's unit direction and length: [ux, uy, length] */
-export const segDir = (s: WallSeg): [number, number, number] => {
-  const dx = s.b[0] - s.a[0],
-    dy = s.b[1] - s.a[1],
-    L = Math.hypot(dx, dy) || 1e-6;
-  return [dx / L, dy / L, L];
+export const segDir = (wall: WallSeg): [number, number, number] => {
+  const [dx, dy] = sub(wall.b, wall.a);
+  const length = Math.hypot(dx, dy) || 1e-6;
+  return [dx / length, dy / length, length];
 };
-/* ends that meet another wall at an angle are pushed out by half that wall's thickness, so corners close */
-export function wallExtensions(segs: WallSeg[], WT: number): [number, number][] {
-  const ext = segs.map((): [number, number] => [0, 0]);
-  segs.forEach((s, i) =>
-    (["a", "b"] as const).forEach((e, ei) => {
-      const p = s[e],
-        di = segDir(s);
-      segs.forEach((o, j) => {
-        if (j === i) return;
-        for (const f of ["a", "b"] as const) {
-          if (Math.hypot(o[f][0] - p[0], o[f][1] - p[1]) > 1) continue;
-          const dj = segDir(o);
-          if (Math.abs(di[0] * dj[1] - di[1] * dj[0]) > 0.17) ext[i][ei] = Math.max(ext[i][ei], (o.t ?? WT) / 2);
-        }
+
+/** Wall ends that meet another wall at an angle reach on by half that wall's thickness, so corners close.
+ * Returns how far each wall's [a, b] ends reach; `thickness` is the default wall thickness. */
+export function wallExtensions(walls: WallSeg[], thickness: number): [number, number][] {
+  return walls.map((wall, i) => {
+    const [ux, uy] = segDir(wall);
+    return ENDS.map((end) => {
+      let reach = 0;
+      walls.forEach((other, j) => {
+        if (j === i || !ENDS.some((e) => distance(other[e], wall[end]) <= 1)) return;
+        const [ox, oy] = segDir(other);
+        const angled = Math.abs(cross([ux, uy], [ox, oy])) > 0.17; // about 10° or more
+        if (angled) reach = Math.max(reach, (other.t ?? thickness) / 2);
       });
-    }),
-  );
-  return ext;
+      return reach;
+    }) as [number, number];
+  });
 }
+
 /** the four plan corners of an opening's box */
 export const openingCorners = (o: Opening) =>
   (
@@ -43,128 +45,86 @@ export const openingCorners = (o: Opening) =>
       [-1, 1],
     ] as const
   ).map(([sx, sy]) => rotPt(o.x + (sx * o.w) / 2, o.y + (sy * (o.d ?? 6)) / 2, o.x, o.y, o.rot || 0));
-/* split a wall into solid blocks [s0, s1, z0, z1] (s = distance along the wall from a) around the openings that overlap it */
-export function wallPieces(s: WallSeg, ext: [number, number], openings: Opening[], H: number, WT: number) {
-  const [ux, uy, L] = segDir(s),
-    nx = -uy,
-    ny = ux,
-    t = s.t ?? WT,
-    h = s.h ?? H,
-    lo = -ext[0],
-    hi = L + ext[1];
-  const holes: [number, number, number, number][] = [];
-  for (const o of openings) {
-    let s0 = Infinity,
-      s1 = -Infinity,
-      q0 = Infinity,
-      q1 = -Infinity;
-    for (const p of openingCorners(o)) {
-      const dx = p[0] - s.a[0],
-        dy = p[1] - s.a[1],
-        ss = dx * ux + dy * uy,
-        qq = dx * nx + dy * ny;
-      s0 = Math.min(s0, ss);
-      s1 = Math.max(s1, ss);
-      q0 = Math.min(q0, qq);
-      q1 = Math.max(q1, qq);
-    }
-    if (Math.min(q1, t / 2) - Math.max(q0, -t / 2) < t * 0.5 || s1 <= lo || s0 >= hi) continue; // must go at least halfway through the wall — grazing a neighbouring wall at a corner doesn't cut it
-    const z0 = Math.max(0, o.z || 0),
-      z1 = Math.min(h, (o.z || 0) + o.h);
-    if (z1 > z0) holes.push([Math.max(lo, s0), Math.min(hi, s1), z0, z1]);
+
+/** a solid block of wall: [from, to] along the wall (distance from its `a` end), [bottom, top] in height */
+export type WallPiece = [number, number, number, number];
+
+/** Splits a wall into solid blocks around the openings that cut through it. `reach` is how far its ends extend
+ * (wallExtensions), `height` and `thickness` the defaults for walls that don't set their own. */
+export function wallPieces(
+  wall: WallSeg,
+  reach: [number, number],
+  openings: Opening[],
+  height: number,
+  thickness: number,
+): WallPiece[] {
+  const [ux, uy, length] = segDir(wall);
+  const along: Pt = [ux, uy];
+  const across = perp(along);
+  const depth = wall.t ?? thickness;
+  const top = wall.h ?? height;
+  const start = -reach[0];
+  const end = length + reach[1];
+
+  // each opening's box, measured along and across the wall
+  const holes: WallPiece[] = [];
+  for (const opening of openings) {
+    const offsets = openingCorners(opening).map((corner) => sub(corner, wall.a));
+    const alongs = offsets.map((p) => dot(p, along));
+    const acrosses = offsets.map((p) => dot(p, across));
+    const from = Math.min(...alongs);
+    const to = Math.max(...alongs);
+    const inWall = Math.min(Math.max(...acrosses), depth / 2) - Math.max(Math.min(...acrosses), -depth / 2);
+    // it must go at least halfway through the wall: grazing a neighbouring wall at a corner doesn't cut it
+    if (inWall < depth * 0.5 || to <= start || from >= end) continue;
+    const bottom = Math.max(0, opening.z || 0);
+    const holeTop = Math.min(top, (opening.z || 0) + opening.h);
+    if (holeTop > bottom) holes.push([Math.max(start, from), Math.min(end, to), bottom, holeTop]);
   }
-  const cuts = [...new Set([lo, hi, ...holes.flatMap((x) => [x[0], x[1]])])].sort((a, b) => a - b),
-    pieces: [number, number, number, number][] = [];
+
+  // between each pair of cuts the wall is solid except where holes span it; neighbouring blocks of the same height merge
+  const cuts = [...new Set([start, end, ...holes.flatMap((h) => [h[0], h[1]])])].sort((a, b) => a - b);
+  const pieces: WallPiece[] = [];
   for (let i = 0; i < cuts.length - 1; i++) {
-    const a = cuts[i],
-      b = cuts[i + 1],
-      m = (a + b) / 2;
-    if (b - a < 0.05) continue;
-    const zs = holes
-      .filter((x) => x[0] <= m && x[1] >= m)
-      .map((x) => [x[2], x[3]])
+    const from = cuts[i];
+    const to = cuts[i + 1];
+    const middle = (from + to) / 2;
+    if (to - from < 0.05) continue;
+    const gaps = holes
+      .filter((h) => h[0] <= middle && h[1] >= middle)
+      .map((h) => [h[2], h[3]])
       .sort((p, q) => p[0] - q[0]);
-    let z = 0;
     const solid: [number, number][] = [];
-    for (const [z0, z1] of zs) {
-      if (z0 > z) solid.push([z, z0]);
-      z = Math.max(z, z1);
+    let z = 0;
+    for (const [gapBottom, gapTop] of gaps) {
+      if (gapBottom > z) solid.push([z, gapBottom]);
+      z = Math.max(z, gapTop);
     }
-    if (z < h) solid.push([z, h]);
-    for (const [z0, z1] of solid) {
-      const prev = pieces.find((p) => p[1] === a && p[2] === z0 && p[3] === z1);
-      if (prev) prev[1] = b;
-      else pieces.push([a, b, z0, z1]);
+    if (z < top) solid.push([z, top]);
+    for (const [bottom, blockTop] of solid) {
+      const before = pieces.find((p) => p[1] === from && p[2] === bottom && p[3] === blockTop);
+      if (before) before[1] = to;
+      else pieces.push([from, to, bottom, blockTop]);
     }
   }
   return pieces;
 }
-/* corners where wall ends meet: one draggable handle per joint */
+
+/** a corner where wall ends meet: one draggable handle per joint */
 export interface Joint {
   p: Pt;
   m: [number, "a" | "b"][]; // the wall ends that meet here: [wall index, end]
 }
-export function planJoints(segs: WallSeg[]) {
-  const js: Joint[] = [];
-  segs.forEach((s, i) =>
-    (["a", "b"] as const).forEach((e) => {
-      const p = s[e];
-      let j = js.find((q) => Math.hypot(q.p[0] - p[0], q.p[1] - p[1]) < 0.6);
-      if (!j) js.push((j = { p: [p[0], p[1]], m: [] }));
-      j.m.push([i, e]);
+
+export function planJoints(walls: WallSeg[]) {
+  const joints: Joint[] = [];
+  walls.forEach((wall, i) =>
+    ENDS.forEach((end) => {
+      const p = wall[end];
+      let joint = joints.find((j) => distance(j.p, p) < 0.6);
+      if (!joint) joints.push((joint = { p: [p[0], p[1]], m: [] }));
+      joint.m.push([i, end]);
     }),
   );
-  return js;
-}
-/* the original axis-aligned walls ({axis, at, spans, doors}) → free segments + door openings; looks identical */
-export function legacyWalls(sc: Scene) {
-  const H = sc.wall_height ?? 46,
-    LIN = sc.lintel ?? 8,
-    LOW = sc.low ?? 8,
-    WT = sc.wall_thickness ?? 4,
-    segs: WallSeg[] = [],
-    opens: Opening[] = [];
-  const pt = (axis: string, at: number, v: number): Pt => (axis === "y" ? [at, v] : [v, at]);
-  const run = (w: LegacyWall, low: boolean) => {
-    const h = w.h ?? (low ? LOW : H);
-    const iv = [
-      ...(w.spans || []).map(([a, b]) => [Math.min(a, b), Math.max(a, b), 0]),
-      ...(low ? [] : (w.doors || []).map(([a, b]) => [Math.min(a, b), Math.max(a, b), 1])),
-    ].sort((p, q) => p[0] - q[0]);
-    let cur: number[] | null = null;
-    const flush = () => {
-      if (cur)
-        segs.push({
-          a: pt(w.axis, w.at, cur[0]),
-          b: pt(w.axis, w.at, cur[1]),
-          ...(h !== H ? { h } : {}),
-          ...(low ? { low: true } : {}),
-          ...(w.note ? { note: w.note } : {}),
-        });
-    };
-    for (const [a, b, door] of iv) {
-      if (door) {
-        const [x, y] = pt(w.axis, w.at, (a + b) / 2);
-        opens.push({
-          kind: "door",
-          x,
-          y,
-          w: R1(b - a),
-          d: WT + 2,
-          h: h - LIN,
-          z: 0,
-          ...(w.axis === "y" ? { rot: 90 } : {}),
-        });
-      }
-      if (cur && a <= cur[1] + 0.01) cur[1] = Math.max(cur[1], b);
-      else {
-        flush();
-        cur = [a, b];
-      }
-    }
-    flush();
-  };
-  for (const w of sc.walls || []) run(w, false);
-  for (const w of sc.front_walls || []) run(w, true);
-  return { segs, opens };
+  return joints;
 }

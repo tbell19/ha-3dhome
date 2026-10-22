@@ -6,16 +6,6 @@ declare global {
   interface Window {
     /** the core's helpers for the editor module (src/editor-api.ts) */
     __ha3dhome?: EditorApi;
-    /** dashboard strategies listed under Settings → Dashboards → Add dashboard (HA 2026.5+) */
-    customStrategies?: {
-      type: string;
-      strategyType: string;
-      name: string;
-      description: string;
-      documentationURL: string;
-    }[];
-    /** custom cards listed in the card picker */
-    customCards?: { type: string; name: string; description: string }[];
     /** Home Assistant's helpers for building Lovelace cards */
     loadCardHelpers?(): Promise<{ createCardElement(config: LovelaceCardConfig): LovelaceCardElement }>;
   }
@@ -25,4 +15,13 @@ declare global {
 export interface LovelaceCardElement extends HTMLElement {
   setConfig?(config: LovelaceCardConfig): void;
   hass?: unknown;
+}
+
+declare module "preact" {
+  namespace JSX {
+    interface IntrinsicElements {
+      /** Home Assistant's icon element, for example <ha-icon icon="mdi:close" /> */
+      "ha-icon": HTMLAttributes<HTMLElement> & { icon: string };
+    }
+  }
 }

@@ -22,7 +22,9 @@ export const WEATHER_ICON3: Record<string, string> = {
 /** colour temperature in kelvin → [r, g, b] */
 export function k2rgb(k: number): number[] {
   const t = k / 100;
-  let r: number, g: number, b: number;
+  let r: number;
+  let g: number;
+  let b: number;
   if (t <= 66) {
     r = 255;
     g = 99.47 * Math.log(t) - 161.12;

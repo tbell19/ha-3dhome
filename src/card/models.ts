@@ -86,8 +86,8 @@ export class ModelsPart {
   async _extractModel(this: Home3DCard, o: SceneItem): Promise<ModelFiles> {
     const lib = await this._openLib(o.lib!);
     const s = lib.sh3fs.find((x) => x.name === (o.sh3f || "")) || lib.sh3fs[0];
-    let zip = s.zip,
-      path = o.model!.replace(/^\/+/, "");
+    let zip = s.zip;
+    let path = o.model!.replace(/^\/+/, "");
     if (/\.zip$/i.test(path)) {
       const JSZip = await this._jszip();
       const f = zipFind(zip, path);
@@ -99,8 +99,8 @@ export class ModelsPart {
     }
     const of = zipFind(zip, path);
     if (!of) throw new Error("model missing: " + path);
-    const obj = await of.async("string"),
-      dir = dirOf(of.name);
+    const obj = await of.async("string");
+    const dir = dirOf(of.name);
     const out: ModelFiles = { obj, mtl: null, tex: {} };
     const mtlName = (obj.match(/^\s*mtllib\s+(.+?)\s*$/m) || [])[1];
     if (mtlName) {
@@ -160,13 +160,13 @@ export class ModelsPart {
           }
         });
         obj.updateMatrixWorld(true);
-        const box = new T.Box3().setFromObject(obj),
-          size = box.getSize(new T.Vector3()),
-          center = box.getCenter(new T.Vector3());
+        const box = new T.Box3().setFromObject(obj);
+        const size = box.getSize(new T.Vector3());
+        const center = box.getCenter(new T.Vector3());
         return { node: obj, size, center, min: box.min.clone() };
       })();
       p.catch((e) => {
-        console.warn("ha-3dhome-card model", key, e);
+        console.warn("ha-3dhome model", key, e);
         MODELCACHE.delete(key);
       });
       MODELCACHE.set(key, p);
@@ -178,14 +178,14 @@ export class ModelsPart {
     const objs = this._cfg().scene?.objects || [];
     objs.forEach((o, i) => {
       if (o.type !== "model") return;
-      const key = "o:" + i,
-        world = this._world;
+      const key = "o:" + i;
+      const world = this._world;
       this._modelProto(o)
         .then((proto) => {
           const outer = this._items.get(key);
           if (world !== this._world || !outer) return;
-          const inner = outer.userData.inner,
-            T = this.T;
+          const inner = outer.userData.inner;
+          const T = this.T;
           const ph = inner.children.find((c: THREE.Object3D) => c.userData.placeholder);
           if (ph) {
             inner.remove(ph);

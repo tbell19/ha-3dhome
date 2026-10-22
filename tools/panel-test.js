@@ -10,49 +10,37 @@
  * dashboard, a save from another device appears without a new WebGL context, edits in progress aren't pulled away and
  * their Save reports the clash, the sidebar button on narrow screens, nothing offered to non-admins.
  */
-const { chromium } = require("playwright");
-const fs = require("fs"),
-  path = require("path");
-const ROOT = path.join(__dirname, "..");
-const CODE = require("./bundle").bundle({ dist: process.argv.includes("--dist") }); // { core, editor }
-const OUT = path.join(__dirname, "out");
-fs.mkdirSync(OUT, { recursive: true });
-const js = (body) => ({ body, contentType: "application/javascript", headers: { "access-control-allow-origin": "*" } });
-const esm = (rel) =>
-  fs
-    .readFileSync(path.join(ROOT, "node_modules/three/examples/jsm", rel), "utf8")
-    .replace(/from 'three'/g, "from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm'");
-const results = [];
-const check = (name, ok, detail = "") => {
-  results.push(ok);
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`);
+const path = require("path");
+const { OUT, CODE, SAMPLE_HOME, launch, check, report } = require("./harness");
+
+/* the sample home as an old (pre-v6) dashboard held it: in the iso-home strategy, with a railing and an old-style
+ * string light, which the import leaves out and brings up to date */
+const OLD_DASHBOARD = {
+  strategy: {
+    type: "custom:iso-home",
+    title: "Home",
+    ...SAMPLE_HOME,
+    scene: {
+      ...SAMPLE_HOME.scene,
+      overlays: [...SAMPLE_HOME.scene.overlays, { type: "railing", x: 500, x_end: 450, y1: 500, y2: 540, h: 20 }],
+    },
+    lights: [
+      ...SAMPLE_HOME.lights,
+      {
+        entity: "light.old_string",
+        kind: "string",
+        z: 37,
+        points: [
+          [200, 400],
+          [300, 400],
+        ],
+      },
+    ],
+  },
 };
 
 (async () => {
-  const dash = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/fixtures/test-home.json"), "utf8"));
-  const exe =
-    process.env.CHROMIUM_PATH || (fs.existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined);
-  const browser = await chromium.launch({
-    executablePath: exe,
-    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
-  });
-  const p = await browser.newPage({ viewport: { width: 1100, height: 700 }, deviceScaleFactor: 1 });
-  const errors = [];
-  p.on("pageerror", (e) => {
-    errors.push(e.message);
-    console.log("pageerror:", e.message);
-  });
-  await p.route("https://cdn.jsdelivr.net/**", (r) => {
-    const u = r.request().url();
-    for (const [k, f] of [
-      ["OrbitControls", "controls/OrbitControls.js"],
-      ["TransformControls", "controls/TransformControls.js"],
-      ["OBJLoader", "loaders/OBJLoader.js"],
-      ["MTLLoader", "loaders/MTLLoader.js"],
-    ])
-      if (u.includes(k)) return r.fulfill(js(esm(f)));
-    return r.fulfill(js(fs.readFileSync(path.join(ROOT, "node_modules/three/build/three.module.js"), "utf8")));
-  });
+  const { browser, page: p, errors, ev, wait, until } = await launch({ viewport: { width: 1100, height: 700 } });
   const html = `<!doctype html><meta charset=utf-8><body style="margin:0"><div id=host></div>
 <script>customElements.define('ha-card',class extends HTMLElement{connectedCallback(){this.style.display='block'}});
 customElements.define('ha-icon',class extends HTMLElement{});
@@ -63,7 +51,7 @@ HTMLCanvasElement.prototype.getContext=function(t,...a){const c=_gc.call(this,t,
 window.server={E1:{config:{},rev:0,subs:[]},E2:{config:{},rev:0,subs:[]},saves:[],calls:[],
   push(id){const s=this[id];for(const cb of s.subs)cb(JSON.parse(JSON.stringify({config:s.config,rev:s.rev})))},
   saveFrom(id,config){const s=this[id];s.config=config;s.rev++;this.push(id)}};
-const __dash=${JSON.stringify(dash)};
+const __dash=${JSON.stringify(OLD_DASHBOARD)};
 window.makeHass=(admin)=>({states:{},user:{is_admin:admin},services:{},callService:async()=>{},
   connection:{subscribeEvents:async()=>()=>{},
     subscribeMessage:async(cb,m)=>{const s=server[m.entry_id];s.subs.push(cb);setTimeout(()=>server.push(m.entry_id),0);return async()=>{s.subs.splice(s.subs.indexOf(cb),1)}}},
@@ -80,15 +68,9 @@ window.makeHass=(admin)=>({states:{},user:{is_admin:admin},services:{},callServi
 const __panel=document.createElement('ha-3dhome-panel');
 __panel.hass=makeHass(true); __panel.narrow=false; __panel.panel={url_path:'3d-home',config:{entry_id:'E1'}};
 document.getElementById('host').append(__panel);
-window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-card');</script>`;
+window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-map');</script>`;
   await p.route("http://ha.test/**", (r) => r.fulfill({ body: html, contentType: "text/html" }));
 
-  const ev = (s) => p.evaluate(s);
-  const wait = (ms) => p.waitForTimeout(ms);
-  const until = async (expr, ms = 15000) => {
-    for (const t = Date.now(); Date.now() - t < ms; await wait(100)) if (await ev(expr)) return true;
-    return false;
-  };
   const rooms = () => ev(`[...card.shadowRoot.querySelectorAll('.rooms button')].map(b=>b.textContent)`);
   const importBox = `panel.shadowRoot.querySelector('.import')`;
 
@@ -120,6 +102,12 @@ window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-ca
     "the copied map shows",
     await until(`card.shadowRoot.querySelectorAll('.rooms button').length>=8`),
     (await rooms()).join(),
+  );
+  check(
+    "the copy is brought up to date (retired pieces left out, old string lights converted)",
+    await ev(
+      `!server.E1.config.scene.overlays.some(o=>o.type==='railing') && server.E1.config.lights.at(-1).fixture==='string' && !('kind' in server.E1.config.lights.at(-1)) && !('title' in server.E1.config)`,
+    ),
   );
   check("it says where the map came from", await ev(`${importBox}.textContent.includes('Juniper House')`));
   await ev(`${importBox}.querySelector('button').click()`);
@@ -202,7 +190,7 @@ window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-ca
   await wait(500);
   check(
     "a new panel element for the same page keeps the map's scene",
-    await ev(`panel.shadowRoot.querySelector('ha-3dhome-card')===card && card._renderer===__r && __ctx===${ctx0}`),
+    await ev(`panel.shadowRoot.querySelector('ha-3dhome-map')===card && card._renderer===__r && __ctx===${ctx0}`),
   );
   check("…and still follows saves", await ev(`server.E1.subs.length===1`));
 
@@ -217,19 +205,13 @@ window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-ca
   check(
     "…and no Edit button",
     await ev(
-      `(()=>{const b=panel2.shadowRoot.querySelector('ha-3dhome-card').shadowRoot?.querySelector('.edbtn');return !b||b.style.display==='none'})()`,
+      `(()=>{const b=panel2.shadowRoot.querySelector('ha-3dhome-map').shadowRoot?.querySelector('.edbtn');return !b||b.style.display==='none'})()`,
     ),
   );
 
   check("no page errors", errors.length === 0, errors.join(" | "));
   await browser.close();
-  const failed = results.filter((r) => !r).length;
-  console.log(
-    failed
-      ? `\n${failed} of ${results.length} panel checks FAILED`
-      : `\n${results.length}/${results.length} panel checks passed.`,
-  );
-  process.exit(failed ? 1 : 0);
+  report("panel checks");
 })().catch((e) => {
   console.error(e);
   process.exit(1);

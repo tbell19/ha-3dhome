@@ -1,6 +1,6 @@
 /* Before/after screenshots of the optional render looks (`look:` in the card config).
  *
- * Loads the card the same way as the smoke test (strategy + fake hass + Three.js from node_modules),
+ * Loads the map the same way as the smoke test (the panel + fake hass + Three.js from node_modules),
  * once per look, by day and by night, and writes PNGs to tools/out/looks/.
  *
  *   node tools/look-shots.js                 every look
@@ -9,12 +9,10 @@
  *   node tools/look-shots.js nowindow        window daylight off, to compare with base
  *   node tools/look-shots.js panel           the editor's Look panel, with a slider moved
  */
-const { chromium } = require("playwright");
 const fs = require("fs"),
   path = require("path");
+const { ROOT, SAMPLE_HOME, launch, panelPage, serve } = require("./harness");
 
-const ROOT = path.join(__dirname, "..");
-const CODE = require("./bundle").bundle(); // { core, editor }
 const MOBILE = process.argv.includes("--mobile");
 const OUT = path.join(__dirname, "out/looks");
 fs.mkdirSync(OUT, { recursive: true });
@@ -50,33 +48,8 @@ const STATES = {
   "binary_sensor.deck_door": { state: "on", attributes: { device_class: "door" } },
 };
 
-const js = (body) => ({ body, contentType: "application/javascript", headers: { "access-control-allow-origin": "*" } });
-// examples/jsm modules, with bare and relative imports pointed back at the (intercepted) CDN
-const JSM = "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/";
-const esm = (rel) =>
-  fs
-    .readFileSync(path.join(ROOT, "node_modules/three/examples/jsm", rel), "utf8")
-    .replace(/from 'three'/g, "from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm'")
-    .replace(/from '(\.{1,2}\/[^']+)'/g, (_, r) => `from '${new URL(r, JSM + rel).href}/+esm'`);
-
 (async () => {
-  const dash = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/fixtures/test-home.json"), "utf8"));
-  const exe =
-    process.env.CHROMIUM_PATH || (fs.existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined);
-  const browser = await chromium.launch({
-    executablePath: exe,
-    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
-  });
-  const ctx = await browser.newContext(
-    MOBILE
-      ? { viewport: { width: 390, height: 800 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }
-      : { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 },
-  );
-  await ctx.route("https://cdn.jsdelivr.net/**", (r) => {
-    const u = r.request().url();
-    if (u.includes("/examples/jsm/")) return r.fulfill(js(esm(u.split("/examples/jsm/")[1].replace(/\/\+esm$/, ""))));
-    return r.fulfill(js(fs.readFileSync(path.join(ROOT, "node_modules/three/build/three.module.js"), "utf8")));
-  });
+  const { browser, ctx } = await launch({ mobile: MOBILE });
 
   for (const name of names)
     for (const mode of name === "panel" || name === "ltune" ? ["night"] : ["day", "night"]) {
@@ -85,24 +58,17 @@ const esm = (rel) =>
       const errors = [];
       p.on("pageerror", (e) => errors.push(e.message));
       p.on("console", (m) => m.type() === "error" && !m.text().includes("404") && errors.push(m.text()));
-      const html = `<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1"></head>
-<body style="margin:0;background:#111"><div id=host></div>
-<script>customElements.define('ha-card',class extends HTMLElement{connectedCallback(){this.style.display='block'}});
-customElements.define('ha-icon',class extends HTMLElement{});</script>
-${panel ? `<script type=module>${CODE.editor}</script>` : ""}
-<script type=module>${CODE.core}
-const __gen=await customElements.get('ll-strategy-dashboard-ha-3dhome').generate(${JSON.stringify(dash.strategy)});
-const __card=document.createElement('ha-3dhome-card');
-__card.setConfig({...__gen.views[0].cards[0], night_mode: ${JSON.stringify(mode === "night" ? "always" : "never")}, look: ${JSON.stringify(LOOKS[name])}${name === "nowindow" ? ", window_light: 0" : ""}});
-document.getElementById('host').append(__card);
-__card.hass={states:${JSON.stringify(STATES)},user:{is_admin:${panel}},services:{},callService:async()=>{},connection:{subscribeEvents:async()=>()=>{}},callWS:async()=>null};
-window.card=__card;</script></body></html>`;
-      await p.route("http://ha.test/**", (r) =>
-        r.request().url().includes("/local/")
-          ? r.fulfill({ status: 404, body: "" })
-          : r.fulfill({ body: html, contentType: "text/html" }),
-      );
-      await p.goto("http://ha.test/3d-home/3d");
+      const html = panelPage({
+        config: {
+          ...SAMPLE_HOME,
+          night_mode: mode === "night" ? "always" : "never",
+          look: LOOKS[name],
+          ...(name === "nowindow" ? { window_light: 0 } : {}),
+        },
+        states: STATES,
+        admin: panel,
+      });
+      await serve(p, html, (r, u) => u.includes("/local/") && r.fulfill({ status: 404, body: "" }));
       await p.waitForTimeout(7000);
       if (panel) {
         // open the editor's Look panel and drag the glow slider down to 20%

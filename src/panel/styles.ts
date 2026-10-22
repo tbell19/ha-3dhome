@@ -4,11 +4,11 @@
 export const panelStyles = `
   :host { display: block; position: relative; height: 100vh; height: 100dvh; overflow: hidden;
     background: var(--ha-3dhome-bg, #1b1a18); }
-  ha-3dhome-card { display: block; height: 100%; --header-height: 0px; }
+  ha-3dhome-map { display: block; height: 100%; --header-height: 0px; }
   .menu { display: none; position: absolute; left: 4px; top: calc(4px + env(safe-area-inset-top, 0px)); z-index: 5;
     color: #f2ebe0; --mdc-icon-button-size: 44px; }
   :host([narrow]) .menu { display: block; }
-  :host([narrow]) ha-3dhome-card { --ha-3dhome-inset-left: 44px; }
+  :host([narrow]) ha-3dhome-map { --ha-3dhome-inset-left: 44px; }
   .import { position: absolute; left: 50%; top: calc(16px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 6;
     width: min(380px, calc(100% - 32px)); box-sizing: border-box; display: grid; gap: 8px; padding: 16px;
     border-radius: 14px; background: rgba(20,18,16,.92); border: 1px solid rgba(255,255,255,.12); color: #f2ebe0;

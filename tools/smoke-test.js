@@ -1,9 +1,8 @@
-/* Headless smoke test for ha-3dhome-card.
+/* Headless smoke test for 3D Home.
  *
- * Loads the card exactly the way Home Assistant does on a strategy dashboard — through the
- * `custom:ha-3dhome` dashboard strategy, using the sample home in tools/fixtures/test-home.json —
- * with a fake `hass` object, Three.js served from node_modules (no network), and a mock Sweet Home 3D
- * library. Then it drives the editor and checks the results.
+ * Loads the map exactly the way Home Assistant does: the integration's sidebar page (<ha-3dhome-panel>) showing the
+ * sample home (examples/sample-home.json), with a fake `hass`, Three.js served from node_modules (no network) and a
+ * mock Sweet Home 3D library. Then it drives the editor and checks the results.
  *
  *   npm test                 desktop checks (mouse)
  *   npm test -- --mobile     phone viewport + touch checks
@@ -12,22 +11,12 @@
  * Screenshots go to tools/out/. Exit code is non-zero if any check fails.
  * Rendering uses SwiftShader (software WebGL), so it is slow — allow a couple of minutes.
  */
-const { chromium } = require("playwright");
 const fs = require("fs"),
   path = require("path");
 const { build: buildMockLib } = require("./mock/build-mock-lib");
+const { OUT, launch, panelPage, serve, check, report } = require("./harness");
 
-const ROOT = path.join(__dirname, "..");
 const MOBILE = process.argv.includes("--mobile");
-const CODE = require("./bundle").bundle({ dist: process.argv.includes("--dist") }); // { core, editor }
-const OUT = path.join(__dirname, "out");
-fs.mkdirSync(OUT, { recursive: true });
-
-const results = [];
-const check = (name, ok, detail = "") => {
-  results.push({ name, ok });
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`);
-};
 
 const on = (rgb, bri = 255, extra = {}) => ({ state: "on", attributes: { brightness: bri, rgb_color: rgb, ...extra } });
 const STATES = {
@@ -78,76 +67,14 @@ const STATES = {
   },
 };
 
-const js = (body) => ({ body, contentType: "application/javascript", headers: { "access-control-allow-origin": "*" } });
-const esm = (rel) =>
-  fs
-    .readFileSync(path.join(ROOT, "node_modules/three/examples/jsm", rel), "utf8")
-    .replace(/from 'three'/g, "from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm'");
-
 (async () => {
   const libZip = await buildMockLib();
-  const dash = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/fixtures/test-home.json"), "utf8"));
-  // CHROMIUM_PATH lets you point at a system Chromium when the bundled Playwright browser isn't installed
-  const exe =
-    process.env.CHROMIUM_PATH || (fs.existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : undefined);
-  const browser = await chromium.launch({
-    executablePath: exe,
-    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+  const { browser, ctx, page: p, errors, ev, wait, until } = await launch({ mobile: MOBILE });
+  const html = panelPage({
+    states: STATES,
+    hass: "{services:{downloader:{download_file:{}}}}",
   });
-  const ctx = await browser.newContext(
-    MOBILE
-      ? { viewport: { width: 390, height: 800 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }
-      : { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 },
-  );
-  const p = await ctx.newPage();
-  const errors = [];
-  p.on("pageerror", (e) => {
-    errors.push(e.message);
-    console.log("pageerror:", e.message);
-  });
-
-  // CDN modules -> local node_modules
-  await ctx.route("https://cdn.jsdelivr.net/**", (r) => {
-    const u = r.request().url();
-    if (u.includes("js-yaml"))
-      return r.fulfill(js("export default { dump: (v) => JSON.stringify(v, null, 2), load: (t) => JSON.parse(t) };"));
-    if (u.includes("jszip"))
-      return r.fulfill(
-        js(
-          "var module={exports:{}};var exports=module.exports;" +
-            fs.readFileSync(path.join(ROOT, "node_modules/jszip/dist/jszip.min.js"), "utf8") +
-            "\nexport default module.exports;",
-        ),
-      );
-    for (const [k, f] of [
-      ["OrbitControls", "controls/OrbitControls.js"],
-      ["TransformControls", "controls/TransformControls.js"],
-      ["OBJLoader", "loaders/OBJLoader.js"],
-      ["MTLLoader", "loaders/MTLLoader.js"],
-    ])
-      if (u.includes(k)) return r.fulfill(js(esm(f)));
-    return r.fulfill(js(fs.readFileSync(path.join(ROOT, "node_modules/three/build/three.module.js"), "utf8")));
-  });
-  // fake HA origin: the page, /local/sh3d/ libraries and media artwork
-  const html = `<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1"></head>
-<body style="margin:0;background:#111"><div id=host></div>
-<script>customElements.define('ha-card',class extends HTMLElement{connectedCallback(){this.style.display='block'}});
-customElements.define('ha-icon',class extends HTMLElement{});
-customElements.define('hui-tile-card',class extends HTMLElement{setConfig(c){this.c=c} set hass(h){this.h=h;this.textContent=this.c.entity+': '+h.states[this.c.entity]?.state}});
-window.loadCardHelpers=async()=>({createCardElement:(c)=>{const e=document.createElement('hui-'+c.type+'-card');e.setConfig(c);return e}});</script>
-<script type=module>${CODE.editor}</script>
-<script type=module>${CODE.core}
-const __dash=${JSON.stringify(dash)};
-window.saved=null; window.calls=[];
-const __gen=await customElements.get('ll-strategy-dashboard-ha-3dhome').generate(__dash.strategy);
-window.gen=__gen;
-const __card=document.createElement('ha-3dhome-card'); __card.setConfig(__gen.views[0].cards[0]); document.getElementById('host').append(__card);
-__card.hass={states:${JSON.stringify(STATES)},user:{is_admin:true},services:{downloader:{download_file:{}}},
-  callService:async(...a)=>{calls.push(a)},connection:{subscribeEvents:async()=>()=>{}},
-  callWS:async(m)=>{calls.push(m.type);if(m.type==='lovelace/config')return JSON.parse(JSON.stringify(__dash));if(m.type==='lovelace/config/save'){window.saved=m.config;return null}}};
-window.card=__card;</script></body></html>`;
-  await p.route("http://ha.test/**", (r) => {
-    const u = r.request().url();
+  await serve(p, html, (r, u) => {
     if (u.includes("/local/sh3d/3DModels-LucaPresidente"))
       return r.fulfill({ body: fs.readFileSync(libZip), contentType: "application/zip" });
     if (u.includes("/local/")) return r.fulfill({ status: 404, body: "not found" });
@@ -158,11 +85,7 @@ window.card=__card;</script></body></html>`;
         ),
         contentType: "image/png",
       });
-    return r.fulfill({ body: html, contentType: "text/html" });
   });
-
-  const ev = (s) => p.evaluate(s);
-  const wait = (ms) => p.waitForTimeout(ms);
   const screen = (planX, planY, z = 4) =>
     ev(`(()=>{const v=new card.T.Vector3(${planX}-296,${z},${planY}-391).project(card._cam);
     const r=card._renderer.domElement.getBoundingClientRect();return [r.left+(v.x+1)/2*r.width, r.top+(1-v.y)/2*r.height]})()`);
@@ -171,24 +94,8 @@ window.card=__card;</script></body></html>`;
       `(()=>{const b=card._work.scene.boxes[${i}];const a=Array.isArray(b)?b:b.b;return [(a[0]+a[1])/2,(a[2]+a[3])/2]})()`,
     );
 
-  await p.goto("http://ha.test/3d-home/3d");
   await wait(6000);
-  check(
-    "strategy generates one panel view",
-    await ev(`gen.views.length===1 && gen.views[0].type==='panel' && gen.views[0].cards[0].fill===true`),
-  );
-  check(
-    "old names still work (iso-home-3d-card, custom:iso-home)",
-    await ev(
-      `(async()=>!!customElements.get('iso-home-3d-card') && (await customElements.get('ll-strategy-dashboard-iso-home').generate({})).views[0].cards[0].type==='custom:ha-3dhome-card')()`,
-    ),
-  );
-  check(
-    "listed in Add dashboard (window.customStrategies)",
-    await ev(
-      `window.customStrategies.filter(s=>s.type==='ha-3dhome'&&s.strategyType==='dashboard'&&s.name).length===1`,
-    ),
-  );
+  check("the panel shows the map", await ev(`!!card._ready && panel.shadowRoot.contains(card)`));
   check("card renders without page errors", errors.length === 0, errors.join(" | "));
   check("room menu built from floors", (await ev(`card.shadowRoot.querySelectorAll('.rooms button').length`)) >= 8);
   check(
@@ -218,7 +125,7 @@ window.card=__card;</script></body></html>`;
 
   // string lights toggle from a tap anywhere along the string, not just its first point
   await ev(
-    `(()=>{card._config.lights.push({entity:'light.test_string',fixture:'string',kind:'string',z:37,points:[[200,400],[320,400],[380,460]]});card._rebuild()})()`,
+    `(()=>{card._config.lights.push({entity:'light.test_string',fixture:'string',z:37,points:[[200,400],[320,400],[380,460]]});card._rebuild()})()`,
   );
   await wait(800);
   for (const [px, py, label] of [
@@ -302,8 +209,8 @@ window.card=__card;</script></body></html>`;
   await ev(`delete card._update; delete card._placeOverlays`);
 
   await ev(`card.shadowRoot.querySelector('.edbtn').click()`);
-  await wait(1500);
-  check("edit mode opens", await ev(`!!card._edit && !!card.shadowRoot.querySelector('.bar')`));
+  check("edit mode opens", await until(`!!card._edit && !!card.shadowRoot.querySelector('.bar')`, 8000));
+  await wait(500);
   const SOFA = await ev(`card._work.scene.boxes.findIndex(b=>b.group==='sofa')`),
     FAN = await ev(`'v:'+card._work.scene.overlays.findIndex(o=>o.type==='fan')`);
   await ev(`card._editor.clickSelect('b:${SOFA}')`);
@@ -490,7 +397,7 @@ window.card=__card;</script></body></html>`;
     );
     await wait(1200);
     check("media player can be shown as a screen", (await ev(`card._work.scene.objects.at(-1).type`)) === "screen");
-    await ev(`card._editor._toggleEntityPanel()`);
+    await ev(`card.shadowRoot.querySelector('[data-a=add]').click()`);
 
     // model library (mock)
     await ev(`card._editor._openLibrary()`);
@@ -529,17 +436,17 @@ window.card=__card;</script></body></html>`;
     );
     await p.screenshot({ path: path.join(OUT, "desktop-edit.png") });
 
-    await ev(`card._editor._toggleLookPanel()`);
+    await ev(`card.shadowRoot.querySelector('[data-a=look]').click()`);
     await wait(200);
     await ev(
-      `(()=>{const q=(k)=>card.shadowRoot.querySelector('.lookp [data-i="'+k+'"]'), r=q('room'); r.value=r.options[1].value; q('after').value='120'; q('after').dispatchEvent(new Event('change',{bubbles:true}))})()`,
+      `(()=>{const q=(k)=>card.shadowRoot.querySelector('.lookp [data-i="'+k+'"]'); q('after').value='120'; q('after').dispatchEvent(new Event('change',{bubbles:true})); const r=q('room'); r.value=r.options[1].value; r.dispatchEvent(new Event('change',{bubbles:true}))})()`,
     );
     check(
       "the Look panel sets the idle view (room + timeout)",
       await ev(`card._work.idle_view?.after===120 && card._work.idle_view.room===card._rooms()[0].name`),
       JSON.stringify(await ev(`card._work.idle_view`)),
     );
-    await ev(`card._editor._toggleLookPanel()`);
+    await ev(`card.shadowRoot.querySelector('[data-a=look]').click()`);
     // room controls: Lovelace cards per room
     await ev(`card.shadowRoot.querySelector('[data-a="controls"]').click()`);
     await wait(300);
@@ -558,15 +465,17 @@ window.card=__card;</script></body></html>`;
       String(nAuto),
     );
     await ev(
-      `(()=>{const p=card.shadowRoot.querySelector('.rcp'); p.querySelector('[data-ent]').value='light.porch'; p.querySelector('[data-add]').click()})()`,
+      `(()=>{const i=card.shadowRoot.querySelector('.rcp [data-ent]'); i.value='light.porch'; i.dispatchEvent(new Event('input'))})()`,
     );
+    await ev(`card.shadowRoot.querySelector('.rcp [data-add]').click()`);
     await wait(300);
     check(
       "a tile can be added by entity",
       (await ev(`card._work.room_cards['${rcRoom}'].at(-1).entity`)) === "light.porch",
     );
     await ev(`(async()=>{const p=card.shadowRoot.querySelector('.rcp'); p.querySelector('[data-code]').click(); await new Promise(r=>setTimeout(r,200));
-      p.querySelector('textarea').value='{"type":"tile","entity":"climate.heat_pump"}'; p.querySelector('[data-apply]').click()})()`);
+      const t=p.querySelector('textarea'); t.value='{"type":"tile","entity":"climate.heat_pump"}'; t.dispatchEvent(new Event('input'));
+      await new Promise(r=>setTimeout(r,50)); p.querySelector('[data-apply]').click()})()`);
     await wait(500);
     check(
       "pasted card code replaces the room's cards",
@@ -585,17 +494,17 @@ window.card=__card;</script></body></html>`;
 
     await ev(`card._editor._save()`);
     await wait(800);
-    check("save keeps the idle view", await ev(`saved.strategy.idle_view?.after===120`));
+    check("save keeps the idle view", await ev(`server.config.idle_view?.after===120`));
     check(
-      "save writes layout into the strategy config",
+      "save writes the layout to the integration",
       await ev(
-        `!!saved && saved.strategy.type==='custom:ha-3dhome' && saved.strategy.scene.objects.length===card._config.scene.objects.length`,
+        `server.saves.length===1 && server.rev===2 && server.config.scene.objects.length===card._config.scene.objects.length && !calls.includes('lovelace/config/save')`,
       ),
     );
     check("save leaves edit mode", await ev(`!card._edit`));
     check(
       "save writes room controls",
-      await ev(`saved.strategy.room_cards?.['${rcRoom}']?.[0]?.entity==='climate.heat_pump'`),
+      await ev(`server.config.room_cards?.['${rcRoom}']?.[0]?.entity==='climate.heat_pump'`),
     );
     check(
       "room controls stay hidden in the whole-home view",
@@ -626,27 +535,22 @@ window.card=__card;</script></body></html>`;
     await p.screenshot({ path: path.join(OUT, "desktop-room-controls.png") });
     await ev(`card._focusRoom(null)`);
     await wait(1500);
-    // HA regenerates the strategy after a save and swaps in a new card element: it should adopt this one, not start over
-    await ev(`(async()=>{window.__r0=card._renderer; window.__zoom0=card._cam.zoom;
-      const cfg=(await customElements.get('ll-strategy-dashboard-ha-3dhome').generate(saved.strategy)).views[0].cards[0];
-      const n=document.createElement('ha-3dhome-card'); n.setConfig(cfg); n.hass=card._hass;
-      card.replaceWith(n); window.card2=n;})()`);
+    // a save from another device: the map keeps its scene and camera and only rebuilds what it shows
+    await ev(`window.__r0=card._renderer; window.__zoom0=card._cam.zoom`);
+    await ev(`server.saveFrom({...server.config, ambient: 0.5})`);
     await wait(600);
     check(
-      "after a save the new card adopts the old scene (no reload, camera kept)",
-      await ev(
-        `card2._inner===card && card._renderer===__r0 && card._ready && card._cam.zoom===__zoom0 && card.isConnected`,
-      ),
+      "a save from another device shows without a reload (same scene, camera kept)",
+      await ev(`card._config.ambient===0.5 && card._renderer===__r0 && card._ready && card._cam.zoom===__zoom0`),
     );
-    await ev(`window.__h={...card._hass}; card2.hass=__h`);
-    await wait(200);
-    check("the adopted card still gets state updates", await ev(`card._hass===__h`));
     await ev(
       `card._config={...card._config, idle_view:{room:card._rooms()[0].name, after:0.4}}; card._focusRoom(null)`,
     );
     await wait(900);
     await ev(`card._wrap.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))`);
-    await wait(1600);
+    await wait(600);
+    await p.waitForFunction(() => !window.card._fly, null, { timeout: 10000 }).catch(() => {}); // the flight home
+    await wait(200);
     check(
       "after the idle timeout the view returns to the chosen room",
       await ev(
@@ -712,55 +616,28 @@ window.card=__card;</script></body></html>`;
     await p.screenshot({ path: path.join(OUT, "mobile-edit.png") });
   }
 
-  // a dashboard made from Settings → Dashboards → Add has no layout yet: it should render and say how to start
+  // a new panel has no layout yet: it should render and say how to start
   check("full map shows no empty hint", await ev(`!card.shadowRoot.querySelector('.empty')`));
-  await ev(`(async()=>{card.remove();const g=await customElements.get('ll-strategy-dashboard-ha-3dhome').generate({type:'custom:ha-3dhome'});
-    const c=document.createElement('ha-3dhome-card');c.setConfig({...g.views[0].cards[0],dashboard:'new'});document.getElementById('host').append(c);c.hass=card._hass;window.card2=c})()`);
+  await ev(`card._edit && card._editor._exitEdit()`); // the panel holds pushed maps while someone edits
+  await ev(`server.saveFrom({})`);
   await wait(3000);
   check(
-    "new empty dashboard renders with a how-to-start hint",
+    "an empty map renders with a how-to-start hint",
     errors.length === 0 &&
-      (await ev(`!!card2._ready && /Edit/.test(card2.shadowRoot.querySelector('.empty')?.textContent||'')`)),
+      (await ev(`!!card._ready && /Edit/.test(card.shadowRoot.querySelector('.empty')?.textContent||'')`)),
     errors.join(" | "),
   );
   await p.screenshot({ path: path.join(OUT, `${MOBILE ? "mobile" : "desktop"}-empty.png`) });
-  await ev(`card2._openEditor()`);
+  await ev(`card._openEditor()`);
   await wait(800);
   check(
     "the hint goes away in the editor",
-    errors.length === 0 && (await ev(`!!card2._edit && !card2.shadowRoot.querySelector('.empty')`)),
+    errors.length === 0 && (await ev(`!!card._edit && !card.shadowRoot.querySelector('.empty')`)),
     errors.join(" | "),
   );
 
-  // with the old ha-iso-home card also installed, the old names must stay with it (otherwise load order decides)
-  for (const old of [true, false]) {
-    const q = await ctx.newPage();
-    await q.route("http://ha.test/**", (r) =>
-      r.fulfill({
-        contentType: "text/html",
-        body: `<!doctype html><body><home-assistant></home-assistant>
-<script>document.querySelector('home-assistant').hass={connection:{},callWS:async(m)=>m.type==='lovelace/resources'?[{url:'/hacsfiles/ha-3dhome/ha-3dhome.js'}${old ? ",{url:'/local/iso-home/iso-home-3d-card.min.js?v=4.20.0'}" : ""}]:null}</script>
-<script type=module>${CODE.core}</script></body>`,
-      }),
-    );
-    await q.goto("http://ha.test/two");
-    await q.waitForTimeout(1500);
-    const got = await q.evaluate(
-      `!!customElements.get('iso-home-3d-card') && !!customElements.get('ll-strategy-dashboard-iso-home')`,
-    );
-    check(
-      old
-        ? "old names stay with the old card when it is installed too"
-        : "old names are claimed when the old card is not installed",
-      got === !old,
-    );
-    await q.close();
-  }
-
   await browser.close();
-  const failed = results.filter((r) => !r.ok).length;
-  console.log(`\n${results.length - failed}/${results.length} checks passed. Screenshots in tools/out/`);
-  process.exit(failed ? 1 : 0);
+  report("checks", " Screenshots in tools/out/");
 })().catch((e) => {
   console.error(e);
   process.exit(1);

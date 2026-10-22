@@ -4,7 +4,7 @@ import type * as THREE from "three";
 import type { LightConfig, Pt, WallEnd } from "../types";
 import type { Home3DCard } from "./card";
 import { CX, CY } from "../core/constants";
-import { R1, polyArea } from "../core/util";
+import { round1, polyArea } from "../core/util";
 import { TOGGLE_DOMAINS } from "../core/entities";
 import { PLAN, itemCenter } from "../core/items";
 import { stringLen, stringCount, spanSag } from "../core/fixtures";
@@ -73,9 +73,9 @@ export class PickingPart {
   }
 
   _buildTargets(this: Home3DCard) {
-    const T = this.T,
-      cfg = this._cfg(),
-      editing = !!this._edit;
+    const T = this.T;
+    const cfg = this._cfg();
+    const editing = !!this._edit;
     this._targets = [];
     const addTarget = (key: string, x: number, y: number, z: number, r: number, entity: string, action: string) => {
       const m = new T.Mesh(
@@ -89,21 +89,21 @@ export class PickingPart {
     };
     /* string lights: a tap anywhere along the cord toggles them, so the target is a tube that follows each sagging span */
     const stringTarget = (key: string, L: LightConfig) => {
-      const pts = L.points!,
-        z = L.z ?? (L.fixture === "string" ? 40 : 20),
-        r = Math.max(3, (L.hit ?? 10) * 0.6),
-        mat = new T.MeshBasicMaterial({ visible: false });
+      const pts = L.points!;
+      const z = L.z ?? (L.fixture === "string" ? 40 : 20);
+      const r = Math.max(3, (L.hit ?? 10) * 0.6);
+      const mat = new T.MeshBasicMaterial({ visible: false });
       const up = new T.Vector3(0, 1, 0);
       for (let i = 1; i < pts.length; i++) {
-        const a = pts[i - 1],
-          b = pts[i],
-          sag = spanSag(L, Math.hypot(b[0] - a[0], b[1] - a[1])) + 2; // bulbs hang ~2 below the cord
+        const a = pts[i - 1];
+        const b = pts[i];
+        const sag = spanSag(L, Math.hypot(b[0] - a[0], b[1] - a[1])) + 2; // bulbs hang ~2 below the cord
         const at = (t: number) =>
           new T.Vector3(a[0] + (b[0] - a[0]) * t - CX, z - sag * 4 * t * (1 - t), a[1] + (b[1] - a[1]) * t - CY);
         for (let k = 0; k < 6; k++) {
-          const p = at(k / 6),
-            q = at((k + 1) / 6),
-            len = p.distanceTo(q);
+          const p = at(k / 6);
+          const q = at((k + 1) / 6);
+          const len = p.distanceTo(q);
           if (len < 0.01) continue;
           const m = new T.Mesh(new T.CapsuleGeometry(r, len, 2, 6), mat);
           m.position.copy(p).add(q).multiplyScalar(0.5);
@@ -156,13 +156,13 @@ export class PickingPart {
   /** Pointer handling on the canvas. Viewing: tap toggles or opens an entity, hold opens more-info. Editing: press and
    * drag moves the selection or a handle, click selects, and plan tools act on click. */
   _bindPicking(this: Home3DCard) {
-    const T = this.T,
-      el = this._renderer.domElement;
-    const ray = new T.Raycaster(),
-      v = new T.Vector2();
+    const T = this.T;
+    const el = this._renderer.domElement;
+    const ray = new T.Raycaster();
+    const v = new T.Vector2();
     const ptrs = new Set<number>(); // pointers currently down (more than one = pinch)
-    let down: PointerPress | null = null,
-      timer: ReturnType<typeof setTimeout> | undefined;
+    let down: PointerPress | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     /* ----- ray casts ----- */
     const setRay = (ev: PointerEvent) => {
@@ -237,8 +237,8 @@ export class PickingPart {
     });
     /** put the camera back where the press started (the controls may already have panned a little) */
     const camRestore = (c: CamSnap) => {
-      const oc = this._controls,
-        damp = oc.enableDamping;
+      const oc = this._controls;
+      const damp = oc.enableDamping;
       oc.enableDamping = false;
       oc.update(); // flush any pan/orbit that already started
       this._cam.position.copy(c.pos);
@@ -325,8 +325,8 @@ export class PickingPart {
           return;
         }
       }
-      const keys = pickKeys(ev),
-        key = keys.find((k) => edit.sel.has(k)) || keys[0];
+      const keys = pickKeys(ev);
+      const key = keys.find((k) => edit.sel.has(k)) || keys[0];
       // rooms cover most of the plan, so they only drag once selected (otherwise a drag pans)
       if (key && ((!press.touch && key[0] !== "r") || edit.sel.has(key))) press.key = key;
     };
@@ -363,17 +363,17 @@ export class PickingPart {
         // string light: move a point, or bend a span by adding one
         const L = this._editor.item(h.d.key!);
         if (h.type === "smid") {
-          const a = L.points[h.d.k!],
-            b = L.points[h.d.k! + 1];
-          L.points.splice(h.d.k! + 1, 0, [R1((a[0] + b[0]) / 2), R1((a[1] + b[1]) / 2)]);
+          const a = L.points[h.d.k!];
+          const b = L.points[h.d.k! + 1];
+          L.points.splice(h.d.k! + 1, 0, [round1((a[0] + b[0]) / 2), round1((a[1] + b[1]) / 2)]);
         }
         press.spt = { key: h.d.key!, k: h.type === "smid" ? h.d.k! + 1 : h.d.k! };
       } else {
         const f = this._editor.item(h.d.key!);
         if (h.type === "mid") {
-          const a = f.pts[h.d.k!],
-            b = f.pts[(h.d.k! + 1) % f.pts.length];
-          f.pts.splice(h.d.k! + 1, 0, [R1((a[0] + b[0]) / 2), R1((a[1] + b[1]) / 2)]);
+          const a = f.pts[h.d.k!];
+          const b = f.pts[(h.d.k! + 1) % f.pts.length];
+          f.pts.splice(h.d.k! + 1, 0, [round1((a[0] + b[0]) / 2), round1((a[1] + b[1]) / 2)]);
         }
         press.vert = { key: h.d.key!, k: h.type === "mid" ? h.d.k! + 1 : h.d.k! };
       }
@@ -382,12 +382,12 @@ export class PickingPart {
     const dragHandle = (ev: PointerEvent, press: PointerPress) => {
       if (!press.jdrag) startHandleDrag(press, press.handle!);
       if (press.spt) {
-        const L = this._editor.item(press.spt.key),
-          q = floorPoint(ev, L.z ?? 17);
+        const L = this._editor.item(press.spt.key);
+        const q = floorPoint(ev, L.z ?? 17);
         if (!q) return;
         let pt: Pt = [q.x + CX, q.z + CY];
         if (this._edit!.snap) pt = [Math.round(pt[0]), Math.round(pt[1])];
-        L.points[press.spt.k] = [R1(pt[0]), R1(pt[1])];
+        L.points[press.spt.k] = [round1(pt[0]), round1(pt[1])];
         this._refreshFixture(press.spt.key);
         this._editor.buildStringHandles();
         this._editor.showTip(ev, `${this._fmtLen(stringLen(L.points))} · ${stringCount(L)} bulbs`);
@@ -397,24 +397,24 @@ export class PickingPart {
       const p = planPt(ev);
       if (!p) return;
       if (press.vert) {
-        const f = this._editor.item(press.vert.key),
-          n = f.pts.length,
-          k = press.vert.k,
-          prev = f.pts[(k - 1 + n) % n];
+        const f = this._editor.item(press.vert.key);
+        const n = f.pts.length;
+        const k = press.vert.k;
+        const prev = f.pts[(k - 1 + n) % n];
         const s = this._editor.snapPoint(p, { from: prev, room: press.vert });
-        f.pts[k] = [R1(s.p[0]), R1(s.p[1])];
+        f.pts[k] = [round1(s.p[0]), round1(s.p[1])];
         this._vsel = press.vert;
         this._editor.rebuildPlan();
         this._editor.showMarker(s.p, s.kind);
         this._editor.showTip(ev, this._fmtArea(polyArea(f.pts)));
         return;
       }
-      const segs = this._work!.scene!.wall_segs!,
-        m = press.m!,
-        [i0, e0] = m[0],
-        other = segs[i0][e0 === "a" ? "b" : "a"];
+      const segs = this._work!.scene!.wall_segs!;
+      const m = press.m!;
+      const [i0, e0] = m[0];
+      const other = segs[i0][e0 === "a" ? "b" : "a"];
       const s = this._editor.snapPoint(p, { from: m.length === 1 ? other : null, exclude: m });
-      for (const [i, e] of m) segs[i][e] = [R1(s.p[0]), R1(s.p[1])];
+      for (const [i, e] of m) segs[i][e] = [round1(s.p[0]), round1(s.p[1])];
       this._editor.rebuildPlan();
       this._editor.showMarker(s.p, s.kind);
       this._editor.showTip(ev, m.map(([i]) => this._fmtLen(segDir(segs[i])[2])).join(" · "));
@@ -445,20 +445,20 @@ export class PickingPart {
         return;
       }
       if (!press.dragging && !startItemDrag(ev, press)) return;
-      const piv0 = press.piv0!,
-        p0 = press.p0!;
+      const piv0 = press.piv0!;
+      const p0 = press.p0!;
       const p = floorPoint(ev, piv0.y);
       if (!p) return;
       if (press.rot) {
         // rotate mode: turn the selection around its centre as the pointer circles it
-        const a0 = Math.atan2(p0.z - piv0.z, p0.x - piv0.x),
-          a1 = Math.atan2(p.z - piv0.z, p.x - piv0.x);
+        const a0 = Math.atan2(p0.z - piv0.z, p0.x - piv0.x);
+        const a1 = Math.atan2(p.z - piv0.z, p.x - piv0.x);
         let dr = -(a1 - a0);
         if (this._edit!.snap) dr = Math.round(dr / (Math.PI / 12)) * (Math.PI / 12);
         this._pivot.quaternion.setFromAxisAngle(new T.Vector3(0, 1, 0), dr).multiply(this._drag!.quat);
       } else {
-        let dx = p.x - p0.x,
-          dz = p.z - p0.z;
+        let dx = p.x - p0.x;
+        let dz = p.z - p0.z;
         if (this._edit!.snap) {
           dx = Math.round(dx / 2) * 2;
           dz = Math.round(dz / 2) * 2;
@@ -558,8 +558,8 @@ export class PickingPart {
 
   /* badge taps: toggle lights/switches, run scripts/scenes/buttons, otherwise more-info; hold = more-info */
   _bindEntityTap(this: Home3DCard, node: HTMLElement, entity: string, tap: string | undefined) {
-    let t: ReturnType<typeof setTimeout> | undefined,
-      held = false;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    let held = false;
     node.addEventListener("pointerdown", () => {
       held = false;
       t = setTimeout(() => {
@@ -575,8 +575,8 @@ export class PickingPart {
   }
 
   _entityAction(this: Home3DCard, entity: string, tap: string) {
-    const d = entity.split(".")[0],
-      h = this._hass;
+    const d = entity.split(".")[0];
+    const h = this._hass;
     const a =
       tap ||
       (TOGGLE_DOMAINS.has(d)

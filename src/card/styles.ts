@@ -1,14 +1,14 @@
 /* The card's shadow DOM: its stylesheet and markup. Everything the viewer and the editor show is styled here, so the
  * editor (loaded later) needs no styles of its own.
  */
-import type { CardConfig } from "../types";
 import { ic } from "../core/util";
 
-/** the card's stylesheet; `fill` (the strategy's full-screen panel) and `aspect_ratio` size the map */
-export const cardStyles = (cfg: CardConfig) => `
-  ha-card { overflow: hidden; background: var(--ha-3dhome-bg, var(--iso-bg, #1b1a18)); ${cfg.fill ? "border-radius: 0; border: 0;" : ""} }
+/** the map's stylesheet; it fills the panel */
+export const cardStyles = `
+  :host { display: block; height: 100%; }
+  ha-card { overflow: hidden; background: var(--ha-3dhome-bg, #1b1a18); border-radius: 0; border: 0; height: 100%; }
   .wrap { position: relative; width: 100%; container-type: inline-size; touch-action: none; font-family: var(--ha-font-family-body, system-ui);
-    ${cfg.fill ? "height: calc(100vh - var(--header-height, 56px) - env(safe-area-inset-top, 0px)); min-height: 360px;" : `aspect-ratio: ${cfg.aspect_ratio || "16 / 10"};`} }
+    height: 100%; min-height: 360px; }
   canvas { display: block; width: 100% !important; height: 100% !important; }
   .ov { position: absolute; inset: 0; pointer-events: none; }
   .editing .ov { opacity: .45; } .editing .ov * { pointer-events: none !important; }

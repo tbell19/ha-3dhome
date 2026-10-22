@@ -1,5 +1,5 @@
 /* Bundles and minifies the two modules into the integration's frontend folder (what HACS and the releases ship):
- *   src/ha-3dhome.ts        -> ha-3dhome.js          (core: viewer, panel, strategy, plan rendering; loads the editor on Edit)
+ *   src/ha-3dhome.ts        -> ha-3dhome.js          (core: the panel and the 3D map; loads the editor on Edit)
  *   src/ha-3dhome-editor.ts -> ha-3dhome-editor.js   (everything behind ✎ Edit)
  *   npm run build
  * It also checks that the integration's manifest carries the same version as the card.

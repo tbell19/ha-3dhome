@@ -98,9 +98,9 @@ export class RoomsPart {
       this._flyTo({ target: v.target, zoom: v.zoom, theta: this._homeSph.theta, phi: this._homeSph.phi }, ms);
       return;
     }
-    const [x1, x2, y1, y2] = room.rect,
-      H = this._cfg().scene?.wall_height ?? 46,
-      s = this._sph();
+    const [x1, x2, y1, y2] = room.rect;
+    const H = this._cfg().scene?.wall_height ?? 46;
+    const s = this._sph();
     const target = new T.Vector3((x1 + x2) / 2 - CX, 5, (y1 + y2) / 2 - CY);
     const phi = s.phi < 0.3 ? s.phi : Math.min(Math.max(s.phi, 0.7), 1.0);
     const probe = this._cam.clone();
@@ -110,8 +110,8 @@ export class RoomsPart {
     probe.position.setFromSpherical(new T.Spherical(s.radius, phi, s.theta)).add(target);
     probe.lookAt(target);
     probe.updateMatrixWorld(true);
-    let ex = 0,
-      ey = 0;
+    let ex = 0;
+    let ey = 0;
     for (const x of [x1, x2])
       for (const y of [y1, y2])
         for (const z of [0, H]) {
@@ -119,9 +119,9 @@ export class RoomsPart {
           ex = Math.max(ex, Math.abs(v.x));
           ey = Math.max(ey, Math.abs(v.y));
         }
-    const sa = this._safeArea(),
-      fw = sa.w / (this._wrap.clientWidth || 1),
-      fh = sa.h / (this._wrap.clientHeight || 1);
+    const sa = this._safeArea();
+    const fw = sa.w / (this._wrap.clientWidth || 1);
+    const fh = sa.h / (this._wrap.clientHeight || 1);
     const zoom = Math.min((0.82 * fw) / (ex || 1), (0.72 * fh) / (ey || 1)); // fit the room inside the part the controls leave clear
     this._flyTo({ target, zoom, phi }, ms);
   }
@@ -145,9 +145,9 @@ export class RoomsPart {
     mb.title = this._rcMin ? "Show controls" : "Hide controls";
     box.classList.toggle("min", !!this._rcMin);
     box.classList.remove("hide");
-    const body = box.querySelector<HTMLElement>(".rcbody"),
-      sig = JSON.stringify(list),
-      gen = this._gen;
+    const body = box.querySelector<HTMLElement>(".rcbody");
+    const sig = JSON.stringify(list);
+    const gen = this._gen;
     const c = (this._rcCache ||= new Map()).get(key);
     if (c?.sig === sig) {
       if (body.firstChild !== c.els[0] || body.children.length !== c.els.length) body.replaceChildren(...c.els);
@@ -220,10 +220,10 @@ export class RoomsPart {
   }
 
   _roomAt(this: Home3DCard, ev: MouseEvent) {
-    const T = this.T,
-      el = this._renderer.domElement,
-      r = el.getBoundingClientRect(),
-      ray = new T.Raycaster();
+    const T = this.T;
+    const el = this._renderer.domElement;
+    const r = el.getBoundingClientRect();
+    const ray = new T.Raycaster();
     ray.setFromCamera(
       new T.Vector2(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1),
       this._cam,
@@ -274,44 +274,44 @@ export class RoomsPart {
   }
 
   _updateFade(this: Home3DCard) {
-    const f = this._focus,
-      a = this._fadeAmount();
+    const f = this._focus;
+    const a = this._fadeAmount();
     if (!f || a == null || !this._world) {
       if (this._faded?.size) this._clearFade();
       return;
     }
-    const T = this.T,
-      dir = this._cam.position.clone().sub(this._controls.target).normalize();
+    const T = this.T;
+    const dir = this._cam.position.clone().sub(this._controls.target).normalize();
     const sig = `${dir.x.toFixed(3)},${dir.y.toFixed(3)},${dir.z.toFixed(3)}|${this._fadeGen || 0}`;
     if (sig === this._fadeSig) return;
     this._fadeSig = sig;
-    const sc = this._cfg().scene || {},
-      H = sc.wall_height ?? 46,
-      inset = (sc.wall_thickness ?? 4) + 1;
-    const pts = f.polys.flat(),
-      x1 = Math.min(...pts.map((p) => p[0])),
-      x2 = Math.max(...pts.map((p) => p[0]));
-    const y1 = Math.min(...pts.map((p) => p[1])),
-      y2 = Math.max(...pts.map((p) => p[1]));
+    const sc = this._cfg().scene || {};
+    const H = sc.wall_height ?? 46;
+    const inset = (sc.wall_thickness ?? 4) + 1;
+    const pts = f.polys.flat();
+    const x1 = Math.min(...pts.map((p) => p[0]));
+    const x2 = Math.max(...pts.map((p) => p[0]));
+    const y1 = Math.min(...pts.map((p) => p[1]));
+    const y2 = Math.max(...pts.map((p) => p[1]));
     const inRoom = (x: number, y: number) => f.polys.some((pl) => inPoly(x, y, pl));
     // sample points inside the room, kept off its own walls, on the floor and at half height
-    const N = 7,
-      samples: THREE.Vector3[] = [];
+    const N = 7;
+    const samples: THREE.Vector3[] = [];
     for (let i = 0; i <= N; i++)
       for (let j = 0; j <= N; j++) {
-        const x = x1 + inset + ((x2 - x1 - 2 * inset) * i) / N,
-          y = y1 + inset + ((y2 - y1 - 2 * inset) * j) / N;
+        const x = x1 + inset + ((x2 - x1 - 2 * inset) * i) / N;
+        const y = y1 + inset + ((y2 - y1 - 2 * inset) * j) / N;
         if (x2 - x1 > 2 * inset && y2 - y1 > 2 * inset && inRoom(x, y))
           for (const z of [2, H * 0.55]) samples.push(new T.Vector3(x - CX, z, y - CY));
       }
     if (!samples.length) samples.push(new T.Vector3((x1 + x2) / 2 - CX, 2, (y1 + y2) / 2 - CY));
     // what can block: walls and openings piece by piece, furniture, models and fixtures as whole items
-    const box = new T.Box3(),
-      c = new T.Vector3(),
-      ray = new T.Ray(),
-      hit = new T.Vector3(),
-      want = new Set<THREE.Mesh>(),
-      seen = new Set<THREE.Object3D>();
+    const box = new T.Box3();
+    const c = new T.Vector3();
+    const ray = new T.Ray();
+    const hit = new T.Vector3();
+    const want = new Set<THREE.Mesh>();
+    const seen = new Set<THREE.Object3D>();
     const blocks = (b: THREE.Box3) =>
       samples.some((s) => {
         ray.set(s, dir);
@@ -345,20 +345,20 @@ export class RoomsPart {
   /** swap a mesh's material for a see-through copy, `a` opaque */
   _fadeMesh(this: Home3DCard, m: THREE.Mesh, a: number) {
     if (m.userData.fadeOrig) return;
-    const orig = m.material,
-      one = (mt: THREE.Material) => {
-        if (!mt || mt.visible === false || mt.colorWrite === false) return mt;
-        const ck = mt.uuid + "|" + a;
-        let fm = (this._fadeMats ||= new Map()).get(ck);
-        if (!fm) {
-          fm = mt.clone();
-          fm.transparent = true;
-          fm.opacity = (mt.opacity ?? 1) * a;
-          fm.depthWrite = false;
-          this._fadeMats.set(ck, fm);
-        }
-        return fm;
-      };
+    const orig = m.material;
+    const one = (mt: THREE.Material) => {
+      if (!mt || mt.visible === false || mt.colorWrite === false) return mt;
+      const ck = mt.uuid + "|" + a;
+      let fm = (this._fadeMats ||= new Map()).get(ck);
+      if (!fm) {
+        fm = mt.clone();
+        fm.transparent = true;
+        fm.opacity = (mt.opacity ?? 1) * a;
+        fm.depthWrite = false;
+        this._fadeMats.set(ck, fm);
+      }
+      return fm;
+    };
     m.userData.fadeOrig = orig;
     m.material = Array.isArray(orig) ? orig.map(one) : one(orig);
   }

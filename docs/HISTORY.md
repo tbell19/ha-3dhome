@@ -60,24 +60,27 @@
 32. **Connection loss and lost WebGL contexts (v5.1.0).** On-demand rendering (v4.20) meant nothing redrew when a phone or tablet threw away the page's WebGL context in the background, so coming back to HA could leave a blank map. The card now redraws when the context is restored, and rebuilds itself (keeping the camera) when the context stays lost for 3 s on a visible page (`_ctxCheck`). It also follows `hass.connected` and the browser's online state: a drop longer than 2.5 s greys the map under a "Reconnecting to Home Assistant…" pill and taps that would call a service just nudge the pill (`_connState`, `_offlineTap`); Save refuses with a toast and keeps the edits. On reconnect every entity is re-applied and the scene redrawn. After a long sleep, a network change or a back/forward cache restore it pings the websocket and asks HA to reconnect if no answer comes in 8 s (`_probeConn`).
 33. **Readable TypeScript source (v5.2.0).** The two large source files (about 4,600 dense lines) became small modules in `src/core`, `src/card` and `src/editor`, formatted with Prettier and written in TypeScript (the config schema is in `src/types.ts`), still bundled into the same two files. Pure helpers are fully strict; the card and editor are strict apart from null checks. Long functions were split into named steps (`_init`, `_update`, pointer input), and the stylesheet moved to `styles.ts`. The editor now loads only when Edit is first pressed (`loadEditor`), so people who only view the map no longer download it. Nothing else changed: every test suite passes unchanged.
 34. **A sidebar page of its own (v5.3.0).** On a dashboard the map sat inside Lovelace: every save rewrote the dashboard, Home Assistant replaced the card element and the card had to hand its scene over (`PARKED`), and strategy dashboards were regenerated on every registry change. 3D Home became a Home Assistant integration (`custom_components/ha_3dhome`, HACS category integration) that adds a sidebar page per config entry (`panel_custom`, `<ha-3dhome-panel>`), keeps each page's config and a revision in `.storage`, and pushes every save to all open screens over a websocket subscription. A save that started from an older revision is refused, so two devices can't overwrite each other. The card applies a new layout in its running scene (`_applyLayout`) instead of restarting WebGL, on the panel and on dashboards. The integration serves the card files itself (versioned URLs, so no resource to bump) and loads the card on every page, so the card and the dashboard strategy keep working without a resource. An empty page offers to copy the map from a dashboard. Saving goes through a `LayoutStore` (the dashboard, or the panel's), and the editor became its own object (`Editor`) that the card talks to through `CardEditor` and that reaches the card only through `EditorHost` (`src/editor-contract.ts`), instead of methods copied onto the card.
+35. **Only the sidebar page; the editor in Preact (v6.0.0).** The Lovelace card, the dashboard strategy, the old ha-iso-home names, the pre-4.7 wall format and the item types only the first hand-made mockup used (railings, corner glass, glass walls, door panels, plant wall, track, line, bulbs) were removed, and the integration no longer loads the code on every Home Assistant page. An empty page can still copy a map from a 5.x dashboard and brings it up to date. The editor's toolbar, inspector and panels, which were HTML strings with hand-wired listeners, became Preact components (TSX) drawn from the editor's state; Preact (about 5 KB gzipped with its hooks) is bundled into the editor file only, so the map loads none of it. A naming pass split packed declarations to one per line and renamed `it` → `item`, `k` → `kind`, `R1` → `round1` and `_ed` → `_editorLayer`, and the plan geometry was rewritten on a small `vec2` helper. The browser tests share one harness (`tools/harness.js`) that loads the panel with a fake integration.
 
 ## Key decisions
 
 | Decision | Why |
 |---|---|
 | Layout as JSON in the dashboard config (v4–v5.2) | One source of truth that the in-card editor can save to; no file access to HA needed |
-| A custom panel and integration (v5.3) | No dashboard to regenerate on save, live updates across screens, files served with versioned URLs; the card and strategy stay for people who want the map on a dashboard |
+| A custom panel and integration (v5.3) | No dashboard to regenerate on save, live updates across screens, files served with versioned URLs |
+| Only the panel (v6.0) | One way in keeps the code small: no element parking, no saving into dashboards, no loading on every page |
+| Preact for the editor UI (v6.0) | Components instead of HTML strings and listeners, at about 5 KB gzipped, loaded only with the editor; React would be ten times that, and the 3D map itself stays plain Three.js |
+| No geometry library | Three.js covers 3D; the plan maths is a few 2D vector operations (`src/core/vec2.ts`) |
 | Plain ES modules, CDN Three.js | No build step needed in Home Assistant; the dist files are just minified sources |
 | Orthographic camera | Keeps the "artsy isometric" look; rooms read like a diorama |
 | Squashed heights (`model_scale` [2.1, 4]) | Matches the stylised 60-unit walls instead of real-scale ceilings |
 | Downloader integration for SH3D | SourceForge zips aren't CORS-fetchable; HA downloads into `www/` and the browser reads `/local/` |
-| Strategy dashboard (v4.1) | Full-screen map with no Lovelace chrome; the editor writes into `strategy` directly. Kept as an option next to the panel |
+| Strategy dashboard (v4.1–v5.3) | Full-screen map with no Lovelace chrome; the editor wrote into `strategy` directly. Replaced by the panel in v6.0 |
 | Touch: select-then-drag | Panning on a phone kept moving furniture by accident |
 
 ## Open items
 
 - **Floor plan follow-ups:**
-  - door leaves (`doorpanel` objects) don't follow when an opening moves;
   - a wall can't yet be curved or tapered.
 - **Panel follow-ups:**
   - an icon in `home-assistant/brands`, so the HACS brands check can run;

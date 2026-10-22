@@ -1,17 +1,8 @@
 # Configuration reference
 
-The same keys work on the card (`type: custom:ha-3dhome-card`), inside the strategy (`strategy: {type: custom:ha-3dhome, …}`) and on the 3D Home sidebar page, which keeps them in the integration's storage instead of a dashboard (the page sets `type`, `fill` and `dashboard` itself). All positions are **plan units** (see ARCHITECTURE.md → Coordinate system).
+A 3D Home page keeps its map in the integration's storage as one JSON object with the keys below. The editor writes it; you only need this reference for things the editor doesn't cover, or to read the Advanced (JSON) box. All positions are **plan units** (see ARCHITECTURE.md → Coordinate system). [examples/sample-home.json](../examples/sample-home.json) is a complete example.
 
-## Strategy-only options
-
-| Key | Default | Meaning |
-|---|---|---|
-| `title` | `"Home"` | Title of the generated view |
-| `path` | `"3d"` | URL path of the generated view (`/<dashboard>/3d`) |
-| `icon` | `mdi:floor-plan` | View icon |
-| `extra_views` | – | Array of ordinary Lovelace views appended after the map |
-
-## Card options
+## Map options
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -21,8 +12,6 @@ The same keys work on the card (`type: custom:ha-3dhome-card`), inside the strat
 | `outdoor_temperature` | – | Sensor that overrides the weather temperature |
 | `sun_entity` | `sun.sun` | Its `azimuth` and `elevation` attributes place the sun and set the daylight level (see Sun below) |
 | `night_mode` | auto | `"always"` or `"never"` to force a look |
-| `fill` | `false` (`true` via strategy) | Fill viewport height instead of using an aspect ratio |
-| `aspect_ratio` | `"16 / 10"` | Card aspect when not `fill` |
 | `view_size` | `375` | Plan units across the view (bigger = more zoomed out) |
 | `pan_bounds` | `[-340,340,-240,240]` | Clamp for the camera target (Three.js X/Z) |
 | `room_menu` | auto | `false` hides it; or an array `[{name, label?, floors?:[…], rect?:[x1,x2,y1,y2]}]` |
@@ -33,16 +22,13 @@ The same keys work on the card (`type: custom:ha-3dhome-card`), inside the strat
 | `max_shadow_lights` | `8` | How many lights cast shadows |
 | `shadow_map_size` | `512` | Per-light shadow map resolution |
 | `light_strength` | `1` | Global light multiplier |
-| `window_light` | `1` | Daylight through windows, glass doors and glass walls into roofed rooms, scaled by how bright it is outside. `0` turns it off |
+| `window_light` | `1` | Daylight through windows and glass doors into roofed rooms, scaled by how bright it is outside. `0` turns it off |
 | `max_window_lights` | `10` | How many windows get daylight (widest first) |
 | `ambient` | `0.35` | Room fill: the flat daytime light on every surface, 0 to 1. Lower lets window light and shadows show. Night levels don't change. Set with the Look panel's Room fill slider |
 | `look` | on | Render looks, each a strength from `0` (off) to `1`. A look left out uses its default strength, and `look: false` turns them all off. Set from the editor's ✨ Look panel. See below |
 | `idle_view` | off | `{room, after}`: after `after` seconds with no touch, click, scroll or key on the map, fly back to `room` (a room name from the room menu; left out = whole home). Off while editing. Set from the ✨ Look panel's "When left alone" menus |
 | `max_pixel_ratio` | `2` | Cap on devicePixelRatio |
-| `dashboard` | from URL | Dashboard url_path the editor saves to |
-| `card_id` | – | Disambiguates the card when a dashboard has several |
 | `three_url`, `orbit_url`, `jszip_url` | jsDelivr | Override CDN module URLs |
-| `rooms` | – | Legacy 2D clipping rectangles; unused by 3D |
 
 ### Looks (`look`)
 
@@ -97,9 +83,9 @@ Example: `look: { light: 1, ao: 0.8, stage: 1, bloom: 0.3 }`. The post-processin
 - `x, y` is the centre, `w × h` the size in plan units, `rot` degrees, `opacity`, `locked` (clicks pass through it).
 - `src` is normally an image in Home Assistant's image store (`/api/image/serve/<id>/original`), or any URL. If the upload isn't available, it is a small inline `data:` JPEG.
 
-**`room_menu`** (optional, card or strategy level) replaces the automatic room list: `[{name, label?, floors?: [names], rect?: [x1, x2, y1, y2]}]`. A `rect` overrides the outline-derived framing. Leave it out to follow the floors.
+**`room_menu`** (optional) replaces the automatic room list: `[{name, label?, floors?: [names], rect?: [x1, x2, y1, y2]}]`. A `rect` overrides the outline-derived framing. Leave it out to follow the floors.
 
-**`room_cards`** (optional, card or strategy level) holds ordinary Lovelace card configs per room, keyed by the room menu's `name` (the floor name for automatic rooms). Picking a room from the menu, or double-clicking it, shows that room's cards in the top right corner; `home` is for the ⌂ Home view. Cards are built with Home Assistant's own card helpers, so any built-in or custom card works (tiles, entities, thermostat, stacks…). The header folds them away. Edit them in the editor's 🎛 Controls panel.
+**`room_cards`** (optional) holds ordinary Lovelace card configs per room, keyed by the room menu's `name` (the floor name for automatic rooms). Picking a room from the menu, or double-clicking it, shows that room's cards in the top right corner; `home` is for the ⌂ Home view. Cards are built with Home Assistant's own card helpers, so any built-in or custom card works (tiles, entities, thermostat, stacks…). The header folds them away. Edit them in the editor's 🎛 Controls panel.
 
 ```yaml
 room_cards:
@@ -110,8 +96,6 @@ room_cards:
     - type: thermostat
       entity: climate.heat_pump
 ```
-
-**Legacy walls.** Older configs use `walls: [{axis, at, spans, doors}]` and `front_walls`. They still render. Opening the editor converts them to `wall_segs` + door `openings`, with no visual change, and Save stores the new form.
 
 **Boxes**, simple furniture, in either form:
 - array: `[x1, x2, y1, y2, height, colour, z]`
@@ -127,13 +111,11 @@ All objects accept `rot` (degrees) and `group`.
 
 | `type` | Fields |
 |---|---|
-| `doorpanel` | `axis`, `at`, `span:[a,b]`, `fill?` |
 | `shelf` | `box:[x1,x2,y1,y2,h]`, `shelves:[z…]`, `colors?` |
 | `table` | `x, y, r, z` (top height) |
 | `floorlamp` | `x, y, z` (height) |
 | `tablelamp` | `x, y, z` (base height) |
 | `plant` | `x, y, z?` |
-| `plantwall` | `x1, x2, y, z1, z2` (recessed lit niche) |
 | `model` | `name, lib, sh3f, model, mr?` (modelRotation), `x, y, z, w, d, h, cm:[w,d,h]` (original cm), `mirror?, creator?, lic?` |
 | `screen` | `entity` (media_player or camera), `x, y, z` (bottom), `w` (width; height is w·9/16), `stand?`, `tap?` |
 
@@ -144,18 +126,11 @@ Fixtures that never cast shadows. All accept `rot` and `group`.
 | `type` | Fields |
 |---|---|
 | `pendant` | `x, y, z, top` (ceiling) |
-| `track` | `a:[x,y], b:[x,y], z, heads?:[0..1…]` |
 | `fan` | `x, y, z, r?, ceiling?` |
 | `sink` | `rect:[x1,x2,y1,y2], z, faucet?:[x,y]` |
 | `burners` | `pts:[[x,y]…], z` |
-| `line` | `a:[x,y,z], b:[x,y,z], stroke, w` |
-| `glasswall` | `x, y1, y2, posts:[y…], handle?, h?` |
-| `cornerglass` | `x1, x2, y` |
-| `railing` | `x, y1, y2, x_end, h` |
-| `bulbs` | `pts:[[x,y]…], z` (string-light bulbs) |
-| `frontwalls` | marker only (2D legacy) |
 
-**`size`** (v4.12): objects with a fixed shape (`plant`, `floorlamp`, `tablelamp`, `pendant`, `fan`, `burners`, `bulbs`, `sink`) have no size fields of their own, so resizing one stores a multiplier: a number, or `[x, y, z]` along the object's own axes. It applies about the point the object stands on or hangs from (a fan stays on the ceiling). Everything else is resized by changing its own fields (`w/d/h`, `box`, `r`, end points…).
+**`size`** (v4.12): objects with a fixed shape (`plant`, `floorlamp`, `tablelamp`, `pendant`, `fan`, `burners`, `sink`) have no size fields of their own, so resizing one stores a multiplier: a number, or `[x, y, z]` along the object's own axes. It applies about the point the object stands on or hangs from (a fan stays on the ceiling). Everything else is resized by changing its own fields (`w/d/h`, `box`, `r`, end points…).
 
 ## Lights
 
@@ -175,17 +150,15 @@ Fixtures that never cast shadows. All accept `rot` and `group`.
 - **Light settings** (editor: select a light → Light settings). The bulb's live brightness and colour from Home Assistant still drive the light; these set what it looks like at full brightness and full colour. Co-located bulbs share them.
   - `intensity` (default `1`, up to `4`): brightness at the bulb's full brightness.
   - `saturation` (default `1`, `0` to `2`): how strongly the bulb's colour shows; `0` is white.
-  - `r` (default `40`): reach. The light fades out at about `r × 2.6` (`× 3.2` for spot lights). For string lights and the niche it scales their default reach (40 = 100%).
-  - `decay` (default `1.1`, strings and niche `1.2`): falloff. Low lights evenly to the edge of the reach, high gives a bright centre that fades fast.
+  - `r` (default `40`): reach. The light fades out at about `r × 2.6` (`× 3.2` for spot lights). For string lights it scales their default reach (40 = 100%).
+  - `decay` (default `1.1`, strings `1.2`): falloff. Low lights evenly to the edge of the reach, high gives a bright centre that fades fast.
   - `angle` (degrees, spot lights only; default 43, 52 for cans) and `soft` (default `0.8`): beam width and how soft its edge is.
   - `halo` (default `9`): the glow drawn around the bulb.
 
 - Lights with the same rounded `x:y:z` merge into one physical light; this is how two-bulb fans work.
 - `fixture` gives the light its own model, which glows with the light: `can` (also aims straight down), `ceiling`, `pendant` (cord up to `wall_height`), `bulb`, `floorlamp` (stands on the floor, shade at `z`), `tablelamp` (shade at `z`, set it on a table) or `string`. Leave it out for a bare glow, e.g. when a fan or pendant overlay is the fixture. `trim` / `shade` override the metal and shade colours.
-- `fixture: "string"` (with `kind: "string"`) runs along `points:[[x,y]…]` at height `z`. Bulbs: `count`, or one every `spacing` (default 14 units, about 30 cm), so longer strings get more bulbs. Each span sags by `sag` (default 5% of its length).
-- `kind: "string"` without a fixture: the older form, `points` plus the `bulbs` overlay.
+- `fixture: "string"` runs along `points:[[x,y]…]` at height `z`. Bulbs: `count`, or one every `spacing` (default 14 units, about 30 cm), so longer strings get more bulbs. Each span sags by `sag` (default 5% of its length).
 - `size` (v4.12, default `1`): scales the fixture model about the bulb; cords still reach the ceiling.
-- `kind: "niche"`: uses `rect:[x1,x2,z1,z2,y]` to light the plant-wall panel.
 
 ## Hotspots
 
@@ -211,3 +184,7 @@ HTML pills anchored in 3D at `x, y, z`. `size` (v4.12, default `1`) scales the p
 ## Doors
 
 `{ "entity": "binary_sensor.…_contact", "name", "x", "y", "z", "size"?, "icon_open"?, "icon_closed"? }`. The dot is red when open and green when closed.
+
+## Maps from 5.x dashboards
+
+Up to 5.x the map could live in a dashboard, as the `custom:ha-3dhome-card` card or the `custom:ha-3dhome` strategy (or ha-iso-home's `custom:iso-home-3d-card` and `custom:iso-home`). An empty 3D Home page offers to copy such a map in. On the way it drops the card-only options (`type`, `fill`, `aspect_ratio`, `dashboard`, `card_id`) and the item types only the first hand-made mockup used (`doorpanel`, `plantwall`, `track`, `line`, `glasswall`, `cornerglass`, `railing`, `bulbs`, `frontwalls` and niche lights), and turns `kind: "string"` lights into `fixture: "string"`. Walls in the pre-4.7 `walls` / `front_walls` format are no longer read; open such a map once in 5.x and save it to convert it.

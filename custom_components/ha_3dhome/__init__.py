@@ -1,9 +1,8 @@
 """3D Home: a live 3D map of the home as its own sidebar panel.
 
-The integration serves the card files, adds a panel for each config entry, and keeps that panel's card config (its
-layout and options) in .storage (see store.py), which the panel follows and saves over the websocket (see
-websocket.py). It also loads the card
-on every page, so `custom:ha-3dhome-card` works on ordinary dashboards without a separate resource.
+The integration serves the map's two JavaScript files, adds a panel for each config entry, and keeps that panel's
+config (its layout and options) in .storage (see store.py), which the panel follows and saves over the websocket (see
+websocket.py). Home Assistant loads the files only when the panel is opened, so other pages don't pay for them.
 """
 
 from __future__ import annotations
@@ -39,10 +38,9 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Serve the card files, load the card on every page, and register the websocket commands (once per start)."""
+    """Serve the map's files and register the websocket commands (once per start)."""
     hass.data.setdefault(DOMAIN, {})
     await hass.http.async_register_static_paths([StaticPathConfig(URL_BASE, str(FRONTEND_DIR), True)])
-    frontend.add_extra_js_url(hass, await _module_url(hass))
     async_register_commands(hass)
     return True
 
@@ -84,6 +82,6 @@ async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 
 async def _module_url(hass: HomeAssistant) -> str:
-    """The card's URL, with the version in it so browsers fetch the new files after an update."""
+    """The map's URL, with the version in it so browsers fetch the new files after an update."""
     integration = await async_get_integration(hass, DOMAIN)
     return f"{URL_BASE}/{CORE_FILE}?v={integration.version}"

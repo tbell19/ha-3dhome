@@ -1,9 +1,10 @@
-/* Standalone demo: the real card on a fictional home ("Juniper House", examples/sample-home.json) with a fake `hass`.
+/* Standalone demo: the real 3D Home page on a fictional home ("Juniper House", examples/sample-home.json) with a fake `hass`.
  * Nothing here talks to Home Assistant. Tapping toggles the pretend entities, the editor works, and Save keeps the
  * layout in this browser (localStorage) until Reset.
  *
  * Served by GitHub Pages (.github/workflows/pages.yml) or locally with `npm run demo`. Both put the built card in ./card/
- * and the sample layout at ./sample-home.json.
+ * and the sample layout at ./sample-home.json. The page stands in for both Home Assistant (states, services) and the
+ * ha_3dhome integration (it keeps the map and pushes every save back, like ha_3dhome/config/subscribe).
  */
 const KEY = "ha-3dhome-demo-layout";
 const store = {
@@ -14,6 +15,7 @@ const store = {
 
 /* ---- stand-ins for the bits of the Home Assistant frontend the card uses ---- */
 customElements.define("ha-card", class extends HTMLElement { connectedCallback() { this.style.display = "block"; } });
+customElements.define("ha-menu-button", class extends HTMLElement {});
 // <ha-icon icon="mdi:name">: the Material Design Icons SVG from Iconify, painted in currentColor
 customElements.define("ha-icon", class extends HTMLElement {
   static get observedAttributes() { return ["icon"]; }
@@ -66,7 +68,8 @@ const STATES = {
 
 const GROUPS = { "light.study_fan": ["light.study_fan_a", "light.study_fan_b"] };   // light groups, as Home Assistant would have them
 const TOGGLE = { on: "off", off: "on", open: "closed", closed: "open", playing: "paused", paused: "playing" };
-let card, cfg, states = structuredClone(STATES);
+let panel, cfg, rev = 1, states = structuredClone(STATES);
+const followers = new Set(); // the panel's subscription to the stored map
 
 function hass() {
   return {
@@ -83,16 +86,23 @@ function hass() {
       }
     },
     callWS: async (m) => {
-      if (m.type === "lovelace/config") return { strategy: structuredClone(cfg) };
-      if (m.type === "lovelace/config/save") { cfg = m.config.strategy || m.config; store.set(cfg); toast("Saved in this browser. Reset puts the sample home back."); return null; }
+      if (m.type === "ha_3dhome/config/save") {
+        cfg = m.config; rev++; store.set(cfg); push();
+        toast("Saved in this browser. Reset puts the sample home back.");
+        return { rev };
+      }
+      if (m.type === "lovelace/dashboards/list") return [];
       return null;
     },
-    connection: { subscribeEvents: async () => () => {} },
+    connection: {
+      subscribeEvents: async () => () => {},
+      subscribeMessage: async (cb) => { followers.add(cb); setTimeout(() => cb({ config: structuredClone(cfg), rev }), 0); return async () => followers.delete(cb); },
+    },
   };
 }
 function setState(id, state, attrs = {}) {
   states = { ...states, [id]: { ...states[id], state, attributes: { ...states[id].attributes, ...attrs }, last_changed: new Date().toISOString() } };
-  if (card) card.hass = hass();
+  if (panel) panel.hass = hass();
   if (dialog.open && dialog.dataset.id === id) openInfo(id);
 }
 
@@ -124,22 +134,23 @@ function setDay(day) {
   states = { ...states, "sun.sun": { state: day ? "above_horizon" : "below_horizon", attributes: { ...states["sun.sun"].attributes, elevation: day ? 38 : -12, azimuth: day ? 200 : 290 } } };
   document.getElementById("day").setAttribute("aria-pressed", day);
   document.getElementById("night").setAttribute("aria-pressed", !day);
-  if (card) card.hass = hass();
+  if (panel) panel.hass = hass();
 }
 document.getElementById("day").onclick = () => setDay(true);
 document.getElementById("night").onclick = () => setDay(false);
 document.getElementById("reset").onclick = async () => { store.clear(); states = structuredClone(STATES); await mount(await sample()); toast("Back to the sample home"); };
 
-/* ---- mount the card the way the dashboard strategy does ---- */
-async function sample() { return (await (await fetch("./sample-home.json")).json()).strategy; }
+/* ---- the page Home Assistant would show in its sidebar ---- */
+function push() { for (const cb of followers) cb({ config: structuredClone(cfg), rev }); }
+async function sample() { return (await fetch("./sample-home.json")).json(); }
 async function mount(c) {
   cfg = c;
-  const gen = await customElements.get("ll-strategy-dashboard-ha-3dhome").generate(cfg);
-  card?.remove();
-  card = document.createElement("ha-3dhome-card");
-  card.setConfig({ ...gen.views[0].cards[0], dashboard: "demo" });
-  document.getElementById("host").append(card);
-  card.hass = hass();
+  rev++;
+  if (panel) return push();
+  panel = document.createElement("ha-3dhome-panel");
+  panel.hass = hass();
+  panel.panel = { url_path: "demo", config: { entry_id: "demo" } };
+  document.getElementById("host").append(panel);
 }
 
 await import("./card/ha-3dhome.js");

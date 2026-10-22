@@ -58,8 +58,8 @@ export function parseProps(text: string) {
     }
     line = buf + line;
     buf = "";
-    let i = 0,
-      key = "";
+    let i = 0;
+    let key = "";
     for (; i < line.length; i++) {
       const ch = line[i];
       if (ch === "\\") {

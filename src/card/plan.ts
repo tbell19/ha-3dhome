@@ -9,14 +9,14 @@ import { segDir, wallExtensions, wallPieces, planJoints } from "../core/plan-geo
 
 export class PlanPart {
   _buildPlanLayer(this: Home3DCard, sc: Scene) {
-    const T = this.T,
-      plan = !!this._plan,
-      edit = !!this._edit;
-    const H = sc.wall_height ?? 46,
-      WT = sc.wall_thickness ?? 4,
-      wallCol = (sc.wall_colors || ["#e9dcc8"])[0];
-    const segs = sc.wall_segs || [],
-      opens = sc.openings || [];
+    const T = this.T;
+    const plan = !!this._plan;
+    const edit = !!this._edit;
+    const H = sc.wall_height ?? 46;
+    const WT = sc.wall_thickness ?? 4;
+    const wallCol = (sc.wall_colors || ["#e9dcc8"])[0];
+    const segs = sc.wall_segs || [];
+    const opens = sc.openings || [];
     const G = (this._wallG = new T.Group());
     this._world.add(G);
     this._mats ||= {};
@@ -42,16 +42,16 @@ export class PlanPart {
     const invis = (this._mats.__invis ||= new T.MeshBasicMaterial({ visible: false }));
     const ext = wallExtensions(segs, WT);
     segs.forEach((s, i) => {
-      const [ux, uy, L] = segDir(s),
-        t = s.t ?? WT,
-        h = s.h ?? H,
-        ry = -Math.atan2(uy, ux);
+      const [ux, uy, L] = segDir(s);
+      const t = s.t ?? WT;
+      const h = s.h ?? H;
+      const ry = -Math.atan2(uy, ux);
       this._begin("w:" + i, [(s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2], 0, G);
       const mat = this._surfMat(s.color || wallCol, s.texture ?? sc.wall_texture);
       for (const [p0, p1, z0, z1] of wallPieces(s, ext[i], opens, H, WT)) {
         if (z1 - z0 < 0.05) continue;
-        const sm = (p0 + p1) / 2,
-          m = new T.Mesh(this._planUV(new T.BoxGeometry(p1 - p0, z1 - z0, t), sm, (z0 + z1) / 2), mat);
+        const sm = (p0 + p1) / 2;
+        const m = new T.Mesh(this._planUV(new T.BoxGeometry(p1 - p0, z1 - z0, t), sm, (z0 + z1) / 2), mat);
         m.position.set(s.a[0] + ux * sm - CX, z0 + (z1 - z0) / 2, s.a[1] + uy * sm - CY);
         m.rotation.y = ry;
         m.userData.wall = true;
@@ -204,8 +204,8 @@ export class PlanPart {
   _fmtLen(this: Home3DCard, units: number, vertical?: boolean) {
     const cm = units * this._modelScale()[vertical ? 1 : 0];
     if (this._imperial()) {
-      const inch = Math.round(cm / 2.54),
-        ft = Math.floor(inch / 12);
+      const inch = Math.round(cm / 2.54);
+      const ft = Math.floor(inch / 12);
       return ft ? `${ft}′ ${inch - ft * 12}″` : `${inch}″`;
     }
     return cm >= 100 ? `${(cm / 100).toFixed(2)} m` : `${Math.round(cm)} cm`;

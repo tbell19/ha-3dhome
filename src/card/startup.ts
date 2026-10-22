@@ -11,8 +11,8 @@ export class StartupPart {
   /** first start (and restart after a lost context): load Three.js, build the DOM, renderer, camera and listeners, then
    * the world */
   async _init(this: Home3DCard) {
-    const cfg = this._config,
-      gen = this._gen;
+    const cfg = this._config;
+    const gen = this._gen;
     const T: typeof THREE = (this.T = await import(cfg.three_url || THREE_URL));
     const { OrbitControls } = await import(cfg.orbit_url || ORBIT_URL);
     if (gen !== this._gen || !this.isConnected) {
@@ -20,10 +20,10 @@ export class StartupPart {
       return;
     } // torn down / detached meanwhile
     const root = this.shadowRoot || this.attachShadow({ mode: "open" });
-    root.innerHTML = `<style>${cardStyles(cfg)}</style>${CARD_HTML}`;
+    root.innerHTML = `<style>${cardStyles}</style>${CARD_HTML}`;
     const wrap = (this._wrap = root.querySelector<HTMLElement>(".wrap"));
     this._ov = root.querySelector<HTMLElement>(".ov");
-    this._ed = root.querySelector<HTMLElement>(".ed");
+    this._editorLayer = root.querySelector<HTMLElement>(".ed");
     this._edBtn = root.querySelector<HTMLElement>(".edbtn");
     this._conn = root.querySelector<HTMLElement>(".conn");
     this._edBtn.addEventListener("click", () => this._openEditor());
@@ -64,8 +64,8 @@ export class StartupPart {
   /** Edit pressed: fetch the editor the first time, then enter edit mode */
   async _openEditor(this: Home3DCard) {
     if (!this._editor) {
-      const btn = this._edBtn,
-        gen = this._gen;
+      const btn = this._edBtn;
+      const gen = this._gen;
       btn.style.opacity = ".5";
       try {
         const mod = await loadEditor();
@@ -144,14 +144,14 @@ export class StartupPart {
       if (!this._camMoved()) return;
       this._camMv = true;
       this._syncNav();
-      const f = this._focus,
-        t = controls.target;
+      const f = this._focus;
+      const t = controls.target;
       if (f && !this._fly) {
         // panning well away from the framed room ends the see-through view
-        const [x1, x2, y1, y2] = f.room.rect,
-          x = t.x + CX,
-          y = t.z + CY,
-          M = 40;
+        const [x1, x2, y1, y2] = f.room.rect;
+        const x = t.x + CX;
+        const y = t.z + CY;
+        const M = 40;
         if (x < x1 - M || x > x2 + M || y < y1 - M || y > y2 + M) this._setFocus(null);
       }
       this._requestRender();
@@ -166,9 +166,9 @@ export class StartupPart {
 
   /** the view buttons, the room bar, the room controls header, the idle countdown and double-click to frame a room */
   _bindNav(this: Home3DCard, root: ShadowRoot) {
-    const wrap = this._wrap,
-      cam = this._cam,
-      renderer = this._renderer;
+    const wrap = this._wrap;
+    const cam = this._cam;
+    const renderer = this._renderer;
     const nav = root.querySelector<HTMLElement>(".nav");
     nav.addEventListener("click", (ev) => {
       const a = (ev.target as HTMLElement).closest<HTMLElement>("button")?.dataset.v;
