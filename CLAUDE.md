@@ -75,7 +75,11 @@ HACS installs GitHub releases, so a version tag is what ships and `main` is the 
 - **Outside the editor the scene is merged (v6.2.5)**
   - `_batch()` hides the static meshes behind merged copies (`_batchBox`); the originals stay for picking, the see-through room (`_showBatch(false)`) and the editor (which rebuilds without merging). Something that changes after the build outside the editor (like lamps' glowing parts, door leaves and screens) must be left out of the merge in `_batch()`, or its changes won't show.
   - Floors keep out of the shadow maps through `customDepthMaterial`, which merged meshes copy.
-  - The corner shading is the GTAO pass everywhere: skipped while the view moves, reused when only the lights changed (`_aoUnchanged`). Baking it into a top-down map was tried and dropped (HISTORY item 46): it can't match the screen-space look on walls and under lamplight.
+  - The corner shading is the GTAO pass everywhere: on while the view moves unless `ao_pause` is set, reused when only the lights changed (`_aoUnchanged`). Baking it into a top-down map was tried and dropped (HISTORY item 46): it can't match the screen-space look on walls and under lamplight.
+- **Shader compiling (v6.3.0)**
+  - Compiling shaders on first draw froze the page for seconds after it opened. Nothing draws until `_warmShaders` has compiled the scene and the post-processing passes (`_requestRender` waits on `_warming`); new merged meshes show only after `_prepareShaders`.
+  - With the composer in use, every frame goes through it. The scene's shaders differ between the composer's buffers and the screen, so switching between the two compiles every one of them again.
+
 - **Lighting and shadows**
   - Fixtures and overlays must not cast shadows (`_noCast`). Otherwise fans and bulbs shadow their own lights and the room goes dark.
   - Shadow maps are static (`shadowMap.autoUpdate=false`). Set `renderer.shadowMap.needsUpdate = true` after geometry changes.

@@ -323,6 +323,7 @@ export interface CardConfig {
   max_window_lights?: number;
   ambient?: number;
   look?: false | Partial<Record<keyof Looks, number | boolean>>;
+  ao_pause?: boolean;
   idle_view?: { room?: string; after?: number };
   max_pixel_ratio?: number;
   [k: string]: unknown;
@@ -339,6 +340,7 @@ export type LayoutKey =
   | "chips"
   | "doors"
   | "look"
+  | "ao_pause"
   | "ambient"
   | "idle_view"
   | "room_cards";

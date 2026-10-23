@@ -313,10 +313,14 @@ export class LivePart {
     return same;
   }
 
-  async _loadPost(this: Home3DCard) {
+  /** Loads the post-processing passes and builds the composer (once per start; later calls get the same promise). */
+  _loadPost(this: Home3DCard): Promise<void> {
     const gen = this._gen;
-    if (this._ppLoading === gen) return;
-    this._ppLoading = gen;
+    if (this._ppLoading?.gen !== gen) this._ppLoading = { gen, done: this._buildPost(gen) };
+    return this._ppLoading.done;
+  }
+
+  async _buildPost(this: Home3DCard, gen: number) {
     try {
       const [{ EffectComposer }, { RenderPass }, { OutputPass }, { GTAOPass }, { UnrealBloomPass }] =
         await loadPostProcessing();
@@ -367,14 +371,96 @@ export class LivePart {
       this._aoKey = null;
       comp.addPass(ao);
       comp.addPass((this._bloomPass = new UnrealBloomPass(new T.Vector2(256, 256), 0.45, 0.55, 0.72)));
-      comp.addPass(new OutputPass());
+      comp.addPass((this._outputPass = new OutputPass()));
       this._resize();
       this._update();
       this._requestRender();
     } catch (e: any) {
       console.warn("ha-3dhome: effects unavailable", e);
+    }
+  }
+
+  /* Compiles every shader the first frame needs before that frame is drawn. Where the browser can (the
+   * KHR_parallel_shader_compile extension) the GPU driver compiles them in the background and the page stays responsive;
+   * drawing straight away instead waits on each shader in turn, which froze the page for seconds on start. The
+   * post-processing passes come first when a look needs them: the scene's shaders differ when the scene draws into the
+   * composer instead of onto the screen. Nothing draws meanwhile (_requestRender waits for _warming). */
+  async _warmShaders(this: Home3DCard) {
+    const gen = this._gen;
+    this._warming = true;
+    try {
+      const L = lookOf(this._cfg());
+      if ((L.ao || L.bloom) && !this._composer) {
+        await this._loadPost();
+        if (gen !== this._gen) return;
+        this._update(); // _usePP now knows about the composer
+      }
+      await this._prepareShaders(this._scene);
+      if (this._composer) await this._preparePasses();
+    } catch (e: any) {
+      console.warn("ha-3dhome: shaders not prepared", e);
     } finally {
-      if (this._ppLoading === gen) this._ppLoading = null;
+      if (gen === this._gen) {
+        this._warming = false;
+        this._requestRender();
+      }
+    }
+  }
+
+  /** Compiles the shaders `obj` needs for the target the scene draws into (the composer's or the screen) without
+   * holding up the page. With KHR_parallel_shader_compile the driver builds them in the background while this waits;
+   * without it each shader is finished in its own task, so the page still gets a turn between them. → resolves once
+   * every one is ready. */
+  async _prepareShaders(
+    this: Home3DCard,
+    obj: THREE.Object3D,
+    target = this._usePP ? this._composer.readBuffer : null,
+    lights: THREE.Object3D | null = this._scene,
+  ) {
+    const r = this._renderer;
+    const world = this._world;
+    r.setRenderTarget(target);
+    const mats = r.compile(obj, this._cam, lights as THREE.Scene);
+    r.setRenderTarget(null);
+    const parallel = r.extensions.has("KHR_parallel_shader_compile");
+    const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
+    const programs = new Set([...mats].map((m) => (r.properties.get(m) as any).currentProgram).filter(Boolean));
+    for (const program of programs) {
+      if (world !== this._world || !this._renderer) return; // rebuilt or torn down meanwhile
+      if (parallel) while (!program.isReady()) await pause(10);
+      else {
+        program.getUniforms(); // finishes this one shader (a no-op when it already is)
+        await pause(0);
+      }
+    }
+  }
+
+  /** The post-processing passes' shaders, the same way. Each pass draws a full-screen quad without lights, into the
+   * composer's buffers or (the last one) onto the screen; ambient occlusion also draws the whole scene, lit, with one
+   * material of its own. */
+  async _preparePasses(this: Home3DCard) {
+    const T = this.T;
+    const quad = new T.PlaneGeometry();
+    try {
+      // the output pass picks its tone mapping from the renderer as it draws: let it pick, without drawing
+      const out = this._outputPass;
+      const draw = out.fsQuad.render;
+      out.fsQuad.render = () => {};
+      out.render(this._renderer, null, this._composer.readBuffer, 0, false);
+      out.fsQuad.render = draw;
+      for (const pass of this._composer.passes) {
+        const mats = Object.values(pass)
+          .flat()
+          .filter((v: any) => v?.isMaterial && v !== this._aoPass?.normalMaterial);
+        if (!mats.length) continue;
+        const quads = new T.Scene();
+        for (const m of mats) quads.add(new T.Mesh(quad, m));
+        await this._prepareShaders(quads, pass.renderToScreen ? null : this._composer.readBuffer, null);
+      }
+      const ao = this._aoPass;
+      if (ao) await this._prepareShaders(new T.Mesh(quad, ao.normalMaterial), this._composer.readBuffer);
+    } finally {
+      quad.dispose();
     }
   }
 

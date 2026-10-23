@@ -26,6 +26,7 @@ A 3D Home page keeps its map in the integration's storage as one JSON object wit
 | `max_window_lights` | `10` | How many windows get daylight (widest first) |
 | `ambient` | `0.35` | Room fill: the flat daytime light on every surface, 0 to 1. Lower lets window light and shadows show. Night levels don't change. Set with the Look panel's Room fill slider |
 | `look` | on | Render looks, each a strength from `0` (off) to `1`. A look left out uses its default strength, and `look: false` turns them all off. Set from the editor's ✨ Look panel. See below |
+| `ao_pause` | off | `true` pauses the corner shading (`ao`) while the view moves or something is dragged, and fades it back in once the view is still. Smoother on slow devices. Set from the ✨ Look panel |
 | `idle_view` | off | `{room, after}`: after `after` seconds with no touch, click, scroll or key on the map, fly back to `room` (a room name from the room menu; left out = whole home). Off while editing. Set from the ✨ Look panel's "When left alone" menus |
 | `max_pixel_ratio` | `2` | Cap on devicePixelRatio |
 

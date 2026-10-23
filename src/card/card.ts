@@ -8,6 +8,7 @@ import type { TransformControls } from "three/examples/jsm/controls/TransformCon
 import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import type { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import type { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type {
   CardConfig,
   HomePage,
@@ -196,8 +197,10 @@ export class Home3DCard extends HTMLElement {
   declare _composer: EffectComposer | null;
   declare _aoPass: GTAOPass | null;
   declare _bloomPass: UnrealBloomPass | null;
+  declare _outputPass: OutputPass | null; // the composer's last pass (tone mapping and colour space)
   declare _usePP: boolean; // render through the composer
-  declare _ppLoading: number | null;
+  declare _ppLoading: { gen: number; done: Promise<void> } | null; // the post-processing load of this start (_loadPost)
+  declare _warming: boolean; // the first frame's shaders are compiling (_warmShaders): nothing draws yet
   declare _raf: number | null;
   declare _aoLevel: number; // the ambient occlusion strength the look asks for (0..1)
   declare _drawK: { p: THREE.Vector3; q: THREE.Quaternion; z: number } | null; // the camera as last drawn (_seenMove)
@@ -388,7 +391,8 @@ export class Home3DCard extends HTMLElement {
     this._glowTex = null;
     for (const ps of this._composer?.passes || []) ps.dispose?.();
     this._composer?.dispose();
-    this._composer = this._aoPass = this._bloomPass = null;
+    this._composer = this._aoPass = this._bloomPass = this._outputPass = null;
+    this._warming = false;
     this._usePP = false;
     this._lkSig = null;
     this._bgKey = undefined;

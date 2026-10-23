@@ -99,6 +99,10 @@ export const cardStyles = `
   .lookp .n { font-weight: 600; } .lookp output { opacity: .75; font-variant-numeric: tabular-nums; }
   .lookp input { grid-column: 1 / -1; width: 100%; margin: 2px 0; accent-color: #f2c76b; }
   .lookp .d { grid-column: 1 / -1; opacity: .6; font-size: 11px; }
+  .lookp .pause { grid-template-columns: auto 1fr; cursor: pointer; }
+  .lookp .pause input { grid-column: auto; grid-row: span 2; width: auto; margin: 0; }
+  .lookp .pause .d { grid-column: 2; }
+  .lookp .pause:has(input:disabled) { opacity: .45; cursor: default; }
   .lookp .idle { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.08); }
   .lookp select { width: 100%; box-sizing: border-box; background: rgba(255,255,255,.06); color: #f2ebe0; border: 1px solid rgba(255,255,255,.14); border-radius: 8px; padding: 6px 8px; font: inherit; }
   .lookp select option { background: #2a2622; color: #f2ebe0; }

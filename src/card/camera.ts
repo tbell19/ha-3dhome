@@ -12,7 +12,7 @@ export interface CameraGoal {
 }
 import { CX, CY } from "../core/constants";
 
-const SETTLE_MS = 150; // how long the view stays still before ambient occlusion comes back
+const SETTLE_MS = 150; // with ao_pause: how long the view stays still before ambient occlusion comes back
 const FADE_MS = 200; // and how long it takes to fade in
 
 export class CameraPart {
@@ -158,10 +158,10 @@ export class CameraPart {
   }
 
   _requestRender(this: Home3DCard) {
-    if (this._raf || !this._renderer || document.hidden) return; // hidden tab: render once it's visible again
+    if (this._raf || !this._renderer || document.hidden || this._warming) return; // hidden tab: render once it's visible again
     this._raf = requestAnimationFrame(() => {
       this._raf = null;
-      if (!this._renderer) return;
+      if (!this._renderer || this._warming) return; // _warmShaders draws once it is done
       this._controls.update(); // sets _camMv (via "change") only if the camera really moved
       const stepped = this._stepOffset(); // always steps the offset easing
       const moving = this._camMv || stepped; // _camMv also counts moves since the last frame (without damping, a drag moves the camera from its pointer events)
@@ -190,22 +190,25 @@ export class CameraPart {
     return shift * px >= 0.5;
   }
 
-  /* Draws one frame. Ambient occlusion is the costliest pass (a second render of the scene plus a full-screen blur), so it
-   * sits out while the view moves and fades back in once the view has been still for SETTLE_MS. → true while it fades in */
+  /* Draws one frame. Ambient occlusion is the costliest pass (a second render of the scene plus a full-screen blur). With
+   * `ao_pause` set it sits out while the view moves and fades back in once the view has been still for SETTLE_MS;
+   * otherwise it stays on. Either way the frame goes through the composer, so the scene's shaders are only ever built
+   * for one target (switching between the composer and the screen rebuilds every one of them). → true while it fades in */
   _draw(this: Home3DCard, moving: boolean) {
     const ao = this._usePP ? this._aoPass : null;
     const level = ao ? this._aoLevel || 0 : 0;
+    const pause = !!this._cfg().ao_pause;
     const now = performance.now();
     if (moving) this._movedAt = now;
     const still = now - (this._movedAt || 0);
-    const k = level > 0 ? Math.min(1, Math.max(0, (still - SETTLE_MS) / FADE_MS)) : 0;
+    const k = level > 0 ? (pause ? Math.min(1, Math.max(0, (still - SETTLE_MS) / FADE_MS)) : 1) : 0;
     if (ao) {
       ao.enabled = k > 0;
       ao.blendIntensity = level * k;
       this._aoReuse = k > 0 && this._aoUnchanged();
     }
-    if (this._usePP && (k > 0 || this._bloomPass?.enabled)) this._composer.render();
-    else this._renderer.render(this._scene, this._cam); // nothing left for the composer to add
+    if (this._usePP) this._composer.render();
+    else this._renderer.render(this._scene, this._cam);
     if (!level || k >= 1 || moving) return false;
     if (still >= SETTLE_MS) return true;
     clearTimeout(this._settleT);

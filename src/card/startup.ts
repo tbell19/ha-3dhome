@@ -61,6 +61,7 @@ export class StartupPart {
     this._ready = true;
     this._connState();
     this._update();
+    this._warmShaders();
     this._showHome();
     if (this._hass?.user?.is_admin && editorAvailable()) this._edBtn.style.display = "";
     // an editor registered as its own resource may arrive later

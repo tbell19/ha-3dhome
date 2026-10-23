@@ -37,6 +37,15 @@ export class EditorPanels {
     this._lookDrag = false;
   }
 
+  /** Whether corner shading pauses while the view moves (off by default, so only `true` is stored). One undo step. */
+  setAoPause(this: Editor, on: boolean) {
+    this._pushUndo();
+    if (on) this.card._work.ao_pause = true;
+    else delete this.card._work.ao_pause;
+    this._syncBar();
+    this.card._requestRender();
+  }
+
   /** Where the map goes after `seconds` without a touch: a room, or the whole home when `room` is empty. 0 turns it off. */
   setIdleView(this: Editor, seconds: number, room: string) {
     this._pushUndo();

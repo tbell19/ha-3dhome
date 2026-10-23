@@ -1,5 +1,5 @@
 /* Look panel: a strength slider per render look, and where the map goes when nobody touches it.
- * The values live in card._work; the editor's setLook and setIdleView change them, one undo step each.
+ * The values live in card._work; the editor's setLook, setAoPause and setIdleView change them, one undo step each.
  */
 import type { Editor } from "./editor";
 import { closeSidePanel } from "./side-panels";
@@ -52,6 +52,18 @@ export function LookPanel({ editor }: { editor: Editor }) {
           <span class="d">{hint}</span>
         </label>
       ))}
+
+      <label class="pause">
+        <input
+          type="checkbox"
+          data-k="ao_pause"
+          checked={!!layout.ao_pause}
+          disabled={!strength.ao}
+          onChange={(ev) => editor.setAoPause(ev.currentTarget.checked)}
+        />
+        <span class="n">Pause corner shading while moving</span>
+        <span class="d">Smoother panning and dragging on slow devices</span>
+      </label>
 
       <div class="idle">
         <span class="n">When left alone</span>

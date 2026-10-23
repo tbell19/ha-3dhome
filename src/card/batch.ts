@@ -135,19 +135,28 @@ export class BatchPart {
       for (const m of gr.from) hidden.add(m);
     }
     for (const m of kept) hidden.delete(m); // whole, even where another of its materials did merge
-    for (const m of hidden) m.visible = false;
+    box.visible = false;
     world.add(box);
     box.updateMatrixWorld(true);
     this._batchBox = box;
     this._batched = [...hidden];
-    this._batchOn = true;
-    this._renderer.shadowMap.needsUpdate = true;
-    this._requestRender();
+    this._batchOn = false;
+    // the merged copies' materials are new shaders (colour from the vertices): build them before they show, or the
+    // first frame with them waits on the compile
+    this._prepareShaders(box)
+      .catch(() => {})
+      .then(() => {
+        if (this._batchBox !== box || this._edit) return;
+        box.userData.ready = true;
+        this._showBatch(!this._faded?.size); // a see-through room keeps the originals (_updateFade)
+        this._renderer.shadowMap.needsUpdate = true;
+        this._requestRender();
+      });
   }
 
   /** Shows the merged meshes (on) or the originals (off). The see-through room needs the originals. */
   _showBatch(this: Home3DCard, on: boolean) {
-    if (!this._batchBox || this._batchOn === on) return;
+    if (!this._batchBox?.userData.ready || this._batchOn === on) return;
     this._batchOn = on;
     this._batchBox.visible = on;
     for (const m of this._batched || []) m.visible = !on;

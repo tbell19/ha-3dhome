@@ -106,6 +106,7 @@ const STATES = {
 
   await ev(`[...card.shadowRoot.querySelectorAll('.rooms button')].find(b=>b.textContent==='Kitchen').click()`);
   await wait(1500);
+  await until(`!card._fly`, 5000); // the first frames of a room view can wait on a see-through material's shader
   check("room button flies camera", (await ev(`card._cam.zoom`)) > 1.3);
   await ev(`card._focusRoom(card._rooms().find(r=>r.name==='bath'))`);
   await wait(1200);
@@ -136,21 +137,34 @@ const STATES = {
     JSON.stringify(merged),
   );
 
-  // panning skips the ambient occlusion pass (the costliest one) and brings it back once the view is still
+  // ambient occlusion stays on while the view pans; with ao_pause it sits out and comes back once the view is still
   if (!MOBILE && (await ev(`!!card._aoPass && card._usePP`))) {
-    await p.mouse.move(640, 420);
-    await p.mouse.down();
-    for (let i = 1; i <= 6; i++) {
-      await p.mouse.move(640 + 8 * i, 420 + 3 * i);
-      await ev(`new Promise(r=>requestAnimationFrame(()=>r()))`);
-    }
-    const mid = await ev(`card._aoPass.enabled`);
-    await p.mouse.up();
+    const pan = async (dx) => {
+      await p.mouse.move(640, 420);
+      await p.mouse.down();
+      for (let i = 1; i <= 6; i++) {
+        await p.mouse.move(640 + dx * i, 420 + 3 * i);
+        await ev(`new Promise(r=>requestAnimationFrame(()=>r()))`);
+      }
+      const mid = await ev(`card._aoPass.enabled`);
+      await p.mouse.up();
+      await until(`!card._raf`, 30000);
+      return mid;
+    };
+    const kept = await pan(8);
+    check("ambient occlusion stays on while panning", kept === true);
+    await ev(`card._config.ao_pause=true`);
+    const mid = await pan(-8);
     const back = await until(
       `card._aoPass.enabled && card._aoPass.blendIntensity===card._aoLevel && !card._raf`,
       60000,
     );
-    check("panning skips ambient occlusion until the view settles", !mid && back, JSON.stringify({ mid, back }));
+    await ev(`delete card._config.ao_pause`);
+    check(
+      "with ao_pause, panning skips ambient occlusion until the view settles",
+      !mid && back,
+      JSON.stringify({ mid, back }),
+    );
     // a frame where only the lights changed reuses the last ambient occlusion
     await wait(1000);
     await until(`!card._raf`, 30000);
@@ -252,16 +266,19 @@ const STATES = {
   check("edit mode opens", await until(`!!card._edit && !!card.shadowRoot.querySelector('.bar')`, 8000));
   check("the editor shows the meshes one by one", await until(`!card._batchBox`, 5000));
   if (await ev(`!!card._aoPass && card._usePP && card._aoLevel>0`)) {
-    // moving the view skips the shading pass (the costliest one) and brings it back once the view is still
-    const mid = await ev(`(card._draw(true), card._requestRender(), card._aoPass.enabled)`);
+    // moving the view keeps the shading pass; with ao_pause it skips it and brings it back once the view is still
+    const kept = await ev(`(card._draw(true), card._requestRender(), card._aoPass.enabled)`);
+    await until(`!card._raf`, 30000);
+    const mid = await ev(`(card._cfg().ao_pause=true, card._draw(true), card._requestRender(), card._aoPass.enabled)`);
     const back = await until(
       `card._aoPass.enabled && card._aoPass.blendIntensity===card._aoLevel && !card._raf`,
       30000,
     );
+    await ev(`delete card._cfg().ao_pause`);
     check(
-      "in the editor, moving skips the shading pass until the view settles",
-      !mid && back,
-      JSON.stringify({ mid, back }),
+      "in the editor, moving keeps the shading pass, and ao_pause skips it until the view settles",
+      kept && !mid && back,
+      JSON.stringify({ kept, mid, back }),
     );
   }
   await wait(500);

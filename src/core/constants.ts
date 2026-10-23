@@ -2,7 +2,7 @@
  */
 import type { CardConfig, LayoutKey, Looks } from "../types";
 
-export const VERSION3D = "6.2.9";
+export const VERSION3D = "6.3.0";
 export const CX = 296;
 export const CY = 391;
 /* render looks, each a strength 0..1 under `look:`. A missing key or true uses the default strength, 0 or false turns it off, and `look: false` turns them all off. */
@@ -56,6 +56,7 @@ export const LAYOUT_KEYS: readonly LayoutKey[] = [
   "chips",
   "doors",
   "look",
+  "ao_pause",
   "ambient",
   "idle_view",
   "room_cards",
