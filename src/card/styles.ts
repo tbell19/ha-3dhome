@@ -60,6 +60,7 @@ export const cardStyles = `
   .pop button:disabled { opacity: .4; cursor: default; background: none; }
   .menu { position: absolute; z-index: 5; display: grid; gap: 4px; padding: 6px; border-radius: 12px; background: #24211d; border: 1px solid rgba(255,255,255,.12); }
   .menu button { border-radius: 8px; text-align: left; }
+  .optmenu { min-width: 160px; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; z-index: 8; }
   .moremenu { right: calc(12px + var(--sa-r)); bottom: calc(56px + var(--sa-b)); }
   .insp { position: absolute; left: calc(10px + var(--sa-l)); top: calc(112px + var(--sa-t)); width: min(290px, 46%); max-height: calc(100% - 180px - var(--sa-t) - var(--sa-b)); overflow: auto; color: #f2ebe0;
     background: rgba(12,11,10,.78); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; padding: 10px 12px; font-size: 12px; }
@@ -215,6 +216,8 @@ export const cardStyles = `
   .rcp .rcrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,.05); }
   .rcp .rcrow .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .rcp .rcrow .id { opacity: .5; font-size: 10.5px; }
   .rcp .rcrow button { padding: 2px 7px; margin-left: 2px; }
+  .rcp .rcact { grid-column: 1 / -1; display: flex; gap: 8px; } .rcp .rcact label { flex: 1; display: flex; align-items: center; gap: 6px; font-size: 11px; opacity: .85; min-width: 0; }
+  .rcp .rcact select { flex: 1; min-width: 0; width: auto; padding: 3px 6px; font-size: 11.5px; }
   .rcp .rcprev { display: flex; flex-direction: column; gap: 8px; }
   @container (max-width: 640px) { .rcp { top: auto; bottom: calc(108px + var(--sa-b)); left: calc(8px + var(--sa-l)); right: calc(8px + var(--sa-r)); width: auto; height: 52%; } }
   .nav button, .bar button, .insp button, .lib button, .ents button, .rcp button, .menu button, .rooms button, .lookp header button, .rcards header button {

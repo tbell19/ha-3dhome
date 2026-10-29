@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { LovelaceCardConfig } from "../types";
 import type { Editor } from "./editor";
 import { closeSidePanel } from "./side-panels";
-import { loadYaml as importYaml } from "./shared.js";
+import { loadYaml as importYaml, actionChoice, actionChoices, choiceAction } from "./shared.js";
+import type { ActionChoice } from "../core/card-actions";
 
 /** js-yaml, loaded the first time it's needed (null when it can't be loaded) */
 const loadYaml = () => importYaml().catch(() => null);
@@ -35,6 +36,18 @@ export function RoomControlsPanel({ editor }: { editor: Editor }) {
     if (j < 0 || j >= list.length) return;
     [list[i], list[j]] = [list[j], list[i]];
     setCards(list);
+  };
+
+  /* what a tap or a hold on card i does; on a tile, a tap on its icon does the same as a tap anywhere on it */
+  const setAction = (i: number, which: "tap" | "hold", choice: ActionChoice) => {
+    const c: LovelaceCardConfig = { ...cards[i] };
+    const keys =
+      which === "hold" ? ["hold_action"] : c.type === "tile" ? ["tap_action", "icon_tap_action"] : ["tap_action"];
+    const a = choiceAction(choice);
+    for (const k of keys)
+      if (a) c[k] = a;
+      else delete c[k];
+    setCards(cards.map((old, j) => (j === i ? c : old)));
   };
 
   const addTile = () => {
@@ -110,6 +123,7 @@ export function RoomControlsPanel({ editor }: { editor: Editor }) {
               onUp={() => move(i, -1)}
               onDown={() => move(i, 1)}
               onRemove={() => setCards(cards.filter((_, j) => j !== i))}
+              onAction={(which, choice) => setAction(i, which, choice)}
             />
           ))}
           {!cards.length && <div class="hint">No controls for this room yet.</div>}
@@ -184,6 +198,7 @@ function CardRow(props: {
   onUp: () => void;
   onDown: () => void;
   onRemove: () => void;
+  onAction: (which: "tap" | "hold", choice: ActionChoice) => void;
 }) {
   const c = props.card;
   const type = String(c.type)
@@ -212,7 +227,37 @@ function CardRow(props: {
           <ha-icon icon="mdi:close" />
         </button>
       </span>
+      {typeof c.entity === "string" && (
+        <div class="rcact">
+          <ActionPick label="Tap" entity={c.entity} value={c.tap_action} onPick={(v) => props.onAction("tap", v)} />
+          <ActionPick label="Hold" entity={c.entity} value={c.hold_action} onPick={(v) => props.onAction("hold", v)} />
+        </div>
+      )}
     </div>
+  );
+}
+
+/** A menu of what a tap or a hold does. An action set in the card's code that isn't one of these shows as "From code". */
+function ActionPick(props: { label: string; entity: string; value: unknown; onPick: (v: ActionChoice) => void }) {
+  const now = actionChoice(props.value);
+  return (
+    <label>
+      {props.label}
+      <select
+        data-act={props.label.toLowerCase()}
+        value={now}
+        onChange={(ev) => props.onPick(ev.currentTarget.value as ActionChoice)}
+      >
+        {actionChoices(props.entity).map((o) => (
+          <option value={o.value}>{o.label}</option>
+        ))}
+        {now === "custom" && (
+          <option value="custom" disabled>
+            From code
+          </option>
+        )}
+      </select>
+    </label>
   );
 }
 

@@ -9,7 +9,7 @@
  */
 export {}; // a module (it has top-level await)
 
-const EDITOR_VERSION = "6.3.0";
+const EDITOR_VERSION = "6.4.0";
 await customElements.whenDefined("ha-3dhome-map");
 const H = window.__ha3dhome;
 if (!H || H.VERSION3D !== EDITOR_VERSION)

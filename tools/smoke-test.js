@@ -26,6 +26,7 @@ const STATES = {
     attributes: { temperature: 61, temperature_unit: "°F", humidity: 48, wind_speed: 6, wind_speed_unit: "mph" },
   },
   "sensor.outside_temperature": { state: "61", attributes: { unit_of_measurement: "°F" } },
+  "input_select.house_mode": { state: "Home", attributes: { options: ["Home", "Away", "Night"] } },
   "light.study_fan_a": on([255, 193, 142]),
   "light.study_fan_b": on([255, 193, 142]),
   "light.dining_pendant": on([255, 200, 150]),
@@ -562,6 +563,24 @@ const STATES = {
     check("undo restores the room's cards", (await ev(`card._work.room_cards['${rcRoom}'].length`)) === nAuto + 1);
     await ev(`card._editor._undo(true)`);
     await wait(300);
+    await ev(
+      `(()=>{const s=card.shadowRoot.querySelector('.rcp [data-act=tap]'); s.value='toggle'; s.dispatchEvent(new Event('change'))})()`,
+    );
+    await wait(200);
+    check(
+      "a control's tap action can be picked",
+      await ev(
+        `(()=>{const c=card._work.room_cards['${rcRoom}'][0];return c.tap_action?.action==='toggle' && c.icon_tap_action?.action==='toggle' && !c.hold_action})()`,
+      ),
+    );
+    await ev(
+      `(()=>{const s=card.shadowRoot.querySelector('.rcp [data-act=hold]'); s.value='none'; s.dispatchEvent(new Event('change'))})()`,
+    );
+    await wait(200);
+    check(
+      "a control's hold action can be picked",
+      await ev(`card._work.room_cards['${rcRoom}'][0].hold_action?.action==='none'`),
+    );
 
     await ev(`card._editor._save()`);
     await wait(800);
@@ -604,6 +623,32 @@ const STATES = {
       (()=>{const c=getComputedStyle(card.shadowRoot.querySelector('.rcards .rcbody > *'));return c.getPropertyValue('--primary-text-color').trim()==='#f2ebe0' && c.getPropertyValue('--ha-card-background').includes('28,26,23')})())`),
     );
     await p.screenshot({ path: path.join(OUT, "desktop-room-controls.png") });
+    await ev(`(async()=>{const [el]=await card._makeCards([{type:'tile',entity:'input_select.house_mode'}]); window.__sel=el;
+      card.shadowRoot.querySelector('.rcards .rcbody').append(el)})()`);
+    check(
+      "a select helper's control shows its options on a tap by default",
+      await ev(
+        `__sel.c.tap_action?.ha_3dhome==='options' && __sel.c.icon_tap_action?.ha_3dhome==='options' && !__sel.c.hold_action`,
+      ),
+    );
+    await ev(
+      `__sel.dispatchEvent(new CustomEvent('ll-custom',{bubbles:true,composed:true,detail:__sel.c.tap_action}))`,
+    );
+    check(
+      "the options show in place, the current one marked",
+      await ev(
+        `(()=>{const m=card.shadowRoot.querySelector('.optmenu');return !!m && m.children.length===3 && m.querySelector('.on')?.textContent==='Home'})()`,
+      ),
+    );
+    await p.screenshot({ path: path.join(OUT, "desktop-select-options.png") });
+    await ev(`card.shadowRoot.querySelector('.optmenu button:nth-child(2)').click()`);
+    check(
+      "picking an option sets the helper",
+      await ev(
+        `!card.shadowRoot.querySelector('.optmenu') && calls.some(c=>c[0]==='input_select' && c[1]==='select_option' && c[2].option==='Away' && c[2].entity_id==='input_select.house_mode')`,
+      ),
+    );
+    await ev(`__sel.remove()`);
     await ev(`card._focusRoom(null)`);
     await wait(1500);
     // a save from another device: the map keeps its scene and camera and only rebuilds what it shows

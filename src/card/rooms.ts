@@ -6,6 +6,7 @@ import type { LovelaceCardElement } from "../global";
 import type { Home3DCard, Room } from "./card";
 import { CX, CY } from "../core/constants";
 import { ic, esc, inPoly, roomTitle } from "../core/util";
+import { isOptionsAction, withRoomCardDefaults } from "../core/card-actions";
 
 export class RoomsPart {
   _rooms(this: Home3DCard) {
@@ -165,10 +166,12 @@ export class RoomsPart {
     });
   }
 
-  /* build Lovelace card elements; a card whose element isn't defined yet asks to be rebuilt (ll-rebuild) */
+  /* build Lovelace card elements; a card whose element isn't defined yet asks to be rebuilt (ll-rebuild). A select
+   * helper's card shows its options in place (see core/card-actions.ts): HA fires that action as ll-custom. */
   async _makeCards(this: Home3DCard, list: LovelaceCardConfig[]) {
     const helpers = await window.loadCardHelpers?.().catch(() => null);
-    const make = (conf: LovelaceCardConfig): LovelaceCardElement => {
+    const make = (given: LovelaceCardConfig): LovelaceCardElement => {
+      const conf = withRoomCardDefaults(given);
       let el: LovelaceCardElement;
       try {
         if (helpers) el = helpers.createCardElement(conf);
@@ -186,12 +189,19 @@ export class RoomsPart {
           "ll-rebuild",
           (ev: Event) => {
             ev.stopPropagation();
-            const n = make(conf);
+            const n = make(given);
             el.replaceWith(n);
             n.hass = this._hass;
           },
           { once: true },
         );
+      el.addEventListener("ll-custom", (ev: Event) => {
+        const a = (ev as CustomEvent).detail;
+        if (!isOptionsAction(a)) return;
+        ev.stopPropagation();
+        const entity = a.entity || conf.entity;
+        if (entity) this._showOptions(entity, el);
+      });
       el.hass = this._hass;
       return el;
     };

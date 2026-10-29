@@ -274,6 +274,8 @@ export class Home3DCard extends HTMLElement {
   declare _fitRoom: Room | null;
   declare _rcRoom: string; // the room whose controls show
   declare _rcMin: boolean;
+  declare _optMenu: HTMLElement | null; // a select helper's options, open on the map (_showOptions)
+  declare _optShut: { entity: string; at: number } | null; // the options menu a press just closed (a tap on it shouldn't reopen it)
   declare _rcCache: Map<string, { sig: string; els: HTMLElement[] }> | null; // built room cards, by room
   declare _faded: Set<THREE.Mesh> | null; // meshes made see-through
   declare _fadeSig: string | null;
@@ -406,6 +408,7 @@ export class Home3DCard extends HTMLElement {
       this._renderer = null;
     }
     this._rcCache = null;
+    this._optMenu = null;
     this._camK = null;
     this._seen = null;
     this._seenCfg = null;

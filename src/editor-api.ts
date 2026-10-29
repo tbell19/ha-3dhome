@@ -23,6 +23,7 @@ import { SURFACES } from "./core/surfaces";
 import { solarPosition, sunVector } from "./core/sun";
 import { segDir } from "./core/plan-geometry";
 import { zipFind } from "./core/sh3d";
+import { actionChoice, actionChoices, choiceAction } from "./core/card-actions";
 import { provideEditor } from "./card/editor-loader";
 
 export const editorApi = {
@@ -69,6 +70,9 @@ export const editorApi = {
   shiftItem,
   zipFind,
   LAYOUT_KEYS,
+  actionChoice,
+  actionChoices,
+  choiceAction,
   /** the editor module registers itself with this */
   provideEditor,
 };

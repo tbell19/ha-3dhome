@@ -9,6 +9,7 @@ import { TOGGLE_DOMAINS } from "../core/entities";
 import { PLAN, itemCenter } from "../core/items";
 import { stringLen, stringCount, spanSag } from "../core/fixtures";
 import { segDir } from "../core/plan-geometry";
+import { isSelect } from "../core/card-actions";
 
 /** What a tap target does: stored in the target mesh's userData. */
 interface TapTarget {
@@ -140,7 +141,16 @@ export class PickingPart {
     });
     (cfg.hotspots || []).forEach((H, i) => {
       if (editing) marker("h:" + i, [H.x, H.y, H.z ?? 10], 0x5aa9ff);
-      else addTarget("h:" + i, H.x, H.y, H.z ?? 10, H.hit ?? 12, H.entity, H.tap || "more-info");
+      else
+        addTarget(
+          "h:" + i,
+          H.x,
+          H.y,
+          H.z ?? 10,
+          H.hit ?? 12,
+          H.entity,
+          H.tap || (isSelect(H.entity) ? "options" : "more-info"),
+        );
     });
     if (!editing)
       for (const sc of this._screens || []) {
@@ -528,7 +538,8 @@ export class PickingPart {
       if (!hit || press.held || ev.type !== "pointerup") return;
       if (hit.action === "toggle") {
         if (!this._offlineTap()) this._hass.callService("homeassistant", "toggle", { entity_id: hit.entity });
-      } else this._moreInfo(hit.entity);
+      } else if (hit.action === "options") this._showOptions(hit.entity, { x: ev.clientX, y: ev.clientY });
+      else this._moreInfo(hit.entity);
     };
     const up = (ev: PointerEvent) => {
       ptrs.delete(ev.pointerId);
@@ -570,11 +581,11 @@ export class PickingPart {
     node.addEventListener("pointerleave", () => clearTimeout(t));
     node.addEventListener("pointerup", () => {
       clearTimeout(t);
-      if (!held && !this._edit) this._entityAction(entity, tap);
+      if (!held && !this._edit) this._entityAction(entity, tap, node);
     });
   }
 
-  _entityAction(this: Home3DCard, entity: string, tap: string) {
+  _entityAction(this: Home3DCard, entity: string, tap: string, node?: HTMLElement) {
     const d = entity.split(".")[0];
     const h = this._hass;
     const a =
@@ -585,11 +596,63 @@ export class PickingPart {
           ? "run"
           : ["button", "input_button"].includes(d)
             ? "press"
-            : "more-info");
+            : isSelect(entity)
+              ? "options"
+              : "more-info");
     if (a !== "more-info" && this._offlineTap()) return;
     if (a === "toggle") h.callService("homeassistant", "toggle", { entity_id: entity });
     else if (a === "run") h.callService(d, "turn_on", { entity_id: entity });
     else if (a === "press") h.callService(d, "press", { entity_id: entity });
+    else if (a === "options" && node) this._showOptions(entity, node);
     else this._moreInfo(entity);
+  }
+
+  /** A select helper's options as a menu next to `at` (an element, or a point in client px). Picking one sets it; a press
+   * anywhere else on the map closes the menu. Without a list of options it opens more-info instead. */
+  _showOptions(this: Home3DCard, entity: string, at: HTMLElement | { x: number; y: number }) {
+    const shut = this._optShut;
+    if (shut?.entity === entity && performance.now() - shut.at < 600) return; // the press that closed it was this tap
+    this._hideOptions();
+    const st = this._hass?.states[entity];
+    const opts = st?.attributes?.options;
+    if (!Array.isArray(opts) || !opts.length || !this._wrap) return this._moreInfo(entity);
+    const menu = document.createElement("div");
+    menu.className = "menu pop optmenu";
+    menu.dataset.entity = entity;
+    menu.setAttribute("role", "listbox");
+    for (const o of opts) {
+      const b = document.createElement("button");
+      b.textContent = String(o);
+      b.setAttribute("role", "option");
+      b.classList.toggle("on", o === st.state);
+      b.addEventListener("click", () => {
+        this._hideOptions();
+        if (o === st.state || this._offlineTap()) return;
+        this._hass.callService(entity.split(".")[0], "select_option", { entity_id: entity, option: o });
+      });
+      menu.append(b);
+    }
+    this._wrap.append(menu);
+    this._optMenu = menu;
+    // under the element (or the point), kept inside the map; above it when there is more room there
+    const box = this._wrap.getBoundingClientRect();
+    const r =
+      at instanceof HTMLElement ? at.getBoundingClientRect() : { left: at.x, right: at.x, top: at.y, bottom: at.y };
+    const w = menu.offsetWidth;
+    const below = box.bottom - r.bottom;
+    const above = r.top - box.top;
+    const up = below < menu.offsetHeight + 8 && above > below;
+    menu.style.maxHeight = `${Math.max(120, (up ? above : below) - 16)}px`;
+    menu.style.left = `${Math.max(8, Math.min(r.left - box.left, box.width - w - 8))}px`;
+    if (up) menu.style.bottom = `${box.bottom - r.top + 4}px`;
+    else menu.style.top = `${r.bottom - box.top + 4}px`;
+    menu.querySelector<HTMLElement>(".on")?.scrollIntoView({ block: "nearest" });
+  }
+
+  /** closes the options menu; `pressed` = by a press elsewhere, which a tap on the same entity then finishes */
+  _hideOptions(this: Home3DCard, pressed = false) {
+    this._optShut = pressed && this._optMenu ? { entity: this._optMenu.dataset.entity, at: performance.now() } : null;
+    this._optMenu?.remove();
+    this._optMenu = null;
   }
 }

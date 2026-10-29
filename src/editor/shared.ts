@@ -43,6 +43,9 @@ export const {
   shiftItem,
   zipFind,
   LAYOUT_KEYS,
+  actionChoice,
+  actionChoices,
+  choiceAction,
 } = H;
 
 /* The editor's third-party modules, bundled like the core's (src/core/libs.ts) and loaded when first needed. They share

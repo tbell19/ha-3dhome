@@ -87,6 +87,8 @@ Example: `look: { light: 1, ao: 0.8, stage: 1, bloom: 0.3 }`. The post-processin
 
 **`room_cards`** (optional) holds ordinary Lovelace card configs per room, keyed by the room menu's `name` (the floor name for automatic rooms). Picking a room from the menu, or double-clicking it, shows that room's cards in the top right corner; `home` is for the ⌂ Home view. Cards are built with Home Assistant's own card helpers, so any built-in or custom card works (tiles, entities, thermostat, stacks…). The header folds them away. Edit them in the editor's 🎛 Controls panel.
 
+What a tap and a hold do is the card's own `tap_action` / `hold_action`, picked per card in the Controls panel (Default, Toggle, Open details, Nothing). A select or input_select helper's card shows its options as a menu right on the map when tapped, unless its `tap_action` says otherwise; `{action: fire-dom-event, ha_3dhome: options}` does the same from any action. Chips and hotspots for select helpers show the menu too.
+
 ```yaml
 room_cards:
   lounge:

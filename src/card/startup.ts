@@ -34,6 +34,7 @@ export class StartupPart {
     wrap.addEventListener("pointerdown", (ev) => {
       const t = ev.target as Node;
       if (!this._moreMenu.contains(t) && !this._moreBtn.contains(t)) this._toggleMore(false);
+      if (this._optMenu && !this._optMenu.contains(t)) this._hideOptions(true);
     });
 
     this._createRenderer(T, wrap);
