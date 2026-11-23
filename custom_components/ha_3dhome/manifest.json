@@ -5,6 +5,9 @@
     "@tbell19"
   ],
   "config_flow": true,
+  "after_dependencies": [
+    "hassio"
+  ],
   "dependencies": [
     "frontend",
     "http",

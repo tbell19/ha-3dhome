@@ -175,3 +175,104 @@ async def test_options_take_a_builder(hass: HomeAssistant, tmp_path) -> None:
     assert done["data"]["builder_url"] == "http://builder:8099"
     await hass.async_block_till_done()
     assert hass.data[DOMAIN][entry.entry_id].scans.builder_url == "http://builder:8099"
+
+
+class FakeSupervisor:
+    """The Supervisor's API as scans.py uses it: an app store that gains the builder once its repository is added."""
+
+    def __init__(self) -> None:
+        from types import SimpleNamespace
+
+        self.calls: list[str] = []
+        self.repo_added = False
+        self.installed = False
+        self.started = False
+        ns = SimpleNamespace
+        self.store = ns(
+            addons_list=self._list, add_repository=self._add_repo, install_addon=self._install
+        )
+        self.addons = ns(addon_info=self._info, start_addon=self._start)
+
+    async def _list(self):
+        from types import SimpleNamespace
+
+        apps = [SimpleNamespace(slug="core_mosquitto")]
+        return apps + ([SimpleNamespace(slug="0a1b2c3d_home3d_scan_builder")] if self.repo_added else [])
+
+    async def _add_repo(self, options):
+        self.calls.append(f"add_repository {options.repository}")
+        self.repo_added = True
+
+    async def _install(self, slug):
+        self.calls.append(f"install {slug}")
+        self.installed = True
+
+    async def _info(self, slug):
+        from types import SimpleNamespace
+
+        from aiohasupervisor import SupervisorNotFoundError
+        from aiohasupervisor.models import AddonState
+
+        if not self.installed:
+            raise SupervisorNotFoundError("not installed")
+        state = AddonState.STARTED if self.started else AddonState.STOPPED
+        return SimpleNamespace(state=state, hostname="0a1b2c3d-home3d-scan-builder")
+
+    async def _start(self, slug):
+        self.calls.append(f"start {slug}")
+        self.started = True
+
+
+async def test_home_assistant_sets_up_the_builder(
+    hass: HomeAssistant, hass_client, hass_ws_client, aioclient_mock, tmp_path
+) -> None:
+    """On Home Assistant OS with no address set, the first build installs and starts the builder app itself."""
+    hass.config.config_dir = str(tmp_path)
+    entry = await _setup(hass)
+    client = await hass_client()
+    for n in range(1, 21):
+        await client.post(f"/api/ha_3dhome/scan/{entry.entry_id}/s4/{n}", data=JPEG)
+    app = "http://0a1b2c3d-home3d-scan-builder:8099"
+    aioclient_mock.get(f"{app}/health", json={"ok": True})
+    aioclient_mock.post(f"{app}/jobs", json={"id": "J3"})
+    aioclient_mock.get(f"{app}/jobs/J3", json={"state": "done"})
+    aioclient_mock.get(f"{app}/jobs/J3/result", content=PLY)
+    aioclient_mock.delete(f"{app}/jobs/J3", json={})
+    supervisor = FakeSupervisor()
+    ws = await hass_ws_client(hass)
+    with (
+        patch("custom_components.ha_3dhome.scans.is_hassio", return_value=True),
+        patch("custom_components.ha_3dhome.scans.supervisor_client", return_value=supervisor),
+        patch("custom_components.ha_3dhome.scans.POLL_SECONDS", 0),
+    ):
+        await ws.send_json({"id": 1, "type": "ha_3dhome/scan/build", "entry_id": entry.entry_id, "scan_id": "s4"})
+        assert (await ws.receive_json())["success"]
+        await hass.data[DOMAIN][entry.entry_id].scans._task
+
+        assert supervisor.calls == [
+            "add_repository https://github.com/tbell19/ha-3dhome#claude/elegant-wright-ob0a1v",
+            "install 0a1b2c3d_home3d_scan_builder",
+            "start 0a1b2c3d_home3d_scan_builder",
+        ]
+        store = hass.data[DOMAIN][entry.entry_id]
+        assert store.scans.snapshot()["job"]["state"] == "done"
+        assert store.config["splat"]["src"] == "scan-s4.ply"
+
+        # the next build finds it installed and running
+        supervisor.calls.clear()
+        assert await store.scans._auto_builder() == app
+        assert supervisor.calls == []
+
+
+async def test_a_build_without_the_supervisor_needs_an_address(hass: HomeAssistant, hass_client, tmp_path) -> None:
+    hass.config.config_dir = str(tmp_path)
+    entry = await _setup(hass)
+    with patch("custom_components.ha_3dhome.scans.is_hassio", return_value=False):
+        from custom_components.ha_3dhome.scans import ScanError
+
+        try:
+            await hass.data[DOMAIN][entry.entry_id].scans.async_build("s5")
+        except ScanError as err:
+            assert "address" in str(err)
+        else:
+            raise AssertionError("expected a ScanError")

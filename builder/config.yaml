@@ -1,6 +1,6 @@
 name: 3D Home Scan Builder
 version: "0.1.0"
-slug: ha_3dhome_builder
+slug: home3d_scan_builder
 description: Turns the photos you take in the 3D Home panel into a 3D scan of your home (a Gaussian splat).
 url: https://github.com/tbell19/ha-3dhome/tree/main/builder
 arch:

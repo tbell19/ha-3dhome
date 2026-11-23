@@ -24,8 +24,13 @@ the photos to a **scan builder** and follows it (`custom_components/ha_3dhome/sc
   an add-on store). [COLMAP](https://colmap.github.io/) works out where each photo was taken, then
   [OpenSplat](https://github.com/pierotofy/OpenSplat) trains the splat, on the CPU. The same container runs on any
   computer with Docker, which is faster when that computer is.
-- Its address (and an optional key) goes in the integration's options: Settings → Devices & services → 3D Home →
-  Configure → **Scan builder address**.
+- **On Home Assistant OS (and Supervised) nothing needs setting up.** The first time someone builds a scan, the
+  integration asks the Supervisor to add this repository to the app store, install the app (the Supervisor builds its
+  image on the spot: that first time takes a while) and start it, then talks to it at its internal hostname
+  (`ScanJobs._auto_builder`). Later builds find it running.
+- Elsewhere (Container, Core), or to use a faster computer, run the builder's container there and put its address (and
+  an optional key) in the integration's options: Settings → Devices & services → 3D Home → Configure → **Scan builder
+  address**. An address set there always wins.
 - The job survives a restart of Home Assistant. When it's done, the integration fetches the splat into
   `<config>/ha_3dhome/<entry_id>/splats/`, puts it in the panel's config (pins kept, levelling reset) and deletes the
   photos. Every open page shows the progress and then the scan.

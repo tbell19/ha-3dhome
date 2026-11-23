@@ -6,10 +6,12 @@ a Gaussian splat. [COLMAP](https://colmap.github.io/) works out where each photo
 
 ## Setting up
 
-1. Start this add-on.
-2. In Home Assistant go to **Settings → Devices & services → 3D Home → Configure**, and set **Scan builder address** to
-   `http://<your Home Assistant's address>:8099`.
-3. Open the 3D Home page and choose **Scan with this device**.
+Nothing to do on Home Assistant OS: 3D Home installs and starts this app itself the first time you build a scan.
+
+To run it on another computer instead (faster, or for Home Assistant Container/Core), run this folder's container there
+(`docker build -t home3d-builder --build-arg BUILD_FROM=debian:bookworm builder && docker run -p 8099:8099 home3d-builder`)
+and set **Scan builder address** in **Settings → Devices & services → 3D Home → Configure** to
+`http://<that computer>:8099`.
 
 ## How long it takes
 

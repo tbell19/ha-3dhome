@@ -18,11 +18,17 @@ const SRC = path.join(ROOT, "custom_components", "ha_3dhome");
 const OUT = path.join(ROOT, "preview", "custom_components", "ha_3dhome_scan");
 
 /** every name the integration and the frontend share, renamed in one pass */
+const REPO = "tbell19/ha-3dhome"; // the GitHub repository keeps its name (the scan builder app comes from it)
 const rename = (text) =>
   text
-    .replace(/__ha3dhome/g, "__ha3dhome_scan")
-    .replace(/ha_3dhome/g, "ha_3dhome_scan")
-    .replace(/ha-3dhome/g, "ha-3dhome-scan");
+    .split(REPO)
+    .map((part) =>
+      part
+        .replace(/__ha3dhome/g, "__ha3dhome_scan")
+        .replace(/ha_3dhome/g, "ha_3dhome_scan")
+        .replace(/ha-3dhome/g, "ha-3dhome-scan"),
+    )
+    .join(REPO);
 
 /** what the preview shows in the sidebar and the integrations list */
 const label = (file, text) => {
@@ -65,7 +71,10 @@ const left = [];
   for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, f.name);
     if (f.isDirectory()) scan(p);
-    else if (TEXT.test(f.name) && /(ha_3dhome|ha-3dhome|__ha3dhome)(?!_scan|-scan)/.test(fs.readFileSync(p, "utf8")))
+    else if (
+      TEXT.test(f.name) &&
+      /(ha_3dhome|ha-3dhome|__ha3dhome)(?!_scan|-scan)/.test(fs.readFileSync(p, "utf8").split(REPO).join(""))
+    )
       left.push(p);
   }
 })(OUT);

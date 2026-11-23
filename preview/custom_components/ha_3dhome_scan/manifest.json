@@ -5,16 +5,19 @@
     "@tbell19"
   ],
   "config_flow": true,
+  "after_dependencies": [
+    "hassio"
+  ],
   "dependencies": [
     "frontend",
     "http",
     "panel_custom",
     "websocket_api"
   ],
-  "documentation": "https://github.com/tbell19/ha-3dhome-scan",
+  "documentation": "https://github.com/tbell19/ha-3dhome",
   "integration_type": "service",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/tbell19/ha-3dhome-scan/issues",
+  "issue_tracker": "https://github.com/tbell19/ha-3dhome/issues",
   "requirements": [],
   "version": "6.4.0"
 }

@@ -1,8 +1,13 @@
 """Turning the photos taken in the panel into a 3D scan (a Gaussian splat).
 
 Training a splat needs hours of heavy computing, which Home Assistant itself must not do, so a *scan builder* does it:
-the "3D Home Scan Builder" add-on (builder/ in this repository: COLMAP finds where each photo was taken, OpenSplat
-trains the splat), or the same container on a faster computer. Its address is set in the integration's options.
+the "3D Home Scan Builder" app (builder/ in this repository: COLMAP finds where each photo was taken, OpenSplat
+trains the splat), or the same container on a faster computer.
+
+Which builder: the address in the integration's options when one is set. Otherwise, on Home Assistant OS and Supervised
+installs, Home Assistant sets the app up itself the first time a scan is built (_auto_builder): it adds this repository
+to the app store, installs and starts the app, and talks to it at its internal hostname. Elsewhere (Container, Core)
+the address has to be set.
 
 One job per panel. Its state is kept in .storage, so a build survives a restart of Home Assistant:
 
@@ -33,10 +38,11 @@ import aiohttp
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.hassio import is_hassio
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, MIN_PHOTOS, SIGNAL_SCAN_CHANGED
+from .const import BUILDER_PORT, BUILDER_REPOSITORY, BUILDER_SLUG, DOMAIN, MIN_PHOTOS, SIGNAL_SCAN_CHANGED
 from .splats import scan_dir, splat_dir
 
 if TYPE_CHECKING:
@@ -50,6 +56,13 @@ BUSY = ("queued", "building")
 
 class ScanError(Exception):
     """A build can't start; the message says why, for the person who asked."""
+
+
+def supervisor_client(hass: HomeAssistant) -> Any:
+    """The Supervisor's API client (imported here: the hassio component exists only on Supervisor installs)."""
+    from homeassistant.components.hassio import get_supervisor_client  # noqa: PLC0415
+
+    return get_supervisor_client(hass)
 
 
 class ScanJobs:
@@ -95,6 +108,11 @@ class ScanJobs:
         elif not job or job.get("state") not in BUSY:
             self._set(scan_id=scan_id, state="uploading", photos=1, progress=0, message=None)
 
+    @property
+    def url(self) -> str | None:
+        """The builder's address: the one in the options, else the app Home Assistant set up for this job"""
+        return self.builder_url or (self.job or {}).get("builder")
+
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.token}"} if self.token else {}
 
@@ -107,10 +125,10 @@ class ScanJobs:
         """Send a scan's photos to the builder. Raises ScanError when it can't start."""
         if self.job and self.job.get("state") in BUSY:
             raise ScanError("A 3D scan is already being built for this page. Stop it first.")
-        if not self.builder_url:
+        if not self.builder_url and not is_hassio(self.hass):
             raise ScanError(
-                "Home Assistant needs a scan builder to turn photos into a 3D scan. Install the 3D Home Scan Builder "
-                "add-on, then enter its address in the 3D Home integration's options."
+                "Home Assistant needs a scan builder to turn photos into a 3D scan. Run the 3D Home Scan Builder "
+                "container on a computer, then enter its address in the 3D Home integration's options."
             )
         images = scan_dir(self.hass, self.entry_id, scan_id) / "images"
         count = await self.hass.async_add_executor_job(lambda: len(list(images.glob("*.jpg"))) if images.is_dir() else 0)
@@ -125,23 +143,80 @@ class ScanJobs:
         if self._task:
             self._task.cancel()
             self._task = None
-        if job and job.get("builder_id") and self.builder_url:
+        if job and job.get("builder_id") and self.url:
             try:
                 session = async_get_clientsession(self.hass)
-                await session.delete(f"{self.builder_url}/jobs/{job['builder_id']}", headers=self._headers())
+                await session.delete(f"{self.url}/jobs/{job['builder_id']}", headers=self._headers())
             except aiohttp.ClientError:
                 pass
         if job and job.get("state") in (*BUSY, "uploading"):
             self._set(state="cancelled", message=None)
 
+    async def _auto_builder(self) -> str:
+        """Set up the scan builder app through the Supervisor, as far as needed, and return its address."""
+        from aiohasupervisor import SupervisorError, SupervisorNotFoundError  # noqa: PLC0415
+        from aiohasupervisor.models import AddonState, StoreAddRepository  # noqa: PLC0415
+
+        client = supervisor_client(self.hass)
+
+        async def find() -> str | None:
+            for addon in await client.store.addons_list():
+                if addon.slug == BUILDER_SLUG or addon.slug.endswith("_" + BUILDER_SLUG):
+                    return addon.slug
+            return None
+
+        try:
+            if (slug := await find()) is None:
+                self._set(message="Adding the scan builder to Home Assistant's apps")
+                await client.store.add_repository(StoreAddRepository(repository=BUILDER_REPOSITORY))
+                if (slug := await find()) is None:
+                    raise ScanError("The scan builder isn't in Home Assistant's app store.")
+            try:
+                info = await client.addons.addon_info(slug)
+            except SupervisorNotFoundError:
+                self._set(message="Installing the scan builder. Only the first time; it can take half an hour.")
+                await client.store.install_addon(slug)
+                info = await client.addons.addon_info(slug)
+            if info.state != AddonState.STARTED:
+                self._set(message="Starting the scan builder")
+                await client.addons.start_addon(slug)
+                info = await client.addons.addon_info(slug)
+        except SupervisorError as err:
+            _LOGGER.warning("Couldn't set up the scan builder app: %s", err)
+            raise ScanError(f"Home Assistant couldn't set up the scan builder app: {err}") from err
+        url = f"http://{info.hostname}:{BUILDER_PORT}"
+        await self._wait_healthy(url)
+        return url
+
+    async def _wait_healthy(self, url: str) -> None:
+        """A just-started builder takes a moment to answer."""
+        session = async_get_clientsession(self.hass)
+        for _ in range(60):
+            try:
+                async with session.get(f"{url}/health", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status == 200:
+                        return
+            except (aiohttp.ClientError, TimeoutError):
+                pass
+            await asyncio.sleep(POLL_SECONDS)
+        raise ScanError("The scan builder app started but doesn't answer. Its log in Settings → Apps says why.")
+
     async def _run(self, scan_id: str, images: Path) -> None:
+        if not self.builder_url:
+            try:
+                self._set(builder=await self._auto_builder(), message="Sending the photos")
+            except asyncio.CancelledError:
+                raise
+            except ScanError as err:
+                self._set(state="failed", message=str(err))
+                return
         try:
             tar = await self.hass.async_add_executor_job(_tar, images)
             body = await self.hass.async_add_executor_job(tar.open, "rb")
             session = async_get_clientsession(self.hass)
             try:
                 resp = await session.post(
-                    f"{self.builder_url}/jobs",
+                    f"{self.url}/jobs",
                     data=body,
                     headers={**self._headers(), "Content-Type": "application/x-tar"},
                     timeout=aiohttp.ClientTimeout(total=1800),
@@ -160,8 +235,8 @@ class ScanJobs:
             self._set(state="failed", message=str(err))
             return
         except (aiohttp.ClientError, TimeoutError, KeyError, ValueError) as err:
-            _LOGGER.warning("Couldn't send the scan to %s: %s", self.builder_url, err)
-            self._set(state="failed", message="The scan builder couldn't be reached. Is the add-on running?")
+            _LOGGER.warning("Couldn't send the scan to %s: %s", self.url, err)
+            self._set(state="failed", message="The scan builder couldn't be reached. Is it running?")
             return
         await self._follow()
 
@@ -173,7 +248,7 @@ class ScanJobs:
         failures = 0
         while True:
             try:
-                async with session.get(f"{self.builder_url}/jobs/{builder_id}", headers=self._headers()) as resp:
+                async with session.get(f"{self.url}/jobs/{builder_id}", headers=self._headers()) as resp:
                     if resp.status == 404:
                         self._set(state="failed", message="The scan builder lost this scan (was it restarted?).")
                         return
@@ -210,7 +285,7 @@ class ScanJobs:
         session = async_get_clientsession(self.hass)
         try:
             async with session.get(
-                f"{self.builder_url}/jobs/{builder_id}/result",
+                f"{self.url}/jobs/{builder_id}/result",
                 headers=self._headers(),
                 timeout=aiohttp.ClientTimeout(total=3600),
             ) as resp:
@@ -237,7 +312,7 @@ class ScanJobs:
             lambda: shutil.rmtree(scan_dir(self.hass, self.entry_id, scan_id), ignore_errors=True)
         )
         try:
-            await session.delete(f"{self.builder_url}/jobs/{builder_id}", headers=self._headers())
+            await session.delete(f"{self.url}/jobs/{builder_id}", headers=self._headers())
         except aiohttp.ClientError:
             pass
         self._set(state="done", progress=1, message=None)
