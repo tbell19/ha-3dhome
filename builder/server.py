@@ -93,8 +93,9 @@ def run(job: Job, cmd: list[str], start: float, end: float, message: str, steps:
     if job.cancelled:
         raise Failed("Stopped.")
     job.set(start, message)
+    # at the lowest priority: on Home Assistant's own machine the build must never slow Home Assistant down
     job.proc = subprocess.Popen(
-        cmd, cwd=job.dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+        ["nice", "-n", "19", *cmd], cwd=job.dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
     )
     tail: list[str] = []
     assert job.proc.stdout

@@ -20,11 +20,11 @@ RUN if [ "$(uname -m)" = "x86_64" ]; then TORCH="torch==${TORCH_VERSION}+cpu"; e
     && pip3 install --no-cache-dir --break-system-packages \
         --extra-index-url https://download.pytorch.org/whl/cpu "${TORCH}"
 
-# OpenSplat, built for the CPU against that PyTorch
+# OpenSplat, built for the CPU against that PyTorch (leaving a core free for Home Assistant)
 RUN git clone --depth 1 --branch ${OPENSPLAT_VERSION} https://github.com/pierotofy/OpenSplat /tmp/OpenSplat \
     && cmake -S /tmp/OpenSplat -B /tmp/OpenSplat/build -DCMAKE_BUILD_TYPE=Release -DGPU_RUNTIME=CPU \
         -DCMAKE_PREFIX_PATH="$(python3 -c 'import torch; print(torch.utils.cmake_prefix_path)')" \
-    && cmake --build /tmp/OpenSplat/build -j"$(nproc)" \
+    && cmake --build /tmp/OpenSplat/build -j"$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))" \
     && install -m 755 /tmp/OpenSplat/build/opensplat /usr/local/bin/opensplat \
     && rm -rf /tmp/OpenSplat
 
