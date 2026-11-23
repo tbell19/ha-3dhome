@@ -72,5 +72,7 @@ export const splatStyles = `
   @container (max-width: 640px) {
     .insp { left: 12px; right: 12px; top: auto; bottom: calc(64px + var(--ha-3dhome-safe-bottom, 0px)); width: auto; }
     .btn .lbl { display: none; }
+    /* the editing tools wrap to two rows: toasts and hints go below them */
+    .toast, .hint { top: calc(120px + var(--ha-3dhome-safe-top, 0px)); }
   }
 `;
