@@ -1,6 +1,8 @@
 # 3D Home Scan Builder: COLMAP (where each photo was taken) + OpenSplat (training the splat), on the CPU.
-# The base image comes from build.yaml (Home Assistant's Debian base for each architecture).
-ARG BUILD_FROM
+# Home Assistant's Debian base for the architecture the Supervisor builds for (it passes BUILD_ARCH; BUILD_FROM wins
+# when given, as for a plain `docker build --build-arg BUILD_FROM=debian:bookworm`).
+ARG BUILD_ARCH=amd64
+ARG BUILD_FROM=ghcr.io/home-assistant/${BUILD_ARCH}-base-debian:bookworm
 FROM ${BUILD_FROM}
 
 ARG OPENSPLAT_VERSION=v1.2.2
