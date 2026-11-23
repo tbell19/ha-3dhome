@@ -8,7 +8,7 @@
 export const panelStyles = `
   :host { display: block; position: relative; overflow: hidden; height: 100vh; height: 100dvh;
     background: var(--ha-3dhome-bg, #1b1a18); }
-  ha-3dhome-map { display: block; height: 100%; --header-height: 0px;
+  ha-3dhome-map, ha-3dhome-splat { display: block; height: 100%; --header-height: 0px;
     --ha-3dhome-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
     --ha-3dhome-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
     --ha-3dhome-safe-left: var(--safe-area-content-inset-left, var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
@@ -17,7 +17,7 @@ export const panelStyles = `
     top: calc(4px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
     left: calc(4px + var(--safe-area-content-inset-left, var(--safe-area-inset-left, env(safe-area-inset-left, 0px)))); }
   :host([narrow]) .menu { display: block; }
-  :host([narrow]) ha-3dhome-map { --ha-3dhome-inset-left: 44px; }
+  :host([narrow]) ha-3dhome-map, :host([narrow]) ha-3dhome-splat { --ha-3dhome-inset-left: 44px; }
   .offer { position: absolute; left: 50%; top: calc(16px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
     transform: translateX(-50%); z-index: 6;
     width: min(380px, calc(100% - 32px)); box-sizing: border-box; display: grid; gap: 8px; padding: 16px;

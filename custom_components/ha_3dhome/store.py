@@ -31,6 +31,7 @@ class PanelStore:
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}")
         self.config: dict[str, Any] = {}
         self.rev = 0
+        self.scans: Any = None  # the panel's ScanJobs (scans.py), set up with the entry
 
     async def async_load(self) -> None:
         data = await self._store.async_load() or {}

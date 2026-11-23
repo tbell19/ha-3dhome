@@ -21,19 +21,30 @@ interface Saved {
   rev: number;
 }
 
-/** What the panel uses of its <ha-3dhome-map>. */
+/** What the panel uses of what it shows: <ha-3dhome-map> (a drawn floor plan) or <ha-3dhome-splat> (a 3D scan). */
 interface MapCard extends HTMLElement {
   hass: Hass;
   layoutStore: LayoutStore | null;
   homePage: HomePage | null;
   setConfig(config: CardConfig): void;
   readonly _edit: object | null; // set while someone is editing
+  entryId?: string; // the scan view's: for the integration's file and scan endpoints
 }
+
+/** which element shows a page */
+type Kind = "map" | "splat";
+const ELEMENT: Record<Kind, string> = { map: "ha-3dhome-map", splat: "ha-3dhome-splat" };
+/** the scan view's module, loaded the first time a page shows a 3D scan (or nothing yet) */
+let splatModule: Promise<unknown> | null = null;
+const loadSplatView = () => (splatModule ??= import("../splat/index"));
 
 /** A page's card and what it shows. It outlives the panel element, so if Home Assistant makes a new element for the
  * same page, the map moves over with its scene instead of starting again. */
 interface PageView {
-  card: MapCard;
+  card: MapCard | null; // null until the first config says which element to show
+  kind: Kind | null;
+  planChosen: boolean; // someone chose to draw a floor plan on an empty page
+  config: CardConfig; // the config shown
   rev: number; // the revision the card shows (-1: nothing yet)
   waiting: Saved | null; // a save from elsewhere that arrived while someone was editing here
   hasMap: boolean; // the config shown has something to show
@@ -48,7 +59,12 @@ interface OwnUserData {
 const USER_KEY = "ha_3dhome";
 
 /** a config with nothing to show yet */
-const isEmpty = (config: CardConfig) => !Object.keys(config.scene || {}).length && !config.lights?.length;
+const isEmpty = (config: CardConfig) =>
+  !Object.keys(config.scene || {}).length && !config.lights?.length && !config.splat;
+
+/** a 3D scan, or nothing yet (where the scan view offers to make one), unless a floor plan was chosen */
+const kindFor = (config: CardConfig, view: PageView): Kind =>
+  config.splat ? "splat" : !isEmpty(config) || view.planChosen ? "map" : "splat";
 
 export class Home3DPanel extends HTMLElement {
   private _hass: Hass | null = null;
@@ -57,10 +73,11 @@ export class Home3DPanel extends HTMLElement {
   private _menu: (HTMLElement & { hass?: Hass; narrow?: boolean }) | null = null;
   private _unsub: Promise<() => Promise<void>> | null = null;
   private _home: HomePage | null = null;
+  private _showing: Promise<void> = Promise.resolve(); // configs are shown in order, element swaps included
 
   set hass(hass: Hass) {
     this._hass = hass;
-    if (this._view) this._view.card.hass = hass;
+    if (this._view?.card) this._view.card.hass = hass;
     if (this._menu) this._menu.hass = hass;
     this._start();
   }
@@ -97,7 +114,8 @@ export class Home3DPanel extends HTMLElement {
   private _stop() {
     this._unsub?.then((unsub) => unsub()).catch(() => {});
     this._unsub = null;
-    this._view?.card.removeEventListener("ha-3dhome-editing", this._editing);
+    this._view?.card?.removeEventListener("ha-3dhome-editing", this._editing);
+    this._view?.card?.removeEventListener("ha-3dhome-mode", this._mode);
     this._view = null;
   }
 
@@ -115,7 +133,10 @@ export class Home3DPanel extends HTMLElement {
     let view = VIEWS.get(entryId);
     if (!view) {
       view = {
-        card: document.createElement("ha-3dhome-map") as MapCard,
+        card: null,
+        kind: null,
+        planChosen: false,
+        config: {},
         rev: -1,
         waiting: null,
         hasMap: false,
@@ -124,12 +145,43 @@ export class Home3DPanel extends HTMLElement {
       VIEWS.set(entryId, view);
     }
     this._view = view;
-    view.card.layoutStore = this._store(view);
-    view.card.homePage = this._home = this._homePage(this._panel!.url_path);
-    view.card.hass = this._hass!;
-    view.card.addEventListener("ha-3dhome-editing", this._editing);
-    this.shadowRoot!.prepend(view.card);
+    this._home = this._homePage(this._panel!.url_path);
+    if (view.card) this._mount(view, view.card);
   }
+
+  /** put the page's element on the panel */
+  private _mount(view: PageView, card: MapCard) {
+    card.layoutStore = this._store(view);
+    card.homePage = this._home;
+    card.entryId = this._panel!.config.entry_id;
+    card.hass = this._hass!;
+    card.addEventListener("ha-3dhome-editing", this._editing);
+    card.addEventListener("ha-3dhome-mode", this._mode);
+    this.shadowRoot!.prepend(card);
+  }
+
+  /** show `kind`'s element instead of the one shown (the old one tears itself down once detached) */
+  private async _swap(view: PageView, kind: Kind) {
+    if (kind === "splat") await loadSplatView();
+    if (this._view !== view) return;
+    const old = view.card;
+    if (old) {
+      old.removeEventListener("ha-3dhome-editing", this._editing);
+      old.removeEventListener("ha-3dhome-mode", this._mode);
+      old.remove();
+    }
+    view.kind = kind;
+    view.card = document.createElement(ELEMENT[kind]) as MapCard;
+    this._mount(view, view.card);
+  }
+
+  /** the scan view's "Draw a floor plan instead": show the floor plan map on this empty page */
+  private _mode = (ev: Event) => {
+    const view = this._view;
+    if (!view || (ev as CustomEvent<{ mode: string }>).detail.mode !== "plan") return;
+    view.planChosen = true;
+    this._show({ config: view.config, rev: view.rev }, true);
+  };
 
   /** the editor opened: put away the offer to open Home Assistant here. It closed: show a save from elsewhere that was
    * held back meanwhile */
@@ -160,19 +212,26 @@ export class Home3DPanel extends HTMLElement {
   private _received(saved: Saved) {
     const view = this._view;
     if (!view || saved.rev <= view.rev) return; // what's shown already (our own save comes back too)
-    if (view.card._edit) {
+    if (view.card?._edit) {
       view.waiting = saved; // never pull the layout from under someone editing; their Save will say it changed
       return;
     }
     this._show(saved);
   }
 
-  private _show(saved: Saved) {
+  private _show(saved: Saved, again = false) {
     const view = this._view!;
-    view.rev = saved.rev;
-    view.card.setConfig(saved.config); // only the world is rebuilt when just the layout changed
-    view.hasMap = !isEmpty(saved.config);
-    this._offerHome(view);
+    if (!again) view.rev = saved.rev;
+    view.config = saved.config;
+    this._showing = this._showing.then(async () => {
+      if (this._view !== view || view.config !== saved.config) return; // a newer config is on its way
+      const kind = kindFor(saved.config, view);
+      if (view.kind !== kind || !view.card) await this._swap(view, kind);
+      if (this._view !== view) return;
+      view.card!.setConfig(saved.config); // only the world is rebuilt when just the layout changed
+      view.hasMap = !isEmpty(saved.config);
+      this._offerHome(view);
+    });
   }
 
   /** the card config as stored: plain JSON, without the keys the editor left undefined */
@@ -234,7 +293,7 @@ export class Home3DPanel extends HTMLElement {
       .catch(() => null);
     const value = reply?.value ?? {};
     const asked = value.home_asked ?? [];
-    if (!reply || asked.includes(urlPath) || home.isHome(this._hass!) || view.card._edit) return;
+    if (!reply || asked.includes(urlPath) || home.isHome(this._hass!) || view.card?._edit) return;
     const box = this.shadowRoot!.querySelector<HTMLElement>(".offer")!;
     box.innerHTML = `<b>Open Home Assistant on this map?</b>
       <span>It would show this page first, on all your devices. You can change it later in the ⋮ menu at the bottom right.</span>

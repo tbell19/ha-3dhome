@@ -14,7 +14,7 @@ Read this first. It is the hand-off between sessions: what lives where, how to c
 - `src/ha-3dhome-editor.ts` (editor entry → `ha-3dhome-editor.js`): loaded the first time ✎ Edit is pressed (`_openEditor` → `loadEditor()`). It registers the `Editor` class (`src/editor/editor.ts`, its parts in `src/editor/`) with the core, which makes one per card (`card._editor`). The editor reaches the card only as `this.card.…` through `EditorHost`, and the card calls it only through `CardEditor` (both in `src/editor-contract.ts`): add a new crossing there. The parts read the core's helpers through `src/editor/shared.ts`.
   - The editor's UI is Preact (TSX, bundled into the editor file only): `toolbar.tsx`, `inspector-panel.tsx` + `plan-inspector.tsx`, `side-panels.tsx` (Look, Room controls, Add to map) and `library-panel.tsx`. Components draw from the editor's state and call editor methods; `_syncBar()` and `renderInspector()` redraw them. Don't build HTML strings in the editor; add a component. The `.ts` parts hold the logic.
 - Tests bundle `src/` on the fly (`tools/bundle.js`), so there's no build step before `npm test`; `--dist` tests the committed build. The tests load the editor entry up front, so it's there before Edit is pressed; `npm run test:demo` covers loading it on demand from real files.
-- **Types:** `npm run typecheck`. `src/types.ts`, `src/core/` and `src/panel/` are fully strict (`tsconfig.strict.json`); the card and editor are strict except null checks (`tsconfig.json`), because their fields fill in during `_init` and while editing (turning null checks on there reports about 700 errors, mostly `querySelector` results and fields that are null only after teardown). The panel talks to the card through its own small `MapCard` interface so it stays in the strict set. Unused locals fail the check. Add a field to `card.ts` with `declare` and a comment, never as a class field (that would be runtime code).
+- **Types:** `npm run typecheck`. `src/types.ts`, `src/core/`, `src/panel/` and `src/splat/` are fully strict (`tsconfig.strict.json`); the card and editor are strict except null checks (`tsconfig.json`), because their fields fill in during `_init` and while editing (turning null checks on there reports about 700 errors, mostly `querySelector` results and fields that are null only after teardown). The panel talks to the card through its own small `MapCard` interface so it stays in the strict set. Unused locals fail the check. Add a field to `card.ts` with `declare` and a comment, never as a class field (that would be runtime code).
 
 They define:
 
@@ -30,6 +30,17 @@ HACS installs GitHub releases, so a version tag is what ships and `main` is the 
 1. Edit `src/`, then bump `VERSION3D` (`src/core/constants.ts`), `EDITOR_VERSION` (`src/ha-3dhome-editor.ts`), `version` in package.json and `version` in `custom_components/ha_3dhome/manifest.json` together. The editor refuses to attach to a core of another version, and the build refuses a manifest that disagrees.
 2. Run `npm run typecheck`, `npm test`, `npm run test:mobile`, `npm run test:plan` (and `-- --mobile`), `npm run test:panel` and `npm run test:demo`; all must pass. Run `npm run test:py` when you touch `custom_components/` (it needs `pip install -r requirements_test.txt`; `PYTHON=` picks the interpreter). Also run `npm run test:leaks` if you touched lifecycle, rebuild or disposal code (add `-- --look` when you touched the render looks). Then `npm run build` and commit `custom_components/ha_3dhome/frontend/`. `npm run test:all` runs the type check and every suite with one line each; `npm run format` applies Prettier.
 3. Only the maintainer decides when to tag a release. Don't push tags or submit to the HACS default list unless asked.
+
+## 3D scans (this branch)
+
+An experiment: the home as a Gaussian splat instead of a drawn plan, with entities pinned into it. Everything is in
+docs/SCANS.md. In short: `src/splat/` is `<ha-3dhome-splat>` (lazy-loaded by the panel for a config with `splat`, or an
+empty page), `src/core/splat.ts` and `src/core/capture.ts` hold its pure maths (strict, Node-tested by
+`npm run test:unit`), `custom_components/ha_3dhome/splats.py` and `scans.py` store files and run build jobs, and
+`builder/` is the scan builder add-on (COLMAP + OpenSplat). Pins live in the scan's own coordinates; `splat.align` levels
+the scan. Lighting is an approximation in the splat shader (`src/splat/lighting.ts`, which patches two lines of
+gaussian-splats-3d 0.4.7's vertex shader: check them when bumping it). `npm run test:splat` and `npm run test:builder`
+are extra suites; `npm run build:preview` makes a renamed copy (`ha_3dhome_scan`) that installs beside the release.
 
 ## Floor plan data (v4.7)
 
@@ -114,7 +125,7 @@ The browser tests use `/opt/pw-browsers/chromium` when present, or `CHROMIUM_PAT
 
 ## Conventions
 
-- Keep the module dependency-free apart from three@0.160.0, jszip@3.10.1, js-yaml@4.1.0 and Preact 10.24.3 (editor only), all bundled. Never load code, fonts or images from the internet at runtime: import a third-party module lazily (`src/core/libs.ts`) so it gets its own `lib/` file. The browser tests refuse every outside host and fail if anything tries. Pin exact versions. No packed declarations: one `const` per line.
+- Keep the module dependency-free apart from three@0.160.0, jszip@3.10.1, js-yaml@4.1.0, Preact 10.24.3 (editor and scan view only) and @mkkellogg/gaussian-splats-3d@0.4.7 (scan view only), all bundled. Never load code, fonts or images from the internet at runtime: import a third-party module lazily (`src/core/libs.ts`) so it gets its own `lib/` file. The browser tests refuse every outside host and fail if anything tries. Pin exact versions. No packed declarations: one `const` per line.
 - Keep new UI working at phone width. `.wrap` has `container-type: inline-size`; use `@container (max-width: 640px)`.
 - User-facing strings are plain English, with no jargon in toasts.
 - Commit messages: imperative, short subject, end with the attribution lines the session provides. Every commit also credits the maintainer with the trailer `Co-authored-by: Trent <43056103+tbell19@users.noreply.github.com>`.

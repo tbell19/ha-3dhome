@@ -105,7 +105,8 @@ window.server={config:${JSON.stringify(config)},rev:1,subs:[],saves:[],
 window.makeHass=(extra={})=>({states:${JSON.stringify(states)},user:{is_admin:${admin}},services:{},
   callService:async(...a)=>{calls.push(a)},
   connection:{subscribeEvents:async()=>()=>{},
-    subscribeMessage:async(cb)=>{server.subs.push(cb);setTimeout(()=>server.push(),0);return async()=>{server.subs.splice(server.subs.indexOf(cb),1)}}},
+    subscribeMessage:async(cb,m)=>{if(m&&m.type!=='ha_3dhome/config/subscribe')return window.extraSub?extraSub(cb,m):async()=>{};
+      server.subs.push(cb);setTimeout(()=>server.push(),0);return async()=>{server.subs.splice(server.subs.indexOf(cb),1)}}},
   callWS:async(m)=>{calls.push(m.type);
     if(m.type==='ha_3dhome/config/save'){server.saves.push(m);
       if(m.rev!==server.rev)throw {code:'conflict',message:'The map was saved from another device meanwhile.'};
@@ -118,7 +119,7 @@ ${scripts()}
 const __panel=document.createElement('ha-3dhome-panel');
 __panel.hass=makeHass(${hass}); __panel.narrow=false; __panel.panel={url_path:'3d-home',config:{entry_id:'E1'}};
 document.getElementById('host').append(__panel);
-window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-map');</script></body></html>`;
+window.panel=__panel; Object.defineProperty(window,'card',{configurable:true,get:()=>{const c=panel.shadowRoot.querySelector('ha-3dhome-map,ha-3dhome-splat');if(c)window.__lastCard=c;return c||window.__lastCard||null}});</script></body></html>`;
 }
 
 /** Points the fake Home Assistant origin (http://ha.test/) at `html`; `extra(route, url)` may answer other requests. The

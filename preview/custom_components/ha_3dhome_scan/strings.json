@@ -1,0 +1,47 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a 3D Home panel",
+        "description": "3D Home adds a page to the sidebar with a live 3D view of your home: a 3D scan you film with your phone, or a floor plan you draw.",
+        "data": {
+          "title": "Sidebar title",
+          "icon": "Sidebar icon",
+          "require_admin": "Only administrators can open it",
+          "url_path": "Address"
+        },
+        "data_description": {
+          "url_path": "The address the page opens at, for example 3d-home for /3d-home."
+        }
+      }
+    },
+    "error": {
+      "invalid_url_path": "Use lowercase letters, digits, - and _ only.",
+      "url_path_taken": "Another page already uses this address."
+    },
+    "abort": {
+      "already_configured": "A 3D Home panel already uses this address."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "3D Home panel",
+        "data": {
+          "title": "Sidebar title",
+          "icon": "Sidebar icon",
+          "require_admin": "Only administrators can open it",
+          "builder_url": "Scan builder address",
+          "builder_token": "Scan builder key"
+        },
+        "data_description": {
+          "builder_url": "Where photos are turned into 3D scans: the 3D Home Scan Builder add-on shows its address on its page, for example http://192.168.1.10:8099. Leave empty if you only upload ready-made scans.",
+          "builder_token": "Only if you gave the scan builder a key."
+        }
+      }
+    },
+    "error": {
+      "invalid_builder_url": "Start the address with http:// or https://."
+    }
+  }
+}

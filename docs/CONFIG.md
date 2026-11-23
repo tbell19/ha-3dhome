@@ -1,5 +1,7 @@
 # Configuration reference
 
+A 3D scan instead of a drawn plan (`splat`) is described in [SCANS.md](SCANS.md#config).
+
 A 3D Home page keeps its map in the integration's storage as one JSON object with the keys below. The editor writes it; you only need this reference for things the editor doesn't cover, or to read the Advanced (JSON) box. All positions are **plan units** (see ARCHITECTURE.md → Coordinate system). [examples/sample-home.json](../examples/sample-home.json) is a complete example.
 
 ## Map options

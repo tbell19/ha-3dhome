@@ -85,6 +85,8 @@ The tests render with software WebGL, so a run takes a minute or two. How versio
 
 ## Docs
 
+- [3D scans](docs/SCANS.md): film the home and pin devices into the 3D scan (experimental branch)
+
 - [docs/CONFIG.md](docs/CONFIG.md): every config option and the scene schema
 - [docs/EDITOR.md](docs/EDITOR.md): using the editor (desktop and phone)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how the code is organised, coordinate system, rendering, editor internals

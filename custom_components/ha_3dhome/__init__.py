@@ -18,6 +18,8 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
 from .const import (
+    CONF_BUILDER_TOKEN,
+    CONF_BUILDER_URL,
     CONF_ICON,
     CONF_REQUIRE_ADMIN,
     CONF_TITLE,
@@ -29,6 +31,8 @@ from .const import (
     PANEL_ELEMENT,
     URL_BASE,
 )
+from .scans import ScanJobs
+from .splats import register_views, remove_entry_files
 from .store import PanelStore
 from .websocket import async_register_commands
 
@@ -41,16 +45,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data.setdefault(DOMAIN, {})
     await hass.http.async_register_static_paths([StaticPathConfig(URL_BASE, str(FRONTEND_DIR), True)])
     async_register_commands(hass)
+    register_views(hass)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Load the panel's config and add the panel to the sidebar."""
+    options = {**entry.data, **entry.options}
     store = PanelStore(hass, entry.entry_id)
     await store.async_load()
+    store.scans = ScanJobs(hass, store, options.get(CONF_BUILDER_URL), options.get(CONF_BUILDER_TOKEN))
+    await store.scans.async_load()
     hass.data[DOMAIN][entry.entry_id] = store
 
-    options = {**entry.data, **entry.options}
     await panel_custom.async_register_panel(
         hass,
         frontend_url_path=entry.data[CONF_URL_PATH],
@@ -70,13 +77,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     frontend.async_remove_panel(hass, entry.data[CONF_URL_PATH])
-    hass.data[DOMAIN].pop(entry.entry_id, None)
+    store = hass.data[DOMAIN].pop(entry.entry_id, None)
+    if store and store.scans:
+        await store.scans.async_unload()
     return True
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """The panel was deleted: delete its saved config too."""
+    """The panel was deleted: delete its saved config and its 3D scans too."""
     await PanelStore(hass, entry.entry_id).async_remove()
+    await hass.async_add_executor_job(remove_entry_files, hass, entry.entry_id)
 
 
 async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:

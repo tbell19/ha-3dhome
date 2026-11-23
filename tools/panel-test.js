@@ -27,7 +27,7 @@ window.server={E1:{config:{},rev:0,subs:[]},E2:{config:{},rev:0,subs:[]},saves:[
   saveFrom(id,config){const s=this[id];s.config=config;s.rev++;this.push(id)}};
 window.makeHass=(admin)=>({states:{},user:{is_admin:admin},services:{},callService:async()=>{},
   connection:{subscribeEvents:async()=>()=>{},
-    subscribeMessage:async(cb,m)=>{const s=server[m.entry_id];s.subs.push(cb);setTimeout(()=>server.push(m.entry_id),0);return async()=>{s.subs.splice(s.subs.indexOf(cb),1)}}},
+    subscribeMessage:async(cb,m)=>{if(m.type!=='ha_3dhome/config/subscribe')return async()=>{};const s=server[m.entry_id];s.subs.push(cb);setTimeout(()=>server.push(m.entry_id),0);return async()=>{s.subs.splice(s.subs.indexOf(cb),1)}}},
   callWS:async(m)=>{server.calls.push(m.type);
     if(m.type==='ha_3dhome/config/save'){const s=server[m.entry_id];server.saves.push(m);
       if(m.rev!==s.rev)throw {code:'conflict',message:'The map was saved from another device meanwhile. Cancel to see it, then edit again.'};
@@ -41,13 +41,22 @@ ${scripts()}
 const __panel=document.createElement('ha-3dhome-panel');
 __panel.hass=makeHass(true); __panel.narrow=false; __panel.panel={url_path:'3d-home',config:{entry_id:'E1'}};
 document.getElementById('host').append(__panel);
-window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-map');</script>`;
+window.panel=__panel; Object.defineProperty(window,'card',{configurable:true,get:()=>{const c=panel.shadowRoot.querySelector('ha-3dhome-map,ha-3dhome-splat');if(c)window.__lastCard=c;return c||window.__lastCard||null}});</script>`;
 
   const rooms = () => ev(`[...card.shadowRoot.querySelectorAll('.rooms button')].map(b=>b.textContent)`);
 
   await serve(p, html);
   check("the panel element is registered", await ev(`!!customElements.get('ha-3dhome-panel')`));
-  check("an empty panel shows the card's how-to-start hint", await until(`!!card.shadowRoot?.querySelector('.empty')`));
+  check(
+    "an empty panel offers to make a 3D scan",
+    await until(`!!card?.shadowRoot?.querySelector('.start .scan-camera')`),
+  );
+  await p.screenshot({ path: path.join(OUT, "panel-empty-scan.png") });
+  await ev(`card.shadowRoot.querySelector('.start .plan').click()`);
+  check(
+    "…or to draw a floor plan, with the map's how-to-start hint",
+    await until(`!!card?.shadowRoot?.querySelector('.empty')`),
+  );
   check(
     "the hint says Save keeps the map here",
     await ev(`card.shadowRoot.querySelector('.empty').textContent.includes('Save keeps them here')`),
@@ -226,6 +235,14 @@ window.panel=__panel; window.card=__panel.shadowRoot.querySelector('ha-3dhome-ma
   // someone who isn't an administrator, on another empty panel
   await ev(`(()=>{const q=document.createElement('ha-3dhome-panel');q.hass=makeHass(false);q.panel={url_path:'other',config:{entry_id:'E2'}};
     q.style.cssText='position:fixed;left:0;top:0;width:400px;height:300px';document.body.append(q);window.panel2=q})()`);
+  await wait(1500);
+  check(
+    "non-admins aren't offered to make a scan on an empty page",
+    await ev(
+      `(()=>{const c=panel2.shadowRoot.querySelector('ha-3dhome-splat');return !!c?.shadowRoot?.querySelector('.start') && !c.shadowRoot.querySelector('.scan-camera, .edit')})()`,
+    ),
+  );
+  await ev(`server.saveFrom('E2', ${JSON.stringify(SAMPLE_HOME)})`);
   await wait(1500);
   check(
     "non-admins get no Edit button",

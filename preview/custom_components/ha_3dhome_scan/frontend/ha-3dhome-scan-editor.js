@@ -1,0 +1,1 @@
+var e="6.4.0";await customElements.whenDefined("ha-3dhome-scan-map");var r=window.__ha3dhome_scan;if(!r||r.VERSION3D!==e)throw new Error(`3D Home editor ${e} doesn't match the card core ${r?.VERSION3D||"(missing)"} \u2014 refresh the page`);var{Editor:o}=await(import("./lib/editor-FV7RQUCL.js"));r.provideEditor({version:e,create:e=>new o(e)});

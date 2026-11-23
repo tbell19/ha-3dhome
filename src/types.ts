@@ -46,6 +46,8 @@ export interface Hass {
   callService(domain: string, service: string, data?: Record<string, unknown>): Promise<unknown>;
   callWS<T = any>(msg: Record<string, unknown>): Promise<T>;
   fetchWithAuth?(url: string, init?: RequestInit): Promise<Response>;
+  /** the signed-in session's tokens (Home Assistant's own `auth`), for uploads that report their progress */
+  auth?: { data: { access_token: string }; expired?: boolean; refreshAccessToken?(): Promise<unknown> };
   formatEntityState?(st: HassEntity): string;
 }
 
@@ -326,13 +328,55 @@ export interface CardConfig {
   ao_pause?: boolean;
   idle_view?: { room?: string; after?: number };
   max_pixel_ratio?: number;
+  /** a 3D scan (Gaussian splat) instead of a drawn floor plan: the panel shows <ha-3dhome-splat> */
+  splat?: SplatConfig;
   [k: string]: unknown;
+}
+
+/* ---------- a 3D scan (Gaussian splat) ---------- */
+
+/** A point in the scan's own coordinates (metres, whichever way up the scan came out). */
+export type V3 = [number, number, number];
+
+/** A 3D scan of the home as Gaussian splats, with entities pinned into it. Pins are in the scan's own coordinates, so
+ * levelling the scan again never moves them off the things they belong to. */
+export interface SplatConfig {
+  /** the splat file: a name in the integration's storage (uploaded or built), or a URL */
+  src: string;
+  /** the file's format when `src` doesn't end in it */
+  format?: SplatFormat;
+  /** turns the scan level with its floor at height 0: a quaternion [x, y, z, w] and an offset, applied in that order */
+  align?: { q: [number, number, number, number]; t: V3 };
+  /** the view it opens on, in levelled coordinates */
+  view?: { position: V3; target: V3 };
+  /** the entities placed in the scan */
+  pins?: SplatPin[];
+  /** how bright the scan stays after dark, 0–1 (it keeps the light it was filmed in by day); 1 turns dimming off */
+  night?: number;
+}
+
+export type SplatFormat = "ply" | "splat" | "ksplat" | "spz";
+
+/** One entity placed in the scan. */
+export interface SplatPin {
+  entity: string;
+  /** where, in the scan's own coordinates */
+  p: V3;
+  /** the label; the entity's name when missing */
+  name?: string;
+  icon?: string;
+  /** a light's glow: its halo's radius in metres, and a third of how far its light reaches on the scan (0: neither);
+   * 1 for lights by default */
+  glow?: number;
+  /** what a tap does: "toggle", "more-info" or "none"; toggle for lights, switches and fans, else more-info */
+  tap?: "toggle" | "more-info" | "none";
 }
 
 /** One wall end: the wall's index in scene.wall_segs and which end. */
 export type WallEnd = [number, "a" | "b"];
 
-/** The parts of the config that the editor changes and Save writes back (LAYOUT_KEYS lists them at runtime). */
+/** The parts of the config that the editors change and Save writes back. LAYOUT_KEYS lists the floor plan editor's at
+ * runtime; "splat" is the scan view's own (src/splat/), which the floor plan editor never touches. */
 export type LayoutKey =
   | "scene"
   | "lights"
@@ -343,7 +387,8 @@ export type LayoutKey =
   | "ao_pause"
   | "ambient"
   | "idle_view"
-  | "room_cards";
+  | "room_cards"
+  | "splat";
 
 /** A saved layout: what the editor changes, without the card's own options. */
 export type Layout = Pick<CardConfig, LayoutKey>;

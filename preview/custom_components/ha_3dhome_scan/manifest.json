@@ -1,0 +1,20 @@
+{
+  "domain": "ha_3dhome_scan",
+  "name": "3D Home (scan preview)",
+  "codeowners": [
+    "@tbell19"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "frontend",
+    "http",
+    "panel_custom",
+    "websocket_api"
+  ],
+  "documentation": "https://github.com/tbell19/ha-3dhome-scan",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/tbell19/ha-3dhome-scan/issues",
+  "requirements": [],
+  "version": "6.4.0"
+}

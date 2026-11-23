@@ -1,0 +1,21 @@
+name: 3D Home Scan Builder
+version: "0.1.0"
+slug: ha_3dhome_builder
+description: Turns the photos you take in the 3D Home panel into a 3D scan of your home (a Gaussian splat).
+url: https://github.com/tbell19/ha-3dhome/tree/main/builder
+arch:
+  - amd64
+  - aarch64
+init: false
+startup: application
+boot: auto
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: The address 3D Home sends photos to
+options:
+  token: ""
+  steps: 7000
+schema:
+  token: password?
+  steps: int(500,30000)

@@ -39,6 +39,7 @@ What loads when: opening the page fetches `ha-3dhome.js` (about 42 KB gzipped), 
 | `src/editor/editor.ts` | `class Editor`: the editor object, its own fields, and its parts copied onto its prototype |
 | `src/editor/*.ts` | The editor's logic, one part per topic: `session` (enter/exit, toolbar actions, keys), `selection` (gizmo, drags, undo), `panels` (look, room controls, adding entities), `inspector` (what its fields do), `plan` (floor plan editor), `save`, `library`; `shared.ts` reads the core helpers |
 | `src/editor/*.tsx` | The editor's UI as Preact components: `toolbar`, `inspector-panel` and `plan-inspector`, `side-panels` (hosts `look-panel`, `room-controls-panel`, `add-panel`), `library-panel` |
+| `src/splat/` | `<ha-3dhome-splat>`: a 3D scan (Gaussian splat) with entities pinned into it, loaded by the panel when needed. See [SCANS.md](SCANS.md) |
 | `custom_components/ha_3dhome/` | The integration: `__init__.py` (serving the files, the panel), `config_flow.py`, `store.py` (a page's config and revision), `websocket.py` (follow and save) |
 
 ### How the parts make one class

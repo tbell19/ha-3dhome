@@ -22,3 +22,5 @@ export const loadPostProcessing = () =>
 export const loadGeometryUtils = () => import("three/examples/jsm/utils/BufferGeometryUtils.js");
 /** JSZip, for opening Sweet Home 3D libraries */
 export const loadJSZip = () => import("jszip").then((m) => m.default);
+/** the Gaussian splat renderer, for 3D scans (src/splat/) */
+export const loadSplatRenderer = () => import("@mkkellogg/gaussian-splats-3d");

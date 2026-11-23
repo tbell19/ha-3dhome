@@ -99,6 +99,10 @@
 - **Panel follow-ups:**
   - an icon in `home-assistant/brands`, so the HACS brands check can run;
   - strict null checks for the card and editor (about 700 errors today, mostly `querySelector` results and fields that are null only after teardown).
+- **3D scans (branch):**
+  - build and run the scan builder add-on's image for real (COLMAP + OpenSplat), and time it on common hardware;
+  - normals per splat (from its flattest axis) so lamps stop lighting through walls;
+  - several scans (rooms) in one page, aligned to each other.
 - **Ideas:**
   - multiple floors or levels;
   - snap-to-wall for furniture;

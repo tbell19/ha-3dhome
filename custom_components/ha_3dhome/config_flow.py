@@ -13,6 +13,8 @@ from homeassistant.core import callback
 from homeassistant.helpers.selector import IconSelector
 
 from .const import (
+    CONF_BUILDER_TOKEN,
+    CONF_BUILDER_URL,
     CONF_ICON,
     CONF_REQUIRE_ADMIN,
     CONF_TITLE,
@@ -73,13 +75,31 @@ class Home3DConfigFlow(ConfigFlow, domain=DOMAIN):
         return Home3DOptionsFlow()
 
 
+def _builder_schema(defaults: dict[str, Any]) -> dict[vol.Marker, Any]:
+    """Where photos taken in the panel are turned into a 3D scan (scans.py); empty: nowhere yet."""
+    return {
+        vol.Optional(CONF_BUILDER_URL, description={"suggested_value": defaults.get(CONF_BUILDER_URL)}): str,
+        vol.Optional(CONF_BUILDER_TOKEN, description={"suggested_value": defaults.get(CONF_BUILDER_TOKEN)}): str,
+    }
+
+
 class Home3DOptionsFlow(OptionsFlow):
-    """Change the sidebar title, icon and access of a panel (its address stays)."""
+    """Change the sidebar title, icon and access of a panel (its address stays), and its scan builder."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
+            url = (user_input.get(CONF_BUILDER_URL) or "").strip().rstrip("/")
+            if url and not url.startswith(("http://", "https://")):
+                errors[CONF_BUILDER_URL] = "invalid_builder_url"
+        if user_input is not None and not errors:
+            user_input = {**user_input, CONF_BUILDER_URL: url}
             # the entry is named after the panel, so the integrations page shows the same title as the sidebar
             self.hass.config_entries.async_update_entry(self.config_entry, title=user_input[CONF_TITLE])
             return self.async_create_entry(data=user_input)
-        current = {**self.config_entry.data, **self.config_entry.options}
-        return self.async_show_form(step_id="init", data_schema=vol.Schema(_panel_schema(current)))
+        current = {**self.config_entry.data, **self.config_entry.options, **(user_input or {})}
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({**_panel_schema(current), **_builder_schema(current)}),
+            errors=errors,
+        )

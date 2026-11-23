@@ -739,6 +739,13 @@ const STATES = {
   await ev(`card._edit && card._editor._exitEdit()`); // the panel holds pushed maps while someone edits
   await ev(`server.saveFrom({})`);
   await wait(3000);
+  // an empty page offers a 3D scan first (docs/SCANS.md); the floor plan is one tap away
+  check(
+    "an empty page offers a 3D scan or a floor plan",
+    await ev(`card.localName==='ha-3dhome-splat' && !!card.shadowRoot.querySelector('.start .plan')`),
+  );
+  await ev(`card.shadowRoot.querySelector('.start .plan').click()`);
+  await wait(3000);
   check(
     "an empty map renders with a how-to-start hint",
     errors.length === 0 &&

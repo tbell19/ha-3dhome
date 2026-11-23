@@ -1,0 +1,5 @@
+# Home Assistant add-on repository: Settings → Add-ons → Add-on store → ⋮ → Repositories → this repository's URL.
+# It offers the 3D Home Scan Builder (builder/), which turns photos taken in the 3D Home panel into a 3D scan.
+name: 3D Home
+url: https://github.com/tbell19/ha-3dhome
+maintainer: tbell19

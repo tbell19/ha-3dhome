@@ -17,7 +17,13 @@ const { bundle, ENTRIES, LIB, OUT } = require("./bundle");
 
 const ROOT = path.join(__dirname, "..");
 /** the third-party packages bundled into the files, and their licence files */
-const LICENCES = { three: "LICENSE", jszip: "LICENSE.markdown", "js-yaml": "LICENSE", preact: "LICENSE" };
+const LICENCES = {
+  three: "LICENSE",
+  jszip: "LICENSE.markdown",
+  "js-yaml": "LICENSE",
+  preact: "LICENSE",
+  "@mkkellogg/gaussian-splats-3d": "LICENSE",
+};
 const kb = (n) => (n / 1024).toFixed(1) + " KB";
 (async () => {
   const version = require("../package.json").version,
