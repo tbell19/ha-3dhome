@@ -37,7 +37,11 @@ const label = (file, text) => {
       .replace('DEFAULT_TITLE: Final = "3D Home"', 'DEFAULT_TITLE: Final = "3D Home (scan preview)"')
       .replace('DEFAULT_ICON: Final = "mdi:floor-plan"', 'DEFAULT_ICON: Final = "mdi:cube-scan"')
       .replace('DEFAULT_URL_PATH: Final = "3d-home"', 'DEFAULT_URL_PATH: Final = "3d-home-scan"');
-  if (file === "manifest.json") return text.replace('"name": "3D Home"', '"name": "3D Home (scan preview)"');
+  if (file === "manifest.json")
+    // a version of its own for every preview build: the panel's URL carries it, so browsers fetch the new code
+    return text
+      .replace('"name": "3D Home"', '"name": "3D Home (scan preview)"')
+      .replace(/"version": "([\d.]+)"/, (_, v) => `"version": "${v}.${Math.floor(Date.now() / 1000)}"`);
   return text;
 };
 
