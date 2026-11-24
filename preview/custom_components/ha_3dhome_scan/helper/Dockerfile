@@ -5,11 +5,12 @@
 #
 # Needs Docker with the NVIDIA Container Toolkit (for --gpus all). Building takes a while (OpenSplat compiles for every
 # recent NVIDIA generation); it is done once.
-FROM nvidia/cuda:12.6.3-devel-ubuntu22.04
+# CUDA 12.8: the first that compiles for RTX 50xx (Blackwell, compute 12.0)
+FROM nvidia/cuda:12.8.1-devel-ubuntu22.04
 
 ARG OPENSPLAT_VERSION=v1.2.2
 ARG TORCH_VERSION=2.7.1
-# Turing (RTX 20xx) to Blackwell (RTX 50xx)
+# Turing (RTX 20xx) to Blackwell (RTX 50xx). Building for fewer is faster: --build-arg CUDA_ARCHITECTURES=89 (RTX 40xx)
 ARG CUDA_ARCHITECTURES="75;80;86;89;90;120"
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -17,8 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         colmap python3 python3-pip git cmake build-essential libopencv-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# PyTorch built for CUDA 12.6, which OpenSplat links against
-RUN pip3 install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu126 "torch==${TORCH_VERSION}+cu126"
+# PyTorch built for CUDA 12.8, which OpenSplat links against
+RUN pip3 install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu128 "torch==${TORCH_VERSION}+cu128"
 
 RUN git clone --depth 1 --branch ${OPENSPLAT_VERSION} https://github.com/pierotofy/OpenSplat /tmp/OpenSplat \
     && cmake -S /tmp/OpenSplat -B /tmp/OpenSplat/build -DCMAKE_BUILD_TYPE=Release -DGPU_RUNTIME=CUDA \
