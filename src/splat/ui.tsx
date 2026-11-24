@@ -146,7 +146,7 @@ function Start({ v }: V) {
   );
 }
 
-const busy = (v: SplatView) => !!v._job && ["uploading", "queued", "building"].includes(v._job.state);
+const busy = (v: SplatView) => !!v._job && ["queued", "building"].includes(v._job.state);
 
 function Progress({ f, label }: { f: number; label: string }) {
   return (
@@ -165,7 +165,7 @@ function Progress({ f, label }: { f: number; label: string }) {
 function JobStatus({ v }: V) {
   const job = v._job!;
   const what = {
-    uploading: "Waiting for the photos",
+    uploading: `${job.photos ?? 0} photos taken, not built yet`,
     queued: "Waiting to start building the 3D scan",
     building: "Building the 3D scan",
     done: "The 3D scan is ready",
@@ -179,6 +179,11 @@ function JobStatus({ v }: V) {
       {job.state === "building" && <Progress f={job.progress ?? 0} label="" />}
       {busy(v) && <p>You can close this page; it carries on.</p>}
       <div class="row">
+        {["uploading", "failed", "cancelled"].includes(job.state) && (job.photos ?? 0) >= SCAN_TARGET.min / 3 && (
+          <button class="btn primary build-again" onClick={() => v._buildPhotos()}>
+            Build from these {job.photos} photos
+          </button>
+        )}
         {job.state === "queued" && !v._helpers.length && (
           <button class="btn primary" onClick={() => v._openHelpers()}>
             Set up a computer to build it
@@ -195,7 +200,7 @@ function JobStatus({ v }: V) {
 }
 
 function JobBanner({ v }: V) {
-  if (!busy(v) && v._job!.state !== "failed") return null;
+  if (!busy(v) && !["failed", "uploading"].includes(v._job!.state)) return null;
   return (
     <div class="banner">
       <JobStatus v={v} />

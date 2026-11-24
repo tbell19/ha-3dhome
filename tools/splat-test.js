@@ -328,6 +328,19 @@ window.extraWS=async(m)=>{wsLog.push(m);
   await ev(`pushJob({scan_id:'x',state:'done'})`);
   check("a finished build hides it", await until(`!card.shadowRoot.querySelector('.banner .job')`));
 
+  // photos taken earlier and never built: one button sends them to be built
+  await ev(`wsLog.length=0; pushJob({scan_id:'earlier',state:'uploading',photos:120})`);
+  check(
+    "photos taken earlier offer to be built",
+    await until(`card.shadowRoot.querySelector('.banner .build-again')?.textContent.includes('120 photos')`),
+  );
+  await ev(`card.shadowRoot.querySelector('.banner .build-again').click()`);
+  check(
+    "…which builds those photos",
+    await until(`wsLog.some((m)=>m.type==='ha_3dhome/scan/build'&&m.scan_id==='earlier')`),
+  );
+  await ev(`card._helpersOpen=false; card._ui(); pushJob({scan_id:'earlier',state:'done'})`);
+
   /* ----- phone width ----- */
   await p.setViewportSize({ width: 390, height: 800 });
   await ev(`card._enterEdit()`);

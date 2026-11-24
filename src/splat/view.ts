@@ -861,6 +861,18 @@ export class SplatView extends HTMLElement {
     this._requestRender(300);
   }
 
+  /** build the photos already with Home Assistant (taken earlier, or a build that failed or was stopped) */
+  async _buildPhotos() {
+    const job = this._job;
+    if (!job) return;
+    try {
+      await this._api!.build(job.scan_id);
+      if (!this._helpers.length) this._openHelpers();
+    } catch (e) {
+      this._toast((e as { message?: string })?.message || "Couldn't start building.");
+    }
+  }
+
   /** open the "Build on another computer" screen (and fetch the helper key for its commands) */
   async _openHelpers(renew = false) {
     this._helpersOpen = true;
