@@ -14,7 +14,6 @@
     "test:panel": "node tools/panel-test.js",
     "test:splat": "node tools/splat-test.js",
     "test:unit": "node tools/splat-unit-test.js",
-    "test:builder": "${PYTHON:-python3} builder/test_server.py",
     "test:helper": "${PYTHON:-python3} tools/helper-test.py",
     "shots:looks": "node tools/look-shots.js",
     "demo": "node tools/demo.js",
