@@ -41,7 +41,7 @@ scans are built off Home Assistant's machine by the helper program (`custom_comp
 `worker.py`'s endpoints with the page's helper key) or, optionally, a scan builder at an address (options). Never build or train on
 Home Assistant's own machine: compiling the builder took a 4 GB HA OS VM out of memory and stopped Zigbee2MQTT. Pins live in the scan's own coordinates; `splat.align` levels
 the scan. Lighting is an approximation in the splat shader (`src/splat/lighting.ts`, which patches two lines of
-gaussian-splats-3d 0.4.7's vertex shader: check them when bumping it). `npm run test:splat`, `npm run test:helper` and `npm run test:builder`
+gaussian-splats-3d 0.4.7's vertex shader: check them when bumping it). `npm run test:splat` and `npm run test:helper`
 are extra suites; `npm run build:preview` makes a renamed copy (`ha_3dhome_scan`) that installs beside the release.
 
 ## Floor plan data (v4.7)
