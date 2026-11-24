@@ -43,9 +43,9 @@ Linux first: the Docker image needs an NVIDIA card with the NVIDIA Container Too
 cross-platform Python; on macOS and Windows it works with COLMAP and OpenSplat installed there (OpenSplat builds for
 Apple's Metal too), not yet tried.
 
-**A scan builder at an address** still works (`builder/`, a container that Home Assistant sends the photos to and
-polls): set **Scan builder address** in the integration's options. It needs a machine with 8 GB of memory or more.
-Its API is in `builder/server.py`; `npm run test:builder` runs it with a stand-in pipeline.
+**A scan builder at an address** (Home Assistant sends it the photos and polls it; the API is in `scans.py`'s
+docstring) is still supported through **Scan builder address** in the integration's options. The app that provided one
+was removed: once registered, the Supervisor rebuilt its image at every boot, and on a 4 GB VM that ran out of memory.
 
 ## The view
 
@@ -118,7 +118,6 @@ the folder into `/config/custom_components/`, restart Home Assistant, and add **
   phone scan): the start screen, uploading, levelling from three taps, placing devices by tapping, Save, live pins and
   lighting, the camera (Chromium's fake camera), the build's progress, "Draw a floor plan instead", non-admins.
 - `npm run test:py`: uploads, photos, admin checks, and a whole build against a mocked builder (`tests/test_scans.py`).
-- `npm run test:builder`: the builder's server with a stand-in pipeline.
 - `npm run test:helper`: the helper program against a stand-in Home Assistant, with a stand-in pipeline.
 
 Not tested here: COLMAP and OpenSplat themselves, both Docker images (the helper's needs an NVIDIA GPU, the builder's

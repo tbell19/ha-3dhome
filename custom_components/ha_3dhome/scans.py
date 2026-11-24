@@ -9,7 +9,7 @@ ways:
   needs no address of its own: it asks for work (claim), downloads the photos, builds the splat with COLMAP and
   OpenSplat, reports its progress and uploads the result (worker.py has those endpoints). Several helpers may wait; the
   first to ask gets the job. A helper that stops reporting for HELPER_TIMEOUT gives the job back to the queue.
-- **A scan builder at an address** (builder/server.py, set in the integration's options): Home Assistant sends it the
+- **A scan builder at an address** (set in the integration's options): Home Assistant sends it the
   photos and polls it.
 
 One job per panel. Its state is kept in .storage, so a build survives a restart of Home Assistant:
@@ -21,7 +21,7 @@ One job per panel. Its state is kept in .storage, so a build survives a restart 
     failed     message says why, in plain words
     cancelled
 
-The builder's API (builder/server.py):
+A scan builder's API:
     POST   /jobs              a tar of the photos (images/frame_00001.jpg, ...)  -> {"id"}
     GET    /jobs/<id>         {"state": queued|running|done|failed, "progress", "message"}
     GET    /jobs/<id>/result  the trained splat (.ply)
