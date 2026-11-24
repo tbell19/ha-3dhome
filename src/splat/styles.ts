@@ -69,6 +69,17 @@ export const splatStyles = `
   .scan .rec { width: 72px; height: 72px; border-radius: 50%; border: 4px solid #fff; background: #d33; }
   .scan .rec.on { background: #fff; } .scan .rec.on::after { content: ""; display: block; width: 24px; height: 24px; margin: auto; background: #d33; border-radius: 4px; }
   .scan .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .card .note { font-size: 13px; opacity: .75; margin: 0; }
+  .helpers ol { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+  .helpers .tabs { display: flex; gap: 6px; }
+  .helpers .connected { display: grid; gap: 4px; }
+  .helpers .gpu { opacity: .7; font-size: 13px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.3); }
+  .dot.on { background: #7bd88f; }
+  .cmd { display: flex; gap: 6px; align-items: flex-start; margin-top: 6px; }
+  .cmd code { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,.4);
+    font: 12px/1.4 ui-monospace, monospace; word-break: break-all; user-select: all; }
+  .helpers a { color: #f2c76b; }
   @container (max-width: 640px) {
     .insp { left: 12px; right: 12px; top: auto; bottom: calc(64px + var(--ha-3dhome-safe-bottom, 0px)); width: auto; }
     .btn .lbl { display: none; }

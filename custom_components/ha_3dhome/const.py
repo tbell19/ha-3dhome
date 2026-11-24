@@ -33,11 +33,6 @@ MIN_PHOTOS: Final = 20
 CONF_BUILDER_URL: Final = "builder_url"
 CONF_BUILDER_TOKEN: Final = "builder_token"
 
-# Where the scan builder app comes from when Home Assistant sets it up itself (Home Assistant OS and Supervised): this
-# repository is also an app repository (repository.yaml). The fragment picks the branch the app is on.
-BUILDER_REPOSITORY: Final = "https://github.com/tbell19/ha-3dhome#claude/elegant-wright-ob0a1v"
-BUILDER_SLUG: Final = "home3d_scan_builder"  # Supervisor prefixes it with the repository's id
-BUILDER_PORT: Final = 8099
 
 # Sent to everyone following a panel's scan job when it changes.
 SIGNAL_SCAN_CHANGED: Final = "ha_3dhome_scan_changed_{}"

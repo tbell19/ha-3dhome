@@ -15,28 +15,37 @@ The empty page offers three ways in, all without leaving Home Assistant:
 | **Use a video** | A video already filmed: read frame by frame through the same photo picker. |
 | **Upload a scan** | A `.ply`, `.splat`, `.ksplat` or `.spz` file made elsewhere, for example by Scaniverse, Polycam or Luma on a phone. Shown straight away. |
 
-### Building: the scan builder
+### Building: a computer with a graphics card
 
-Training a splat takes heavy computing for a long time, which Home Assistant itself must not do. The integration hands
-the photos to a **scan builder** and follows it (`custom_components/ha_3dhome/scans.py`):
+Training a splat takes heavy computing: minutes on a good graphics card, hours (or never) on Home Assistant's own
+small computer, which must not try because it would stall the home. A 4 GB Home Assistant OS VM ran out of memory
+just *compiling* the builder, and took Zigbee2MQTT down with it. So scans are built on another computer, by the
+**3D Home helper** (`custom_components/ha_3dhome/helper/`), and Home Assistant only hands out the work
+(`custom_components/ha_3dhome/scans.py`, endpoints in `worker.py`):
 
-- `builder/` in this repository is a Home Assistant add-on, "3D Home Scan Builder" (`repository.yaml` makes the repository
-  an add-on store). [COLMAP](https://colmap.github.io/) works out where each photo was taken, then
-  [OpenSplat](https://github.com/pierotofy/OpenSplat) trains the splat, on the CPU. The same container runs on any
-  computer with Docker, which is faster when that computer is.
-- **On Home Assistant OS (and Supervised) nothing needs setting up.** The first time someone builds a scan, the
-  integration asks the Supervisor to add this repository to the app store, install the app (the Supervisor builds its
-  image on the spot: that first time takes a while) and start it, then talks to it at its internal hostname
-  (`ScanJobs._auto_builder`). Later builds find it running.
-- Elsewhere (Container, Core), or to use a faster computer, run the builder's container there and put its address (and
-  an optional key) in the integration's options: Settings → Devices & services → 3D Home → Configure → **Scan builder
-  address**. An address set there always wins.
-- The job survives a restart of Home Assistant. When it's done, the integration fetches the splat into
-  `<config>/ha_3dhome/<entry_id>/splats/`, puts it in the panel's config (pins kept, levelling reset) and deletes the
-  photos. Every open page shows the progress and then the scan.
+- On the computer with the graphics card, open 3D Home in the browser: **Build on another computer** (on the start
+  screen, and offered whenever a scan is waiting) gives the commands with this page's id and **helper key** filled in.
+  - **Docker (NVIDIA)**: `docker build` straight from Home Assistant (`/api/ha_3dhome/helper/files/helper.tar.gz`, the
+    helper and its Dockerfile: COLMAP plus OpenSplat built for CUDA), then `docker run --gpus all …`.
+  - **Without Docker**: download `ha3dhome_helper.py` (one file, Python 3.9+, standard library only) and run it next to
+    COLMAP and OpenSplat installed on that computer.
+- The helper connects *to* Home Assistant, so the GPU computer needs no fixed address and nothing has to reach it. It
+  asks for work every 10 s; the first helper to ask gets a waiting scan. It downloads the photos, runs COLMAP (on the
+  GPU when COLMAP was built for one, else the processor) and OpenSplat, reports progress to every open page, and
+  uploads the splat. The page lists the helpers connected now and their graphics cards.
+- **The helper key** (`ha_3dhome/helper/key`, made on first use, **New key** replaces it) only lets a helper fetch that
+  page's photos and send back scans: it never controls the home. A wrong key counts as a failed login (IP bans).
+- A helper that goes quiet for 15 minutes gives the scan back to the queue; Stop on the page tells the helper to stop.
+  The job survives a restart of Home Assistant. When it's done, the splat goes to `<config>/ha_3dhome/<entry_id>/splats/`
+  and on the page (pins kept, levelling reset), and the photos are deleted.
 
-The builder's API is in `builder/server.py`'s docstring; `npm run test:builder` runs it with a stand-in for the
-pipeline.
+Linux first: the Docker image needs an NVIDIA card with the NVIDIA Container Toolkit. The plain script is
+cross-platform Python; on macOS and Windows it works with COLMAP and OpenSplat installed there (OpenSplat builds for
+Apple's Metal too), not yet tried.
+
+**A scan builder at an address** still works (`builder/`, a container that Home Assistant sends the photos to and
+polls): set **Scan builder address** in the integration's options. It needs a machine with 8 GB of memory or more.
+Its API is in `builder/server.py`; `npm run test:builder` runs it with a stand-in pipeline.
 
 ## The view
 
@@ -110,6 +119,7 @@ the folder into `/config/custom_components/`, restart Home Assistant, and add **
   lighting, the camera (Chromium's fake camera), the build's progress, "Draw a floor plan instead", non-admins.
 - `npm run test:py`: uploads, photos, admin checks, and a whole build against a mocked builder (`tests/test_scans.py`).
 - `npm run test:builder`: the builder's server with a stand-in pipeline.
+- `npm run test:helper`: the helper program against a stand-in Home Assistant, with a stand-in pipeline.
 
-Not tested here: the real COLMAP + OpenSplat image (its Dockerfile needs the PyTorch download host and was not built in
-the development sandbox), and scans of real rooms.
+Not tested here: COLMAP and OpenSplat themselves, both Docker images (the helper's needs an NVIDIA GPU, the builder's
+was tried once on a 4 GB VM and ran out of memory), and scans of real rooms.

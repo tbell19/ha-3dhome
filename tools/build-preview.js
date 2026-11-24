@@ -41,7 +41,7 @@ const label = (file, text) => {
   return text;
 };
 
-const TEXT = /\.(py|json|js|txt)$/;
+const TEXT = /(\.(py|json|js|txt)|^Dockerfile)$/;
 fs.rmSync(path.join(ROOT, "preview"), { recursive: true, force: true });
 let files = 0;
 (function copy(dir, rel = "") {

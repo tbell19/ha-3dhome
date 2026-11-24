@@ -47,10 +47,11 @@ function endpoints(seen) {
 // the scan job subscription and the build call, in the page
 const head = `window.jobSubs=[];window.wsLog=[];
 window.extraSub=async(cb,m)=>{jobSubs.push(cb);setTimeout(()=>cb({job:null}),0);return async()=>{}};
-window.pushJob=(job)=>jobSubs.forEach((cb)=>cb({job}));
+window.pushJob=(job,helpers=[])=>jobSubs.forEach((cb)=>cb({job,helpers}));
 window.extraWS=async(m)=>{wsLog.push(m);
   if(m.type==='auth/sign_path')return {path:m.path+'?authSig=SIG'};
   if(m.type==='ha_3dhome/scan/build'){const job={scan_id:m.scan_id,state:'queued'};setTimeout(()=>pushJob(job),0);return job}
+  if(m.type==='ha_3dhome/helper/key')return {key:m.new?'HKEY2':'HKEY'};
   return null};`;
 
 (async () => {
@@ -270,6 +271,53 @@ window.extraWS=async(m)=>{wsLog.push(m);
   check("Build asks the integration to build", await until(`wsLog.some((m)=>m.type==='ha_3dhome/scan/build')`));
   check("…and closes the photo screen", await until(`!card._scanning`));
   check("the camera is let go", await ev(`!card.shadowRoot.querySelector('.scan')`));
+  // waiting for a computer to build it: with none connected, the page shows how to set one up
+  check(
+    "with no computer connected, it shows how to set one up",
+    await until(`!!card.shadowRoot.querySelector('.helpers')`),
+  );
+  await ev(`card.shadowRoot.querySelector('.helpers .close').click()`);
+  await ev(`pushJob({scan_id:'x',state:'queued',message:'Waiting for a computer to build it.'})`);
+  check(
+    "a waiting build offers to set up a computer",
+    await until(`!!card.shadowRoot.querySelector('.banner .job .btn.primary')`),
+  );
+  await ev(`card.shadowRoot.querySelector('.banner .job .btn.primary').click()`);
+  check("the helper screen opens with the key", await until(`!!card.shadowRoot.querySelector('.helpers .cmd code')`));
+  const cmds = await ev(`[...card.shadowRoot.querySelectorAll('.helpers .cmd code')].map((c)=>c.textContent)`);
+  check(
+    "its Docker commands build from Home Assistant and run with this page's key",
+    cmds[0] === "docker build -t ha3dhome-helper http://ha.test/api/ha_3dhome/helper/files/helper.tar.gz" &&
+      cmds[1].includes("--gpus all") &&
+      cmds[1].includes("--url http://ha.test --page E1 --key HKEY"),
+    cmds.join(" | "),
+  );
+  await ev(`[...card.shadowRoot.querySelectorAll('.helpers .tabs .btn')][1].click()`);
+  await wait(200);
+  check(
+    "without Docker: a download and a python command",
+    await ev(`card.shadowRoot.querySelector('.helpers a.download').getAttribute('href')==='/api/ha_3dhome/helper/files/ha3dhome_helper.py' &&
+      card.shadowRoot.querySelector('.helpers .cmd code').textContent.startsWith('python3 ha3dhome_helper.py --url http://ha.test --page E1 --key HKEY')`),
+  );
+  check("no computer is connected yet", await ev(`!!card.shadowRoot.querySelector('.helpers .helper.none')`));
+  await ev(
+    `pushJob({scan_id:'x',state:'queued',message:'Waiting for gpu-box to start'},[{name:'gpu-box',gpu:'NVIDIA GeForce RTX 4090',busy:false}])`,
+  );
+  check(
+    "a connected computer shows, with its graphics card",
+    await until(
+      `card.shadowRoot.querySelector('.helpers .helper[data-name="gpu-box"]')?.textContent.includes('RTX 4090')`,
+    ),
+  );
+  await p.screenshot({ path: path.join(OUT, "splat-helpers.png") });
+  await ev(`window.confirm=()=>true; card.shadowRoot.querySelector('.helpers .new-key').click()`);
+  check(
+    "a new key goes into the commands",
+    await until(`card.shadowRoot.querySelector('.helpers .cmd code').textContent.includes('--key HKEY2')`),
+  );
+  await ev(`card.shadowRoot.querySelector('.helpers .close').click()`);
+  check("Done closes it", await until(`!card.shadowRoot.querySelector('.helpers')`));
+
   await ev(`pushJob({scan_id:'x',state:'building',progress:0.42,message:'Training: step 2900 of 7000'})`);
   check(
     "the build's progress shows",

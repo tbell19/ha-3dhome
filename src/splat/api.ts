@@ -7,6 +7,8 @@
  *   ws   ha_3dhome/scan/subscribe {entry_id}          the panel's scan job, now and on every change
  *   ws   ha_3dhome/scan/build {entry_id, scan_id}     turn the uploaded photos into a splat
  *   ws   ha_3dhome/scan/cancel {entry_id}             stop the job
+ *   ws   ha_3dhome/helper/key {entry_id, new?}        the key the helper program connects with
+ *   GET  /api/ha_3dhome/helper/files/<name>          the helper program (ha3dhome_helper.py, helper.tar.gz)
  */
 import type { Hass } from "../types";
 
@@ -19,7 +21,19 @@ export interface ScanJob {
   /** what the builder is doing, or why it failed, in plain words */
   message?: string;
   photos?: number;
+  /** the computer building it, when a helper is */
+  helper?: string | null;
 }
+
+/** A computer running the 3D Home helper program, connected now. */
+export interface Helper {
+  name: string;
+  gpu?: string | null;
+  busy: boolean;
+}
+
+/** where the helper program is served (no key needed: it holds no secrets) */
+export const helperFile = (name: "ha3dhome_helper.py" | "helper.tar.gz") => `/api/ha_3dhome/helper/files/${name}`;
 
 /** a stored splat is a bare file name; anything with a slash or a scheme is a URL */
 export const isStoredSplat = (src: string) => !/[/:]/.test(src);
@@ -93,12 +107,32 @@ export class IntegrationApi {
     return this.hass().callWS({ type: "ha_3dhome/scan/cancel", entry_id: this.entryId });
   }
 
-  /** follow the panel's scan job; null when there is none */
-  follow(cb: (job: ScanJob | null) => void) {
-    return this.hass().connection.subscribeMessage<{ job: ScanJob | null }>((m) => cb(m.job), {
-      type: "ha_3dhome/scan/subscribe",
-      entry_id: this.entryId,
-    });
+  /** the key the helper program connects with (new: another one, which disconnects every helper) */
+  helperKey(renew = false) {
+    return this.hass()
+      .callWS<{ key: string }>({ type: "ha_3dhome/helper/key", entry_id: this.entryId, new: renew })
+      .then((r) => r.key);
+  }
+
+  /** the commands that start the helper on another computer, for this Home Assistant (as the browser reaches it) */
+  helperCommands(key: string, origin = location.origin) {
+    const args = `--url ${origin} --page ${this.entryId} --key ${key}`;
+    return {
+      python: `python3 ha3dhome_helper.py ${args}`,
+      dockerBuild: `docker build -t ha3dhome-helper ${origin}${helperFile("helper.tar.gz")}`,
+      dockerRun: `docker run --rm --gpus all ha3dhome-helper ${args} --name "$(hostname)"`,
+    };
+  }
+
+  /** follow the panel's scan job (null when there is none) and the helpers connected */
+  follow(cb: (job: ScanJob | null, helpers: Helper[]) => void) {
+    return this.hass().connection.subscribeMessage<{ job: ScanJob | null; helpers?: Helper[] }>(
+      (m) => cb(m.job, m.helpers ?? []),
+      {
+        type: "ha_3dhome/scan/subscribe",
+        entry_id: this.entryId,
+      },
+    );
   }
 }
 

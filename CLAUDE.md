@@ -37,9 +37,11 @@ An experiment: the home as a Gaussian splat instead of a drawn plan, with entiti
 docs/SCANS.md. In short: `src/splat/` is `<ha-3dhome-splat>` (lazy-loaded by the panel for a config with `splat`, or an
 empty page), `src/core/splat.ts` and `src/core/capture.ts` hold its pure maths (strict, Node-tested by
 `npm run test:unit`), `custom_components/ha_3dhome/splats.py` and `scans.py` store files and run build jobs, and
-`builder/` is the scan builder add-on (COLMAP + OpenSplat). Pins live in the scan's own coordinates; `splat.align` levels
+scans are built off Home Assistant's machine by the helper program (`custom_components/ha_3dhome/helper/`, which polls
+`worker.py`'s endpoints with the page's helper key) or, optionally, `builder/` at an address. Never build or train on
+Home Assistant's own machine: compiling the builder took a 4 GB HA OS VM out of memory and stopped Zigbee2MQTT. Pins live in the scan's own coordinates; `splat.align` levels
 the scan. Lighting is an approximation in the splat shader (`src/splat/lighting.ts`, which patches two lines of
-gaussian-splats-3d 0.4.7's vertex shader: check them when bumping it). `npm run test:splat` and `npm run test:builder`
+gaussian-splats-3d 0.4.7's vertex shader: check them when bumping it). `npm run test:splat`, `npm run test:helper` and `npm run test:builder`
 are extra suites; `npm run build:preview` makes a renamed copy (`ha_3dhome_scan`) that installs beside the release.
 
 ## Floor plan data (v4.7)

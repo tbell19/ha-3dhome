@@ -35,7 +35,7 @@
           "builder_token": "Scan builder key"
         },
         "data_description": {
-          "builder_url": "Where photos are turned into 3D scans. On Home Assistant OS leave it empty: Home Assistant sets up the 3D Home Scan Builder app itself the first time you build a scan. Elsewhere, the address of the builder container, for example http://192.168.1.10:8099.",
+          "builder_url": "Usually empty: scans are built by the 3D Home helper on a computer with a graphics card (3D Home page → Build on another computer). Only if you run the scan builder container somewhere, its address, for example http://192.168.1.10:8099.",
           "builder_token": "Only if you gave the scan builder a key."
         }
       }

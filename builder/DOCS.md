@@ -4,14 +4,17 @@ Turns the photos you take in the 3D Home panel ("Scan with this device" or "Use 
 a Gaussian splat. [COLMAP](https://colmap.github.io/) works out where each photo was taken, then
 [OpenSplat](https://github.com/pierotofy/OpenSplat) trains the splat.
 
-## Setting up
+## Before you install it
 
-Nothing to do on Home Assistant OS: 3D Home installs and starts this app itself the first time you build a scan.
+**Prefer the 3D Home helper on a computer with a graphics card** (3D Home page → Build on another computer): it is
+much faster and doesn't load Home Assistant's machine.
 
-To run it on another computer instead (faster, or for Home Assistant Container/Core), run this folder's container there
-(`docker build -t home3d-builder --build-arg BUILD_FROM=debian:bookworm builder && docker run -p 8099:8099 home3d-builder`)
-and set **Scan builder address** in **Settings → Devices & services → 3D Home → Configure** to
-`http://<that computer>:8099`.
+This app builds on the processor of the machine it runs on, and needs **8 GB of memory or more**, both to build its
+image and to train. On a smaller Home Assistant machine it runs out of memory, and the system stops other apps to
+make room.
+
+To use it, install and start it, then set **Scan builder address** in **Settings → Devices & services → 3D Home →
+Configure** to `http://<that machine>:8099`.
 
 ## How long it takes
 

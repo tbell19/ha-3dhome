@@ -8,7 +8,7 @@ import type { SplatPin } from "../types";
 import { ACTIVE, entIcon } from "../core/entities";
 import { SCAN_TARGET } from "../core/capture";
 import { pinGlow, pinTap, splatFormat } from "../core/splat";
-import { newScanId } from "./api";
+import { helperFile, newScanId } from "./api";
 import { canFilm, PhotoTaker } from "./capture";
 import { pickFile } from "./files";
 import type { SplatView } from "./view";
@@ -76,7 +76,8 @@ function App({ v }: V) {
       {ed?.tool && <ToolHint v={v} />}
       {ed && ed.sel >= 0 && !ed.tool && <Inspector v={v} />}
       {v._adding && <AddEntity v={v} />}
-      {v._job && cfg?.src && <JobBanner v={v} />}
+      {v._helpersOpen && <Helpers v={v} />}
+      {v._job && cfg?.src && !v._helpersOpen && <JobBanner v={v} />}
       {!ed && admin && cfg?.src && !cfg.align && v._load?.phase === "done" && !v._job && (
         <div class="banner level-tip">
           <span>This scan isn't level yet, so it may look tilted or upside down.</span>
@@ -130,6 +131,12 @@ function Start({ v }: V) {
             <span>A .ply, .splat, .ksplat or .spz file, for example from Scaniverse, Polycam or Luma.</span>
           </button>
           {v._uploadPct != null && <Progress f={v._uploadPct} label="Uploading" />}
+          <p class="note">
+            Scans are built on a computer with a graphics card.{" "}
+            <button class="link helpers-open" onClick={() => v._openHelpers()}>
+              {v._helpers.length ? `Connected: ${v._helpers.map((h) => h.name).join(", ")}` : "Set one up"}
+            </button>
+          </p>
           <button class="link plan" onClick={() => v._usePlan()}>
             Draw a floor plan instead
           </button>
@@ -170,8 +177,13 @@ function JobStatus({ v }: V) {
       <b>{what}</b>
       {job.message && <p>{job.message}</p>}
       {job.state === "building" && <Progress f={job.progress ?? 0} label="" />}
-      {busy(v) && <p>This can take an hour or more. You can close this page; it carries on.</p>}
+      {busy(v) && <p>You can close this page; it carries on.</p>}
       <div class="row">
+        {job.state === "queued" && !v._helpers.length && (
+          <button class="btn primary" onClick={() => v._openHelpers()}>
+            Set up a computer to build it
+          </button>
+        )}
         {busy(v) && (
           <button class="btn" onClick={() => v._api!.cancel()}>
             Stop
@@ -436,6 +448,111 @@ function Corner({ v }: V) {
   );
 }
 
+/* ----- building on another computer ----- */
+
+/** How to start the helper program on a computer with a good graphics card, and which computers are connected. */
+function Helpers({ v }: V) {
+  const [tab, setTab] = useState<"python" | "docker">("docker");
+  const key = v._helperKey;
+  const cmds = key ? v._api!.helperCommands(key) : null;
+  return (
+    <div class="card helpers">
+      <h2>Build scans on another computer</h2>
+      <p>
+        A computer with a good graphics card builds a scan in minutes. Open this page on that computer and start the 3D
+        Home helper there: it connects to Home Assistant and builds every scan you make, until you stop it.
+      </p>
+      <div class="connected">
+        {v._helpers.length ? (
+          v._helpers.map((h) => (
+            <div class="helper" data-name={h.name}>
+              <span class="dot on" /> <b>{h.name}</b> {h.gpu && <span class="gpu">{h.gpu}</span>}
+              {h.busy && <span class="busy"> · building</span>}
+            </div>
+          ))
+        ) : (
+          <div class="helper none">
+            <span class="dot" /> No computer is connected yet.
+          </div>
+        )}
+      </div>
+      <div class="tabs">
+        <button class={`btn ${tab === "docker" ? "on" : ""}`} onClick={() => setTab("docker")}>
+          Docker (NVIDIA)
+        </button>
+        <button class={`btn ${tab === "python" ? "on" : ""}`} onClick={() => setTab("python")}>
+          Without Docker
+        </button>
+      </div>
+      {!cmds && <p>Getting the key…</p>}
+      {cmds && tab === "docker" && (
+        <ol>
+          <li>
+            On Linux with an NVIDIA card, Docker and the NVIDIA Container Toolkit. Build the helper once (it takes a
+            while):
+            <Command text={cmds.dockerBuild} v={v} />
+          </li>
+          <li>
+            Start it:
+            <Command text={cmds.dockerRun} v={v} />
+          </li>
+        </ol>
+      )}
+      {cmds && tab === "python" && (
+        <ol>
+          <li>
+            <a class="download" href={helperFile("ha3dhome_helper.py")} download="ha3dhome_helper.py">
+              Download the helper
+            </a>{" "}
+            (Python 3.9 or newer).
+          </li>
+          <li>
+            Install COLMAP (Debian/Ubuntu: <code>sudo apt install colmap</code>) and OpenSplat built for your graphics
+            card (github.com/pierotofy/OpenSplat).
+          </li>
+          <li>
+            In the folder you downloaded it to:
+            <Command text={cmds.python} v={v} />
+          </li>
+        </ol>
+      )}
+      <p class="note">
+        The key in these commands only lets the helper fetch this page's photos and send back scans.{" "}
+        <button
+          class="link new-key"
+          onClick={() => confirm("Make a new key? Helpers using the old one disconnect.") && v._openHelpers(true)}
+        >
+          New key
+        </button>
+      </p>
+      <div class="row" style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button class="btn close" onClick={() => ((v._helpersOpen = false), v._ui())}>
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Command({ text, v }: V & { text: string }) {
+  return (
+    <div class="cmd">
+      <code>{text}</code>
+      <button
+        class="btn copy"
+        onClick={() =>
+          navigator.clipboard?.writeText(text).then(
+            () => v._toast("Copied."),
+            () => v._toast("Couldn't copy: select the text instead."),
+          )
+        }
+      >
+        Copy
+      </button>
+    </div>
+  );
+}
+
 /* ----- taking photos ----- */
 
 function ScanScreen({ v }: V) {
@@ -464,7 +581,12 @@ function ScanScreen({ v }: V) {
       await v._api!.build(taker.scanId);
       taker.close();
       v._closeScan();
-      v._toast("Your photos are with Home Assistant, which is building the 3D scan now.");
+      if (v._helpers.length)
+        v._toast(`Your photos are with Home Assistant. ${v._helpers[0].name} will build the 3D scan.`);
+      else {
+        v._toast("Your photos are with Home Assistant. Now set up a computer to build the 3D scan.");
+        v._openHelpers();
+      }
     } catch (e) {
       setError((e as { message?: string })?.message || String(e));
       setFinishing(false);

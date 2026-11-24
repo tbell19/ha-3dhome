@@ -5,6 +5,7 @@
     ha_3dhome_scan/scan/subscribe    {entry_id}                  admins only; {job} now, then on every change (scans.py)
     ha_3dhome_scan/scan/build        {entry_id, scan_id}         admins only; turn the scan's photos into a 3D scan
     ha_3dhome_scan/scan/cancel       {entry_id}                  admins only
+    ha_3dhome_scan/helper/key        {entry_id, new?}            admins only; {key} for the helper program (worker.py)
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_subscribe_scan)
     websocket_api.async_register_command(hass, ws_build_scan)
     websocket_api.async_register_command(hass, ws_cancel_scan)
+    websocket_api.async_register_command(hass, ws_helper_key)
 
 
 def _store(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> PanelStore | None:
@@ -120,3 +122,15 @@ async def ws_cancel_scan(hass: HomeAssistant, connection: websocket_api.ActiveCo
         return
     await store.scans.async_cancel()
     connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): f"{DOMAIN}/helper/key", vol.Required("entry_id"): str, vol.Optional("new"): bool}
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_helper_key(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """The page's key for the helper program; new=True makes another, which disconnects every helper."""
+    if (store := _store(hass, connection, msg)) is None:
+        return
+    connection.send_result(msg["id"], {"key": await store.scans.async_helper_key(bool(msg.get("new")))})

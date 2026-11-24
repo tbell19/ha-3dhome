@@ -71,7 +71,7 @@ def _known(request: web.Request, entry_id: str) -> bool:
     return entry_id in request.app[KEY_HASS].data.get(DOMAIN, {})
 
 
-async def _receive(hass: HomeAssistant, request: web.Request, target: Path, limit: int) -> tuple[int, bytes]:
+async def receive_file(hass: HomeAssistant, request: web.Request, target: Path, limit: int) -> tuple[int, bytes]:
     """Stream the request body to `target` (through a temporary file). Returns its size and first bytes."""
     tmp = target.with_name(target.name + ".part")
     await hass.async_add_executor_job(lambda: target.parent.mkdir(parents=True, exist_ok=True))
@@ -129,7 +129,7 @@ class SplatUploadView(HomeAssistantView):
             return _error(400, "That isn't a 3D scan file (.ply, .splat, .ksplat or .spz).")
         target = splat_dir(hass, entry_id) / name
         try:
-            size, head = await _receive(hass, request, target, MAX_SPLAT_BYTES)
+            size, head = await receive_file(hass, request, target, MAX_SPLAT_BYTES)
         except ValueError:
             return _error(413, "The file is too big (2 GB at most).")
         tmp = target.with_name(target.name + ".part")
@@ -157,7 +157,7 @@ class ScanPhotoView(HomeAssistantView):
             return _error(400, "That isn't a photo of a scan.")
         target = scan_dir(hass, entry_id, scan_id) / "images" / f"frame_{int(n):05d}.jpg"
         try:
-            size, head = await _receive(hass, request, target, MAX_PHOTO_BYTES)
+            size, head = await receive_file(hass, request, target, MAX_PHOTO_BYTES)
         except ValueError:
             return _error(413, "The photo is too big.")
         tmp = target.with_name(target.name + ".part")

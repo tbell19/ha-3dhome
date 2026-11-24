@@ -33,7 +33,7 @@ import {
 } from "../core/splat";
 import { stateRgb } from "../core/entities";
 import { jclone, stableJSON } from "../core/util";
-import { IntegrationApi, type ScanJob } from "./api";
+import { IntegrationApi, type Helper, type ScanJob } from "./api";
 import { canFilm, type PhotoTaker } from "./capture";
 import { pickFile } from "./files";
 import { splatStyles } from "./styles";
@@ -104,6 +104,9 @@ export class SplatView extends HTMLElement {
   _load: LoadState | null = null;
   _sample: V3[] = []; // splat centres in scan coordinates, for the extent
   _job: ScanJob | null = null;
+  _helpers: Helper[] = []; // computers running the helper program, connected now
+  _helpersOpen = false; // the "Build on another computer" screen is open
+  _helperKey: string | null = null;
   _scanning = false; // the photo-taking screen is open
   _scanVideo: File | null = null; // read photos from this video instead of the camera
   _taker: PhotoTaker | null = null; // the photo taker while scanning (tests look at it)
@@ -406,8 +409,9 @@ export class SplatView extends HTMLElement {
 
   _follow() {
     if (this._unfollow || !this._api || !this._isAdmin()) return;
-    this._unfollow = this._api.follow((job) => {
+    this._unfollow = this._api.follow((job, helpers) => {
       this._job = job;
+      this._helpers = helpers;
       this._ui();
     });
     this._unfollow.catch(() => (this._unfollow = null)); // an integration without scans: nothing to follow
@@ -855,6 +859,18 @@ export class SplatView extends HTMLElement {
     this._taker = null;
     this._ui();
     this._requestRender(300);
+  }
+
+  /** open the "Build on another computer" screen (and fetch the helper key for its commands) */
+  async _openHelpers(renew = false) {
+    this._helpersOpen = true;
+    this._ui();
+    try {
+      this._helperKey = await this._api!.helperKey(renew);
+    } catch (e) {
+      this._toast((e as { message?: string })?.message || "Couldn't get the helper key.");
+    }
+    this._ui();
   }
 
   /** the scan view gives way to a drawn floor plan: the panel swaps in <ha-3dhome-map> */

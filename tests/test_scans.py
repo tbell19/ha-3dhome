@@ -85,7 +85,7 @@ async def test_photos_and_a_build_without_a_builder(hass: HomeAssistant, hass_cl
     ws = await hass_ws_client(hass)
     await ws.send_json({"id": 1, "type": "ha_3dhome/scan/subscribe", "entry_id": entry.entry_id})
     assert (await ws.receive_json())["success"]
-    assert (await ws.receive_json())["event"] == {"job": None}
+    assert (await ws.receive_json())["event"] == {"job": None, "helpers": []}
 
     assert (await client.post(f"/api/ha_3dhome/scan/{entry.entry_id}/s1/1", data=b"GIF89a")).status == 400
     assert (await client.post(f"/api/ha_3dhome/scan/{entry.entry_id}/../1", data=JPEG)).status in (400, 404)
@@ -97,7 +97,7 @@ async def test_photos_and_a_build_without_a_builder(hass: HomeAssistant, hass_cl
     await ws.send_json({"id": 2, "type": "ha_3dhome/scan/build", "entry_id": entry.entry_id, "scan_id": "s1"})
     reply = await ws.receive_json()
     assert not reply["success"]
-    assert "scan builder" in reply["error"]["message"]
+    assert "at least 20" in reply["error"]["message"]
 
 
 async def test_a_build(hass: HomeAssistant, hass_client, hass_ws_client, aioclient_mock, tmp_path) -> None:
@@ -177,102 +177,135 @@ async def test_options_take_a_builder(hass: HomeAssistant, tmp_path) -> None:
     assert hass.data[DOMAIN][entry.entry_id].scans.builder_url == "http://builder:8099"
 
 
-class FakeSupervisor:
-    """The Supervisor's API as scans.py uses it: an app store that gains the builder once its repository is added."""
-
-    def __init__(self) -> None:
-        from types import SimpleNamespace
-
-        self.calls: list[str] = []
-        self.repo_added = False
-        self.installed = False
-        self.started = False
-        ns = SimpleNamespace
-        self.store = ns(
-            addons_list=self._list, add_repository=self._add_repo, install_addon=self._install
-        )
-        self.addons = ns(addon_info=self._info, start_addon=self._start)
-
-    async def _list(self):
-        from types import SimpleNamespace
-
-        apps = [SimpleNamespace(slug="core_mosquitto")]
-        return apps + ([SimpleNamespace(slug="0a1b2c3d_home3d_scan_builder")] if self.repo_added else [])
-
-    async def _add_repo(self, options):
-        self.calls.append(f"add_repository {options.repository}")
-        self.repo_added = True
-
-    async def _install(self, slug):
-        self.calls.append(f"install {slug}")
-        self.installed = True
-
-    async def _info(self, slug):
-        from types import SimpleNamespace
-
-        from aiohasupervisor import SupervisorNotFoundError
-        from aiohasupervisor.models import AddonState
-
-        if not self.installed:
-            raise SupervisorNotFoundError("not installed")
-        state = AddonState.STARTED if self.started else AddonState.STOPPED
-        return SimpleNamespace(state=state, hostname="0a1b2c3d-home3d-scan-builder")
-
-    async def _start(self, slug):
-        self.calls.append(f"start {slug}")
-        self.started = True
+async def _photos(client, entry_id: str, scan_id: str, n: int = 20) -> None:
+    for i in range(1, n + 1):
+        assert (await client.post(f"/api/ha_3dhome/scan/{entry_id}/{scan_id}/{i}", data=JPEG)).status == 200
 
 
-async def test_home_assistant_sets_up_the_builder(
-    hass: HomeAssistant, hass_client, hass_ws_client, aioclient_mock, tmp_path
-) -> None:
-    """On Home Assistant OS with no address set, the first build installs and starts the builder app itself."""
-    hass.config.config_dir = str(tmp_path)
-    entry = await _setup(hass)
-    client = await hass_client()
-    for n in range(1, 21):
-        await client.post(f"/api/ha_3dhome/scan/{entry.entry_id}/s4/{n}", data=JPEG)
-    app = "http://0a1b2c3d-home3d-scan-builder:8099"
-    aioclient_mock.get(f"{app}/health", json={"ok": True})
-    aioclient_mock.post(f"{app}/jobs", json={"id": "J3"})
-    aioclient_mock.get(f"{app}/jobs/J3", json={"state": "done"})
-    aioclient_mock.get(f"{app}/jobs/J3/result", content=PLY)
-    aioclient_mock.delete(f"{app}/jobs/J3", json={})
-    supervisor = FakeSupervisor()
+async def _key(hass_ws_client, hass, entry_id: str, new: bool = False) -> str:
     ws = await hass_ws_client(hass)
-    with (
-        patch("custom_components.ha_3dhome.scans.is_hassio", return_value=True),
-        patch("custom_components.ha_3dhome.scans.supervisor_client", return_value=supervisor),
-        patch("custom_components.ha_3dhome.scans.POLL_SECONDS", 0),
-    ):
-        await ws.send_json({"id": 1, "type": "ha_3dhome/scan/build", "entry_id": entry.entry_id, "scan_id": "s4"})
-        assert (await ws.receive_json())["success"]
-        await hass.data[DOMAIN][entry.entry_id].scans._task
-
-        assert supervisor.calls == [
-            "add_repository https://github.com/tbell19/ha-3dhome#claude/elegant-wright-ob0a1v",
-            "install 0a1b2c3d_home3d_scan_builder",
-            "start 0a1b2c3d_home3d_scan_builder",
-        ]
-        store = hass.data[DOMAIN][entry.entry_id]
-        assert store.scans.snapshot()["job"]["state"] == "done"
-        assert store.config["splat"]["src"] == "scan-s4.ply"
-
-        # the next build finds it installed and running
-        supervisor.calls.clear()
-        assert await store.scans._auto_builder() == app
-        assert supervisor.calls == []
+    await ws.send_json({"id": 1, "type": "ha_3dhome/helper/key", "entry_id": entry_id, "new": new})
+    reply = await ws.receive_json()
+    assert reply["success"], reply
+    return reply["result"]["key"]
 
 
-async def test_a_build_without_the_supervisor_needs_an_address(hass: HomeAssistant, hass_client, tmp_path) -> None:
+def _helper(key: str, name: str = "gpu-box", gpu: str = "NVIDIA GeForce RTX 4090") -> dict[str, str]:
+    return {"Authorization": f"Bearer {key}", "X-Helper-Name": name, "X-Helper-GPU": gpu}
+
+
+async def test_a_helper_builds_a_scan(hass: HomeAssistant, hass_client, hass_client_no_auth, hass_ws_client, tmp_path) -> None:
+    """With no builder address, a build waits for a helper; the helper claims it, gets the photos, reports progress
+    and sends the splat, which goes on the page."""
+    import io
+    import tarfile
+
     hass.config.config_dir = str(tmp_path)
     entry = await _setup(hass)
-    with patch("custom_components.ha_3dhome.scans.is_hassio", return_value=False):
-        from custom_components.ha_3dhome.scans import ScanError
+    eid = entry.entry_id
+    store = hass.data[DOMAIN][eid]
+    await store.async_save({"splat": {"src": "old.ply", "pins": [{"entity": "light.lamp", "p": [1, 2, 3]}]}}, None)
+    admin = await hass_client()
+    await _photos(admin, eid, "s6")
+    key = await _key(hass_ws_client, hass, eid)
+    assert key == await _key(hass_ws_client, hass, eid)  # the same key until a new one is asked for
+    helper = await hass_client_no_auth()
+    base = f"/api/ha_3dhome/helper/{eid}"
 
-        try:
-            await hass.data[DOMAIN][entry.entry_id].scans.async_build("s5")
-        except ScanError as err:
-            assert "address" in str(err)
-        else:
-            raise AssertionError("expected a ScanError")
+    # a wrong key gets nothing
+    assert (await helper.get(f"{base}/job", headers=_helper("nope"))).status == 401
+    # nothing to build yet; the helper now shows as connected
+    resp = await helper.get(f"{base}/job", headers=_helper(key))
+    assert resp.status == 204
+    assert store.scans.snapshot()["helpers"] == [{"name": "gpu-box", "gpu": "NVIDIA GeForce RTX 4090", "busy": False}]
+
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "ha_3dhome/scan/build", "entry_id": eid, "scan_id": "s6"})
+    reply = await ws.receive_json()
+    assert reply["success"], reply
+    assert reply["result"]["state"] == "queued"
+    assert "gpu-box" in reply["result"]["message"]
+
+    resp = await helper.get(f"{base}/job", headers=_helper(key))
+    assert await resp.json() == {"scan_id": "s6", "photos": 20}
+    assert store.scans.job["state"] == "building" and store.scans.job["helper"] == "gpu-box"
+    # another helper doesn't get the same job
+    assert (await helper.get(f"{base}/job", headers=_helper(key, "other"))).status == 204
+    assert (await helper.get(f"{base}/photos/s6", headers=_helper(key, "other"))).status == 409
+
+    resp = await helper.get(f"{base}/photos/s6", headers=_helper(key))
+    assert resp.status == 200
+    with tarfile.open(fileobj=io.BytesIO(await resp.read())) as tar:
+        assert len([m for m in tar.getnames() if m.startswith("images/frame_")]) == 20
+
+    resp = await helper.post(f"{base}/progress/s6", headers=_helper(key), json={"progress": 0.5, "message": "Training"})
+    assert resp.status == 200
+    job = store.scans.snapshot()["job"]
+    assert job["progress"] == 0.5 and job["message"] == "gpu-box: Training"
+    assert store.scans.snapshot()["helpers"][0]["busy"]
+
+    assert (await helper.post(f"{base}/result/s6", headers=_helper(key), data=b"not a splat")).status == 400
+    resp = await helper.post(f"{base}/result/s6", headers=_helper(key), data=PLY)
+    assert resp.status == 200, await resp.text()
+    assert store.scans.job["state"] == "done"
+    assert store.config["splat"] == {"src": "scan-s6.ply", "pins": [{"entity": "light.lamp", "p": [1, 2, 3]}]}
+    assert (splat_dir(hass, eid) / "scan-s6.ply").read_bytes() == PLY
+    assert not (tmp_path / "ha_3dhome" / eid / "scans" / "s6").exists()
+
+    # a late progress report for a finished scan is told to stop
+    assert (await helper.post(f"{base}/progress/s6", headers=_helper(key), json={"progress": 1})).status == 409
+
+
+async def test_a_helper_fails_stops_or_goes_quiet(
+    hass: HomeAssistant, hass_client, hass_client_no_auth, hass_ws_client, tmp_path
+) -> None:
+    from custom_components.ha_3dhome import scans
+
+    hass.config.config_dir = str(tmp_path)
+    entry = await _setup(hass)
+    eid = entry.entry_id
+    jobs = hass.data[DOMAIN][eid].scans
+    admin = await hass_client()
+    await _photos(admin, eid, "s7")
+    key = await _key(hass_ws_client, hass, eid)
+    helper = await hass_client_no_auth()
+    base = f"/api/ha_3dhome/helper/{eid}"
+    await jobs.async_build("s7")
+
+    # it fails: the page says why
+    assert (await helper.get(f"{base}/job", headers=_helper(key))).status == 200
+    await helper.post(f"{base}/failed/s7", headers=_helper(key), json={"message": "Only 3 of 20 photos could be placed."})
+    assert jobs.job["state"] == "failed"
+    assert jobs.job["message"] == "gpu-box couldn't build it: Only 3 of 20 photos could be placed."
+
+    # it goes quiet: the job goes back to the queue, for any helper
+    await jobs.async_build("s7")
+    assert (await helper.get(f"{base}/job", headers=_helper(key))).status == 200
+    with patch.object(scans, "HELPER_TIMEOUT", -1):
+        jobs._tick()
+    assert jobs.job["state"] == "queued" and jobs.job["helper"] is None
+    assert (await helper.get(f"{base}/job", headers=_helper(key, "other"))).status == 200
+
+    # it's stopped from the page: its next report is told to stop
+    await jobs.async_cancel()
+    assert (await helper.post(f"{base}/progress/s7", headers=_helper(key, "other"), json={"progress": 0.2})).status == 409
+
+    # a new key disconnects the old one
+    await _key(hass_ws_client, hass, eid, new=True)
+    assert (await helper.get(f"{base}/job", headers=_helper(key))).status == 401
+
+
+async def test_the_helper_is_served(hass: HomeAssistant, hass_client_no_auth, tmp_path) -> None:
+    import io
+    import tarfile
+
+    hass.config.config_dir = str(tmp_path)
+    await _setup(hass)
+    client = await hass_client_no_auth()
+    script = await client.get("/api/ha_3dhome/helper/files/ha3dhome_helper.py")
+    assert script.status == 200
+    assert "3D Home helper" in await script.text()
+    context = await client.get("/api/ha_3dhome/helper/files/helper.tar.gz")
+    with tarfile.open(fileobj=io.BytesIO(await context.read())) as tar:
+        assert sorted(tar.getnames()) == ["Dockerfile", "ha3dhome_helper.py"]
+    assert (await client.get("/api/ha_3dhome/helper/files/__init__.py")).status == 404

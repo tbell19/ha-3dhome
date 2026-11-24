@@ -33,6 +33,7 @@ from .const import (
 )
 from .scans import ScanJobs
 from .splats import register_views, remove_entry_files
+from .worker import register_helper_views
 from .store import PanelStore
 from .websocket import async_register_commands
 
@@ -46,6 +47,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await hass.http.async_register_static_paths([StaticPathConfig(URL_BASE, str(FRONTEND_DIR), True)])
     async_register_commands(hass)
     register_views(hass)
+    register_helper_views(hass)
     return True
 
 
